@@ -1,0 +1,21 @@
+# Bật PostgreSQL cho D.C Funnel Bot bằng 1 lệnh:
+#   docker compose up -d
+# Khớp sẵn với DATABASE_URL mặc định trong .env:
+#   postgresql://postgres:postgres@localhost:5432/dc_funnel_bot?schema=public
+
+services:
+  db:
+    image: postgres:16
+    container_name: dc_funnel_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dc_funnel_bot
+    ports:
+      - "5432:5432"
+    volumes:
+      - dc_funnel_pgdata:/var/lib/postgresql/data
+
+volumes:
+  dc_funnel_pgdata:

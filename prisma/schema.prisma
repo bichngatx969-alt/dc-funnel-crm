@@ -1,0 +1,531 @@
+// D.C Funnel Bot - Prisma schema
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  SALE
+}
+
+enum Stage {
+  COLD
+  WARM
+  HOT
+  CUSTOMER
+  LOST
+}
+
+enum ConversationStatus {
+  BOT_ACTIVE
+  HUMAN_TAKEOVER
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+  SYSTEM
+}
+
+enum SenderType {
+  CUSTOMER
+  BOT
+  HUMAN
+  AI
+}
+
+enum TriggerType {
+  KEYWORD
+  POSTBACK
+  QUICK_REPLY
+  DEFAULT
+  STAGE
+}
+
+enum TaskType {
+  FOLLOW_UP
+  CALL
+  CHECK_ORDER
+  CUSTOM
+}
+
+enum TaskStatus {
+  TODO
+  DONE
+  CANCELLED
+}
+
+enum Industry {
+  FASHION
+  STUDIO
+  SALON
+  WEDDING
+  SERVICE
+  OTHER
+}
+
+enum FacebookPageStatus {
+  CONNECTED
+  MISSING_PERMISSION
+  TOKEN_EXPIRED
+  WEBHOOK_NOT_SUBSCRIBED
+  DISCONNECTED
+  ERROR
+}
+
+enum FacebookConnectionStatus {
+  CONNECTED
+  EXPIRED
+  REVOKED
+  ERROR
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum IntegrationAuditStatus {
+  SUCCESS
+  FAILED
+}
+
+// ----------------------------------------------------------------
+// Models
+// ----------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(SALE)
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignedConversations Conversation[] @relation("AssignedConversations")
+  assignedTasks         Task[]         @relation("AssignedTasks")
+}
+
+model BrandProfile {
+  id              String   @id @default(cuid())
+  brandName       String
+  industry        Industry @default(OTHER)
+  description     String?
+  defaultTone     String?
+  logoUrl         String?
+  primaryColor    String?
+  productServices String?
+  salesPolicy     String?
+  contactInfo     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model FacebookConnection {
+  id                   String                   @id @default(cuid())
+  facebookUserId       String?
+  facebookUserName     String?
+  accessTokenEncrypted String?
+  tokenType            String?
+  expiresAt            DateTime?
+  grantedScopes        String[]                 @default([])
+  status               FacebookConnectionStatus @default(CONNECTED)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  pages FacebookPage[]
+
+  @@index([status])
+  @@index([facebookUserId])
+}
+
+model FacebookPage {
+  id                       String             @id @default(cuid())
+  pageId                   String             @unique
+  pageName                 String
+  pageUsername             String?
+  pagePictureUrl           String?
+  pageAccessTokenEncrypted String?
+  tokenExpiresAt           DateTime?
+  connectionId             String?
+  botEnabled               Boolean            @default(false)
+  webhookSubscribed        Boolean            @default(false)
+  permissionsJson          Json?
+  status                   FacebookPageStatus @default(CONNECTED)
+  lastHealthCheckAt        DateTime?
+  lastError                String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  connection    FacebookConnection? @relation(fields: [connectionId], references: [id])
+  customers     Customer[]
+  conversations Conversation[]
+  messages      Message[]
+  flows         Flow[]
+  offers        Offer[]
+
+  @@index([botEnabled])
+  @@index([status])
+  @@index([connectionId])
+}
+
+model FacebookWebhookLog {
+  id               String                  @id @default(cuid())
+  pageId           String?
+  eventType        String?
+  payloadJson      Json
+  processingStatus WebhookProcessingStatus @default(RECEIVED)
+  errorMessage     String?
+  createdAt        DateTime                @default(now())
+
+  @@index([pageId])
+  @@index([processingStatus])
+  @@index([createdAt])
+}
+
+model IntegrationAuditLog {
+  id           String                 @id @default(cuid())
+  provider     String
+  action       String
+  targetPageId String?
+  status       IntegrationAuditStatus
+  message      String?
+  metadataJson Json?
+  createdAt    DateTime               @default(now())
+
+  @@index([provider])
+  @@index([targetPageId])
+  @@index([createdAt])
+}
+
+model Customer {
+  id                String   @id @default(cuid())
+  pageId            String?
+  psid              String
+  name              String?
+  phone             String?
+  avatarUrl         String?
+  source            String?
+  firstCampaign     String?
+  firstPostId       String?
+  currentStage      Stage    @default(COLD)
+  leadScore         Int      @default(0)
+  tags              String[] @default([])
+
+  // Email
+  email          String?
+  emailConsent   Boolean     @default(false)
+  unsubscribedAt DateTime?
+  emailStatus    EmailStatus @default(SUBSCRIBED)
+
+  lastInteractionAt DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  conversations     Conversation[]
+  funnelEvents      FunnelEvent[]
+  tasks             Task[]
+  emailLogs         EmailLog[]
+  emailEnrollments  EmailAutomationEnrollment[]
+  unsubscribeTokens UnsubscribeToken[]
+  facebookPage      FacebookPage? @relation(fields: [pageId], references: [pageId])
+
+  @@unique([pageId, psid])
+  @@index([currentStage])
+  @@index([lastInteractionAt])
+  @@index([email])
+  @@index([pageId])
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  pageId        String?
+  customerId    String
+  status        ConversationStatus @default(BOT_ACTIVE)
+  assignedToId  String?
+  lastMessageAt DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  facebookPage FacebookPage? @relation(fields: [pageId], references: [pageId])
+  assignedTo User?     @relation("AssignedConversations", fields: [assignedToId], references: [id])
+  messages   Message[]
+
+  @@index([status])
+  @@index([lastMessageAt])
+  @@index([pageId])
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  pageId         String?
+  conversationId String
+  direction      MessageDirection
+  senderType     SenderType
+  text           String?
+  payloadJson    Json?
+  metaMessageId  String?          @unique
+  createdAt      DateTime         @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  facebookPage FacebookPage? @relation(fields: [pageId], references: [pageId])
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@index([pageId])
+}
+
+model FunnelEvent {
+  id         String   @id @default(cuid())
+  pageId     String?
+  customerId String
+  eventName  String
+  eventValue String?
+  scoreDelta Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([eventName])
+  @@index([pageId])
+}
+
+model Flow {
+  id           String      @id @default(cuid())
+  pageId       String?
+  name         String
+  triggerType  TriggerType
+  triggerValue String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  steps FlowStep[]
+  facebookPage FacebookPage? @relation(fields: [pageId], references: [pageId])
+
+  @@index([pageId])
+}
+
+model FlowStep {
+  id               String   @id @default(cuid())
+  flowId           String
+  key              String
+  messageText      String
+  quickRepliesJson Json?
+  nextLogicJson    Json?
+  scoreDelta       Int      @default(0)
+  tagsToAdd        String[] @default([])
+  stageToSet       Stage?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, key])
+  @@index([key])
+}
+
+model Offer {
+  id            String   @id @default(cuid())
+  pageId        String?
+  product       String
+  customerStage Stage?
+  triggerTag    String?
+  title         String
+  description   String?
+  priceText     String?
+  offerText     String
+  priority      Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  facebookPage  FacebookPage? @relation(fields: [pageId], references: [pageId])
+
+  @@index([isActive])
+  @@index([triggerTag])
+  @@index([pageId])
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  customerId   String
+  assignedToId String?
+  type         TaskType   @default(FOLLOW_UP)
+  title        String
+  dueAt        DateTime?
+  status       TaskStatus @default(TODO)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo User?    @relation("AssignedTasks", fields: [assignedToId], references: [id])
+
+  @@index([status])
+  @@index([dueAt])
+}
+
+// ----------------------------------------------------------------
+// Email Automation
+// ----------------------------------------------------------------
+
+enum EmailStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
+  BOUNCED
+  COMPLAINED
+}
+
+enum EmailSequenceTrigger {
+  TAG_ADDED
+  STAGE_CHANGED
+  FORM_SUBMITTED
+  MANUAL
+  PURCHASED
+  BOOKING_CREATED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum EmailProviderName {
+  RESEND
+  SMTP
+  GMAIL
+  OTHER
+}
+
+enum EmailLogStatus {
+  QUEUED
+  SENT
+  FAILED
+  OPENED
+  CLICKED
+  BOUNCED
+  COMPLAINED
+}
+
+model EmailTemplate {
+  id            String   @id @default(cuid())
+  name          String
+  subject       String
+  preheader     String?
+  bodyHtml      String
+  bodyText      String?
+  variablesJson Json?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sequenceSteps EmailSequenceStep[]
+  emailLogs     EmailLog[]
+}
+
+model EmailSequence {
+  id           String               @id @default(cuid())
+  name         String
+  description  String?
+  triggerType  EmailSequenceTrigger
+  triggerValue String?
+  isActive     Boolean              @default(true)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  steps       EmailSequenceStep[]
+  enrollments EmailAutomationEnrollment[]
+  emailLogs   EmailLog[]
+
+  @@index([triggerType])
+  @@index([isActive])
+}
+
+model EmailSequenceStep {
+  id             String   @id @default(cuid())
+  sequenceId     String
+  templateId     String
+  delayMinutes   Int      @default(0)
+  order          Int
+  conditionsJson Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sequence EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template EmailTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([sequenceId])
+}
+
+model EmailAutomationEnrollment {
+  id          String           @id @default(cuid())
+  customerId  String
+  sequenceId  String
+  status      EnrollmentStatus @default(ACTIVE)
+  currentStep Int              @default(0)
+  nextRunAt   DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  customer Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sequence EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([nextRunAt])
+  @@index([customerId, sequenceId])
+}
+
+model EmailLog {
+  id                String            @id @default(cuid())
+  customerId        String
+  templateId        String?
+  sequenceId        String?
+  provider          EmailProviderName @default(RESEND)
+  providerMessageId String?
+  toEmail           String
+  subject           String
+  status            EmailLogStatus    @default(QUEUED)
+  errorMessage      String?
+  metadataJson      Json?
+  sentAt            DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  customer Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  template EmailTemplate? @relation(fields: [templateId], references: [id])
+  sequence EmailSequence? @relation(fields: [sequenceId], references: [id])
+
+  @@index([customerId])
+  @@index([status])
+  @@index([providerMessageId])
+  @@index([createdAt])
+}
+
+model UnsubscribeToken {
+  id         String    @id @default(cuid())
+  customerId String
+  tokenHash  String    @unique
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
