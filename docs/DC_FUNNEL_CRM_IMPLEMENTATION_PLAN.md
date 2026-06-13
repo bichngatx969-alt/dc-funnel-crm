@@ -840,27 +840,61 @@ Codex bắt buộc cập nhật mục này sau mỗi backend PR.
 
 ### 16.1. Workspace API Contract
 
-**Status:** `NOT_READY / READY / CHANGED`  
+**Status:** `READY`  
 **Owner:** Codex  
-**Last updated:**  
+**Last updated:** 2026-06-14  
 
 ```http
 GET /api/workspaces
+POST /api/workspaces
+POST /api/workspaces/switch
 ```
 
 Response:
 
 ```json
 {
-  "items": [],
-  "currentWorkspaceId": null
+  "items": [
+    {
+      "id": "workspace_id",
+      "organizationId": "organization_id",
+      "name": "HICHAOS",
+      "industry": "fashion",
+      "role": "OWNER",
+      "assignedOnly": false,
+      "timezone": "Asia/Ho_Chi_Minh",
+      "currency": "VND",
+      "locale": "vi-VN"
+    }
+  ],
+  "currentWorkspaceId": "workspace_id"
 }
 ```
 
 Notes:
 
 ```text
-Điền sau khi Codex hoàn thành PR #2.
+GET /api/workspaces
+- Auth: logged-in user.
+- Side effect: ensures a default workspace exists for legacy users and sets HttpOnly cookie dc_workspace_id.
+- Response envelope: { ok: true, data: { items, currentWorkspaceId } }.
+
+POST /api/workspaces
+- Auth: requireAdmin() => legacy ADMIN, AGENCY_ADMIN, OWNER.
+- Body: { name: string, industry?: string, timezone?: string, currency?: string, locale?: string }.
+- Creates workspace under the user's existing organization, adds caller as OWNER, switches current workspace cookie.
+- Response envelope: { ok: true, data: { workspace, currentWorkspaceId } }.
+
+POST /api/workspaces/switch
+- Auth: logged-in user with WorkspaceMember access.
+- Body: { workspaceId: string }.
+- Sets HttpOnly cookie dc_workspace_id.
+- Response envelope: { ok: true, data: { workspace, currentWorkspaceId } }.
+
+Role compatibility:
+- Prisma Role keeps legacy ADMIN for safe migration compatibility.
+- New workspace roles are available: AGENCY_ADMIN, OWNER, MANAGER, SALE, MARKETER.
+- Legacy ADMIN is mapped to workspace OWNER when creating default membership.
 ```
 
 ---
@@ -1070,6 +1104,76 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Handoff sang PR #2 Workspace Core: thiết kế additive schema Organization/Workspace/WorkspaceMember, default workspace cho data cũ, helper current workspace, API contract /api/workspaces.
 ```
 
+#### 2026-06-14 — Codex (PR #2)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #2 — Workspace Core
+
+### Đã làm hôm nay
+- Xác nhận PR #1 DONE, D-001 DONE, repo có Git commit nền secure foundation, branch codex/02-workspace-core.
+- Thêm schema additive cho Organization, Workspace, WorkspaceMember.
+- Mở rộng Role enum với AGENCY_ADMIN, OWNER, MANAGER, SALE, MARKETER; giữ ADMIN legacy để migration không phá dữ liệu cũ.
+- Thêm workspaceId nullable + index cho FacebookPage, Customer, Conversation, Message, Task, Offer, Flow, EmailTemplate, EmailSequence.
+- Tạo src/lib/workspace.ts: default workspace, WorkspaceMember, cookie dc_workspace_id, current workspace helper, switch helper, legacy backfill helper.
+- Tạo API GET /api/workspaces, POST /api/workspaces, POST /api/workspaces/switch.
+- Cập nhật seed để tạo default organization/workspace/member và backfill data cũ khi seed được chạy sau migration.
+- Áp workspace filter cho API nghiệp vụ chính: conversations, customers, tasks, stats, AI suggest, offers, flows, email templates/sequences, Facebook pages/integration.
+- Cập nhật Facebook integration service để page connect/toggle/disconnect/health-check scoped theo workspace.
+- Không làm Pipeline, Order, Comment-to-Inbox. Không sửa UI lớn.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/seed.ts
+- src/lib/auth.ts
+- src/lib/api.ts
+- src/lib/workspace.ts
+- src/lib/facebook/facebook-integration-service.ts
+- src/lib/funnel/intake.ts
+- src/lib/funnel/engine.ts
+- src/lib/email/send.ts
+- src/lib/email/automation.ts
+- src/app/api/workspaces/route.ts
+- src/app/api/workspaces/switch/route.ts
+- src/app/api/conversations/**
+- src/app/api/customers/**
+- src/app/api/tasks/**
+- src/app/api/stats/route.ts
+- src/app/api/ai/suggest/route.ts
+- src/app/api/offers/**
+- src/app/api/flows/**
+- src/app/api/email/**
+- src/app/api/facebook-pages/route.ts
+- src/app/api/integrations/facebook/pages/**
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật report/API contract.
+- Không sửa src/components/**, src/app/dashboard/** UI, src/app/inbox/** UI, src/app/contacts/**, src/app/pipeline/**, src/app/orders/**.
+
+### Typecheck/build/test
+- npx prisma format: PASS
+- npx prisma generate: PASS
+- npm run typecheck: PASS
+- npm run lint: PASS, còn warning cũ ở src/components/FacebookPageDetailClient.tsx thuộc Claude-owned.
+- npm run build: PASS
+
+### Blocker
+- Không có blocker mới chặn PR #2.
+- Migration chưa được chạy theo yêu cầu. Cần tạo/áp migration an toàn ở bước riêng trước khi chạy app với DB thật.
+
+### Cần founder quyết
+- Không cần quyết định mới cho PR #2.
+
+### Cần agent kia hỗ trợ
+- Claude có thể bắt đầu PR #2B Workspace UI dựa trên mục 16.1 = READY.
+
+### Kế hoạch ngày tiếp theo
+- Dừng sau PR #2. Chờ founder xác nhận trước khi chuyển sang PR #3 Pipeline API.
+```
+
 #### 2026-06-14 — Claude
 
 ```text
@@ -1248,44 +1352,102 @@ PR thuần docs, không thay đổi code → không chạy typecheck/build trong
 ### 18.3. PR #2 — Workspace Core
 
 **Owner:** Codex  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`  
+**Branch:** codex/02-workspace-core  
+**Commit/PR link:** Local working tree, chưa tạo commit PR #2  
 
 #### Summary
 
 ```text
-Chưa cập nhật.
+PR #2 Workspace Core hoàn tất theo hướng additive:
+- Thêm Organization, Workspace, WorkspaceMember.
+- Mở rộng role enum cho multi-tenant, giữ ADMIN legacy để tương thích.
+- Thêm workspaceId nullable + index vào các bảng chính trước, không ép NOT NULL.
+- Thêm helper current workspace + cookie switch + default workspace/backfill helper.
+- Thêm Workspace API: GET /api/workspaces, POST /api/workspaces, POST /api/workspaces/switch.
+- Seed được cập nhật để tạo default workspace/member và backfill data legacy khi được chạy sau migration.
+- Các API nghiệp vụ chính bắt đầu filter theo current workspace.
+- Không chạy migration/db push/seed/reset/deploy.
 ```
 
 #### API Contract Updated?
 
 ```text
-Chưa cập nhật.
+YES — mục 16.1 Workspace API Contract đã đặt Status = READY.
 ```
 
 #### Files changed
 
 ```text
-Chưa cập nhật.
+prisma/schema.prisma
+prisma/seed.ts
+src/lib/auth.ts
+src/lib/api.ts
+src/lib/workspace.ts
+src/lib/facebook/facebook-integration-service.ts
+src/lib/funnel/intake.ts
+src/lib/funnel/engine.ts
+src/lib/email/send.ts
+src/lib/email/automation.ts
+src/app/api/workspaces/route.ts
+src/app/api/workspaces/switch/route.ts
+src/app/api/ai/suggest/route.ts
+src/app/api/conversations/**
+src/app/api/customers/**
+src/app/api/tasks/**
+src/app/api/stats/route.ts
+src/app/api/offers/**
+src/app/api/flows/**
+src/app/api/email/**
+src/app/api/facebook-pages/route.ts
+src/app/api/integrations/facebook/pages/**
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
 ```
 
 #### Tests
 
 ```text
-Chưa cập nhật.
+npx prisma format: PASS
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run lint: PASS with existing warning in Claude-owned src/components/FacebookPageDetailClient.tsx.
+npm run build: PASS
 ```
 
 #### Risks
 
 ```text
-Chưa cập nhật.
+- No migration file was generated/applied and no database command was run. The DB will need a safe migration step before runtime against real DB.
+- Role enum keeps legacy ADMIN. Future cleanup can migrate ADMIN users to AGENCY_ADMIN/OWNER, then remove ADMIN in a later explicit migration if founder approves.
+- workspaceId is nullable by design for safe rollout. Data isolation relies on seed/API helper backfill assigning legacy rows to default workspace after schema migration.
+- FacebookPage.pageId remains globally unique. Same Fanpage cannot be connected to multiple workspaces in this PR.
+- Existing UI has not been updated yet; Claude PR #2B should consume the READY contract.
+- No automated integration tests for workspace switching yet; verified by typecheck/lint/build and code review.
 ```
 
 #### Handoff to Claude
 
 ```text
-Chưa cập nhật.
+Claude PR #2B can start.
+
+Use:
+- GET /api/workspaces to render switcher and current workspace.
+- POST /api/workspaces for admin create-workspace flow.
+- POST /api/workspaces/switch with { workspaceId } to switch current brand/workspace.
+
+Response data uses:
+- items[].id
+- items[].organizationId
+- items[].name
+- items[].industry (lowercase string)
+- items[].role
+- items[].assignedOnly
+- items[].timezone
+- items[].currency
+- items[].locale
+- currentWorkspaceId
+
+The switch mechanism is an HttpOnly cookie named dc_workspace_id. UI should call switch endpoint then refresh/reload workspace-scoped data.
 ```
 
 ---
@@ -1554,8 +1716,8 @@ Agent nào gặp blocker phải ghi vào đây.
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
   PR #1B làm trực tiếp trên working tree. Đề nghị founder git init + tạo branch trước PR #2/#2B (xem D-008).
-- B-002 (BLOCKING cho PR #2B, không chặn hiện tại): Workspace API contract (mục 16.1) đang NOT_READY.
-  Claude KHÔNG build Workspace Switcher/Settings thật cho tới khi Codex đặt 16.1 = READY (đúng cổng API contract).
+- B-002 (RESOLVED bởi Codex PR #2): Workspace API contract (mục 16.1) đã READY.
+  Claude có thể bắt đầu PR #2B Workspace UI theo contract đã cập nhật.
 - Không có blocker nào chặn PR #1B. PR #1B hoàn tất.
 
 [2026-06-14 · Codex · PR #1]
@@ -1563,6 +1725,11 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-004 (RESOLVED trước PR #2): Đã git init và tạo branch codex/02-workspace-core.
 - B-005 (SAFETY): Migration baseline chưa tạo/chạy trong PR #1 để tránh rủi ro với production DB credential chưa xác nhận đã rotate và repo chưa có migrations history.
 - Không có blocker nào chặn hoàn tất PR #1 code hardening. PR #1 hoàn tất.
+
+[2026-06-14 · Codex · PR #2]
+- Không có blocker mới chặn PR #2.
+- Lưu ý an toàn: PR #2 chỉ cập nhật schema/code/seed. Chưa chạy migration/db push/seed/reset/deploy theo đúng yêu cầu.
+- Bước trước runtime với DB thật: cần tạo và review migration additive cho Organization/Workspace/WorkspaceMember + workspaceId nullable, rồi áp migration an toàn.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
