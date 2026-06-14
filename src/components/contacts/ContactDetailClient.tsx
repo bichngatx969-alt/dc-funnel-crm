@@ -23,8 +23,10 @@ import {
   PAYMENT_STATUS_LABEL,
   type Order,
 } from "@/components/orders/types";
+import { CommentCard } from "@/components/comments/CommentCard";
+import type { Comment } from "@/components/comments/types";
 
-type Tab = "timeline" | "conversations" | "opportunities" | "tasks" | "notes" | "orders";
+type Tab = "timeline" | "conversations" | "opportunities" | "tasks" | "notes" | "orders" | "comments";
 
 const TASK_STATUS_LABEL: Record<string, string> = { TODO: "Cần làm", DONE: "Xong", CANCELLED: "Huỷ" };
 const OPP_STATUS_LABEL: Record<string, string> = { OPEN: "Đang mở", WON: "Đã chốt", LOST: "Thất bại" };
@@ -46,6 +48,7 @@ export function ContactDetailClient({ id }: { id: string }) {
   const [noteBusy, setNoteBusy] = useState(false);
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [showOrder, setShowOrder] = useState(false);
+  const [comments, setComments] = useState<Comment[] | null>(null);
 
   const loadDetail = useCallback(async () => {
     setError(null);
@@ -75,13 +78,22 @@ export function ContactDetailClient({ id }: { id: string }) {
     }
   }, [id]);
 
+  const loadComments = useCallback(async () => {
+    try {
+      const data = await apiGet<{ items: Comment[] }>(`/api/comments?customerId=${id}&pageSize=100`);
+      setComments(data.items ?? []);
+    } catch {
+      setComments([]);
+    }
+  }, [id]);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadDetail(), loadTimeline(), loadOrders()]);
+      await Promise.all([loadDetail(), loadTimeline(), loadOrders(), loadComments()]);
       setLoading(false);
     })();
-  }, [loadDetail, loadTimeline, loadOrders]);
+  }, [loadDetail, loadTimeline, loadOrders, loadComments]);
 
   async function addNote(e: FormEvent) {
     e.preventDefault();
@@ -188,6 +200,7 @@ export function ContactDetailClient({ id }: { id: string }) {
         <TabBtn active={tab === "tasks"} onClick={() => setTab("tasks")} label={`Việc cần làm (${counts.tasks})`} />
         <TabBtn active={tab === "notes"} onClick={() => setTab("notes")} label={`Ghi chú (${counts.notes})`} />
         <TabBtn active={tab === "orders"} onClick={() => setTab("orders")} label={`Đơn hàng (${orders?.length ?? 0})`} />
+        <TabBtn active={tab === "comments"} onClick={() => setTab("comments")} label={`Bình luận (${comments?.length ?? 0})`} />
       </div>
 
       {tab === "timeline" && (
@@ -380,6 +393,28 @@ export function ContactDetailClient({ id }: { id: string }) {
                 </li>
               ))}
             </ul>
+          )}
+        </Section>
+      )}
+
+      {tab === "comments" && (
+        <Section>
+          {comments === null ? (
+            <p className="text-sm text-gray-400">Đang tải…</p>
+          ) : comments.length === 0 ? (
+            <EmptyState title="Chưa có bình luận" description="Bình luận Facebook của khách này sẽ hiện ở đây khi được kéo về." />
+          ) : (
+            <div className="space-y-2">
+              {comments.map((cm) => (
+                <CommentCard
+                  key={cm.id}
+                  comment={cm}
+                  onChange={(updated) =>
+                    setComments((list) => (list ? list.map((x) => (x.id === updated.id ? updated : x)) : list))
+                  }
+                />
+              ))}
+            </div>
           )}
         </Section>
       )}

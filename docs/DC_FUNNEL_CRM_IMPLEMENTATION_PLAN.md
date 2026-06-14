@@ -1697,6 +1697,57 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng theo yêu cầu (chỉ PR #5B). Bước kế: PR #6B Comment UI sau khi mục 16.5 = READY.
 ```
 
+#### 2026-06-14 — Claude (PR #6B Comment UI)
+
+```text
+## 2026-06-14 — Claude (PR #6B Comment UI)
+
+### Đang làm PR
+- PR #6B — Comment UI
+
+### Đã làm hôm nay
+- Xác nhận mục 16.5 Comment API = READY; đọc route thật (comments, :id, reply, hide) + lib/facebook/comments.ts (commentInclude, status enum). Tạo branch claude/06-comment-ui.
+- /comments: danh sách (GET /api/comments) với bộ lọc nhanh (Tất cả / Có SĐT / Cần xử lý / Đã phản hồi / Đã ẩn), tìm q, lọc Fanpage, pagination; thẻ CommentCard.
+- CommentCard: nội dung + người comment + badge (Có SĐT / Cần xử lý / trạng thái / đang ẩn) + thời gian + context (Fanpage, bài viết, mở khách, mở hội thoại, chi tiết); xử lý nhanh: Trả lời (inline POST /reply), Ẩn/Hiện (POST /hide), toggle Cần xử lý + Lưu trữ (PATCH). Comment cần xử lý có viền đỏ trái.
+- /comments/[id]: chi tiết đầy đủ (nội dung, bài viết & Fanpage, khách & hội thoại, repliedAt/hiddenAt) + reply/ẩn/follow-up/đổi trạng thái nội bộ.
+- Lỗi Meta (reply/hide thiếu pages_manage_engagement/page token) hiển thị NGUYÊN VĂN + gợi ý cấp quyền/reconnect, KHÔNG fake success (D-002).
+- Tích hợp Contact detail: thêm tab "Bình luận" (GET /api/comments?customerId) tái dùng CommentCard.
+- Thêm nav "Bình luận". UI tiếng Việt 100%; card mobile-friendly.
+
+### Files đã sửa
+- src/components/comments/types.ts (mới)
+- src/components/comments/actions.ts (mới)
+- src/components/comments/CommentCard.tsx (mới)
+- src/components/comments/CommentsClient.tsx (mới)
+- src/components/comments/CommentDetailClient.tsx (mới)
+- src/app/comments/page.tsx (mới)
+- src/app/comments/[id]/page.tsx (mới)
+- src/components/AppShell.tsx (nav "Bình luận")
+- src/components/contacts/ContactDetailClient.tsx (tab "Bình luận")
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.12, 19)
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/comments/**, docs/**. Không đụng prisma, auth.ts, api.ts, workspace.ts, lib/facebook/comments.ts, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- next build: FULL PASS (Compiled successfully + types valid + static 5/5 + traces); /comments + /comments/[id] có trong cây build.
+
+### Blocker
+- Không có blocker chặn PR #6B.
+- D-002 (Meta): reply/hide cần page token + pages_manage_engagement thật để smoke end-to-end; UI đã xử lý lỗi rõ, không fake. Backend của Codex cũng chưa smoke Graph thật.
+- Ghi chú: Order API (PR #5) nay đã commit (c21af46) → B-017 coi như đã giải quyết.
+
+### Cần founder quyết
+- D-002: cấp/duyệt pages_manage_engagement + reconnect page để test reply/hide thật.
+
+### Cần agent kia hỗ trợ
+- (Tương lai) API list members + deep-link conversation trong Inbox ("Mở hội thoại" hiện trỏ /inbox chung).
+
+### Kế hoạch ngày tiếp theo
+- Dừng theo yêu cầu (chỉ PR #6B). Bước kế: PR #7B Automation UI sau khi Codex có Automation API (PR #7) READY.
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -3503,12 +3554,54 @@ UI can rely on:
 ### 18.12. PR #6B — Comment UI
 
 **Owner:** Claude  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`  
+**Branch:** claude/06-comment-ui  
+**Commit/PR link:** N/A  
+
+#### Summary
 
 ```text
-Chưa cập nhật.
+Comment-to-Inbox UI theo API contract 16.5: danh sách bình luận với bộ lọc nhanh (Tất cả/Có SĐT/Cần xử lý/
+Đã phản hồi/Đã ẩn) + tìm + lọc Fanpage + pagination; chi tiết bình luận; xử lý nhanh reply/ẩn/follow-up/
+trạng thái nội bộ. Lỗi Meta hiển thị rõ, không fake success (D-002). Tích hợp tab "Bình luận" trong Contact detail.
+```
+
+#### Files changed
+
+```text
+src/components/comments/types.ts                     (mới)
+src/components/comments/actions.ts                   (mới)
+src/components/comments/CommentCard.tsx              (mới)
+src/components/comments/CommentsClient.tsx           (mới)
+src/components/comments/CommentDetailClient.tsx      (mới)
+src/app/comments/page.tsx, src/app/comments/[id]/page.tsx   (mới)
+src/components/AppShell.tsx                           (nav "Bình luận")
+src/components/contacts/ContactDetailClient.tsx      (tab "Bình luận")
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md             (mục 17, 18.12, 19)
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS
+next build: FULL PASS (Compiled successfully + types valid + static 5/5 + traces); /comments + /comments/[id] trong cây build.
+Test thủ công: /comments → lọc "Có SĐT" → mở chi tiết → PATCH cần xử lý/trạng thái → reply/hide (cần Meta perms thật; nếu thiếu, UI hiện lỗi rõ) → mở contact/hội thoại từ comment; Contact detail tab "Bình luận".
+```
+
+#### Risks
+
+```text
+- D-002: reply/hide qua Graph cần page token + pages_manage_engagement; chưa smoke thật. UI không fake success, hiển thị lỗi + gợi ý reconnect.
+- "Mở hội thoại" từ comment trỏ /inbox chung (chưa deep-link đúng conversation — Inbox chưa hỗ trợ URL param).
+- isHidden có thể đổi nội bộ qua PATCH (cờ) lẫn Graph qua /hide; UI ưu tiên nút Ẩn/Hiện (Graph) để đồng bộ thật.
+```
+
+#### Handoff
+
+```text
+- Đạt Acceptance PR #6B: lọc comment có SĐT; chi tiết; PATCH follow-up/status; reply/hide với lỗi rõ; mở contact/hội thoại.
+- Cần founder/Codex: cấp pages_manage_engagement + reconnect page để smoke reply/hide thật (D-002).
+- Bước kế Claude: PR #7B Automation UI khi Codex có Automation API READY.
 ```
 
 ---
@@ -3662,6 +3755,13 @@ Agent nào gặp blocker phải ghi vào đây.
 [2026-06-14 · Codex · PR #6 Comment-to-Inbox Backend]
 - B-018 RESOLVED: Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_04_comment_backend. npx prisma migrate status up to date; runtime smoke test GET/PATCH comments + webhook feed/comment payload PASS.
 - D-002 vẫn OPEN: pages_manage_engagement/feed subscription cần được xác nhận trên Meta thật. PR #6 đã thêm OAuth scope pages_manage_engagement và subscribed_fields feed, nhưng page đã connect trước đó có thể cần reconnect/resubscribe; Graph reply/hide chưa smoke thật vì không có real page token/quyền trong test.
+
+[2026-06-14 · Claude · PR #6B Comment UI]
+- D-002 (UI sẵn sàng): /comments + /comments/[id] có reply/hide gọi Graph; khi thiếu pages_manage_engagement/page token, UI hiển thị lỗi nguyên văn + gợi ý reconnect, KHÔNG fake success. Cần Meta perms thật để smoke end-to-end.
+- B-017 đã giải quyết: Order API (PR #5) đã commit (c21af46) + Order UI (b88400b); working tree đã sạch ở các file đó.
+- Build: next build FULL PASS (compiled + types + static 5/5).
+- Hạn chế (không chặn): "Mở hội thoại" từ comment trỏ /inbox chung (chưa deep-link đúng conversation).
+- PR #6B hoàn tất (DONE).
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
