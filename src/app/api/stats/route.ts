@@ -1,27 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
   const { searchParams } = new URL(req.url);
   const pageId = searchParams.get("pageId");
   const pageWhere = pageId && pageId !== "all" ? { pageId } : {};
+  const workspaceWhere = { workspaceId, ...pageWhere };
 
   const startOfToday = startOfTodayInHoChiMinh();
 
   const [newCustomersToday, openConversations, hotCustomers, followUpNeeded, customers, topPostbacks] =
     await Promise.all([
-      prisma.customer.count({ where: { ...pageWhere, createdAt: { gte: startOfToday } } }),
-      prisma.conversation.count({ where: { ...pageWhere, status: { in: ["BOT_ACTIVE", "HUMAN_TAKEOVER"] } } }),
-      prisma.customer.count({ where: { ...pageWhere, currentStage: "HOT" } }),
-      prisma.task.count({ where: { status: "TODO", customer: pageWhere } }),
-      prisma.customer.findMany({ where: pageWhere, select: { tags: true }, take: 2000 }),
+      prisma.customer.count({ where: { ...workspaceWhere, createdAt: { gte: startOfToday } } }),
+      prisma.conversation.count({ where: { ...workspaceWhere, status: { in: ["BOT_ACTIVE", "HUMAN_TAKEOVER"] } } }),
+      prisma.customer.count({ where: { ...workspaceWhere, currentStage: "HOT" } }),
+      prisma.task.count({ where: { workspaceId, status: "TODO", customer: pageWhere } }),
+      prisma.customer.findMany({ where: workspaceWhere, select: { tags: true }, take: 2000 }),
       prisma.funnelEvent.groupBy({
         by: ["eventValue"],
-        where: { ...pageWhere, eventName: "postback", eventValue: { not: null } },
+        where: { ...pageWhere, customer: { workspaceId }, eventName: "postback", eventValue: { not: null } },
         _count: { eventValue: true },
         orderBy: { _count: { eventValue: "desc" } },
         take: 8,

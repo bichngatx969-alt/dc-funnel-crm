@@ -31,5 +31,5 @@ export async function requireRole(roles: ApiRole | ApiRole[]) {
 }
 
 export function requireAdmin() {
-  return requireRole("ADMIN");
+  return requireRole(["ADMIN", "AGENCY_ADMIN", "OWNER"]);
 }

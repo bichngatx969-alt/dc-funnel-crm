@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -9,15 +10,22 @@ const STAGES = ["COLD", "WARM", "HOT", "CUSTOMER", "LOST"];
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
+  const workspaceId = await getCurrentWorkspaceId(auth.user);
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+  const existing = await prisma.flow.findFirst({ where: { id, workspaceId } });
+  if (!existing) return jsonError("Không tìm thấy flow", 404);
 
   const flowData: { name?: string; isActive?: boolean; pageId?: string | null } = {};
   if (body.name !== undefined) flowData.name = String(body.name);
   if (body.isActive !== undefined) flowData.isActive = Boolean(body.isActive);
   if (body.pageId !== undefined) {
     const pageId = String(body.pageId || "").trim();
+    if (pageId) {
+      const page = await prisma.facebookPage.findFirst({ where: { pageId, workspaceId }, select: { pageId: true } });
+      if (!page) return jsonError("Fanpage không thuộc workspace hiện tại", 400);
+    }
     flowData.pageId = pageId || null;
   }
 

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -7,11 +8,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
 
-  const customer = await prisma.customer.findUnique({ where: { id } });
+  const customer = await prisma.customer.findFirst({ where: { id, workspaceId } });
   if (!customer) return jsonError("Không tìm thấy khách", 404);
 
   let tags = customer.tags;

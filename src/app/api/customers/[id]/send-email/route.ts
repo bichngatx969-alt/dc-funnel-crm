@@ -1,6 +1,8 @@
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { isEmailEnabled } from "@/lib/env";
 import { sendEmailToCustomer } from "@/lib/email/send";
+import { prisma } from "@/lib/prisma";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +10,12 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
   if (!isEmailEnabled()) return jsonError("Email chưa bật (thiếu RESEND_API_KEY / EMAIL_FROM_ADDRESS)", 400);
 
   const { id } = await params;
+  const customer = await prisma.customer.findFirst({ where: { id, workspaceId }, select: { id: true } });
+  if (!customer) return jsonError("Không tìm thấy khách", 404);
   const body = await req.json().catch(() => ({}));
   const templateId = body.templateId ? String(body.templateId) : undefined;
   const subject = body.subject ? String(body.subject) : undefined;

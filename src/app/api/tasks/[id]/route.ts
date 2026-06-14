@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ const TASK_TYPES = ["FOLLOW_UP", "CALL", "CHECK_ORDER", "CUSTOM"];
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -26,6 +28,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   try {
+    const existing = await prisma.task.findFirst({ where: { id, workspaceId } });
+    if (!existing) return jsonError("Không tìm thấy task", 404);
     const task = await prisma.task.update({ where: { id }, data });
     return jsonOk(task);
   } catch {

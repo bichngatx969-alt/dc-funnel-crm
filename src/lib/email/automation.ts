@@ -10,11 +10,16 @@ export async function enrollCustomerToSequence(
   customerId: string,
   sequenceId: string
 ): Promise<{ enrolled: boolean; reason?: string; enrollmentId?: string }> {
-  const seq = await prisma.emailSequence.findUnique({
-    where: { id: sequenceId },
-    include: { steps: { orderBy: { order: "asc" } } },
-  });
+  const [customer, seq] = await Promise.all([
+    prisma.customer.findUnique({ where: { id: customerId }, select: { workspaceId: true } }),
+    prisma.emailSequence.findUnique({
+      where: { id: sequenceId },
+      include: { steps: { orderBy: { order: "asc" } } },
+    }),
+  ]);
+  if (!customer) return { enrolled: false, reason: "customer_not_found" };
   if (!seq || !seq.isActive) return { enrolled: false, reason: "sequence_inactive" };
+  if (seq.workspaceId !== customer.workspaceId) return { enrolled: false, reason: "workspace_mismatch" };
   if (!seq.steps.length) return { enrolled: false, reason: "no_steps" };
 
   const existing = await prisma.emailAutomationEnrollment.findFirst({
@@ -59,6 +64,7 @@ export async function triggerByEvent(
 
   const seqs = await prisma.emailSequence.findMany({
     where: {
+      workspaceId: customer.workspaceId,
       isActive: true,
       triggerType,
       OR: triggerValue ? [{ triggerValue: null }, { triggerValue }] : [{ triggerValue: null }],

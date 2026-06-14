@@ -15,8 +15,13 @@ datasource db {
 // ----------------------------------------------------------------
 
 enum Role {
+  // Legacy single-brand role, kept during PR #2 for safe migration compatibility.
   ADMIN
+  AGENCY_ADMIN
+  OWNER
+  MANAGER
   SALE
+  MARKETER
 }
 
 enum Stage {
@@ -117,8 +122,65 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  assignedConversations Conversation[] @relation("AssignedConversations")
-  assignedTasks         Task[]         @relation("AssignedTasks")
+  assignedConversations Conversation[]    @relation("AssignedConversations")
+  assignedTasks         Task[]            @relation("AssignedTasks")
+  workspaceMemberships  WorkspaceMember[]
+}
+
+model Organization {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  workspaces Workspace[]
+
+  @@index([deletedAt])
+}
+
+model Workspace {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  industry       Industry  @default(OTHER)
+  timezone       String    @default("Asia/Ho_Chi_Minh")
+  currency       String    @default("VND")
+  locale         String    @default("vi-VN")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  members        WorkspaceMember[]
+  facebookPages  FacebookPage[]
+  customers      Customer[]
+  conversations  Conversation[]
+  messages       Message[]
+  flows          Flow[]
+  offers         Offer[]
+  tasks          Task[]
+  emailTemplates EmailTemplate[]
+  emailSequences EmailSequence[]
+
+  @@index([organizationId])
+  @@index([deletedAt])
+}
+
+model WorkspaceMember {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  userId       String
+  role         Role     @default(SALE)
+  assignedOnly Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@index([role])
 }
 
 model BrandProfile {
@@ -156,6 +218,7 @@ model FacebookConnection {
 
 model FacebookPage {
   id                       String             @id @default(cuid())
+  workspaceId              String?
   pageId                   String             @unique
   pageName                 String
   pageUsername             String?
@@ -172,6 +235,7 @@ model FacebookPage {
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
+  workspace     Workspace?          @relation(fields: [workspaceId], references: [id])
   connection    FacebookConnection? @relation(fields: [connectionId], references: [id])
   customers     Customer[]
   conversations Conversation[]
@@ -182,6 +246,7 @@ model FacebookPage {
   @@index([botEnabled])
   @@index([status])
   @@index([connectionId])
+  @@index([workspaceId])
 }
 
 model FacebookWebhookLog {
@@ -214,18 +279,19 @@ model IntegrationAuditLog {
 }
 
 model Customer {
-  id                String   @id @default(cuid())
-  pageId            String?
-  psid              String
-  name              String?
-  phone             String?
-  avatarUrl         String?
-  source            String?
-  firstCampaign     String?
-  firstPostId       String?
-  currentStage      Stage    @default(COLD)
-  leadScore         Int      @default(0)
-  tags              String[] @default([])
+  id            String   @id @default(cuid())
+  workspaceId   String?
+  pageId        String?
+  psid          String
+  name          String?
+  phone         String?
+  avatarUrl     String?
+  source        String?
+  firstCampaign String?
+  firstPostId   String?
+  currentStage  Stage    @default(COLD)
+  leadScore     Int      @default(0)
+  tags          String[] @default([])
 
   // Email
   email          String?
@@ -243,17 +309,20 @@ model Customer {
   emailLogs         EmailLog[]
   emailEnrollments  EmailAutomationEnrollment[]
   unsubscribeTokens UnsubscribeToken[]
-  facebookPage      FacebookPage? @relation(fields: [pageId], references: [pageId])
+  workspace         Workspace?                  @relation(fields: [workspaceId], references: [id])
+  facebookPage      FacebookPage?               @relation(fields: [pageId], references: [pageId])
 
   @@unique([pageId, psid])
   @@index([currentStage])
   @@index([lastInteractionAt])
   @@index([email])
   @@index([pageId])
+  @@index([workspaceId])
 }
 
 model Conversation {
   id            String             @id @default(cuid())
+  workspaceId   String?
   pageId        String?
   customerId    String
   status        ConversationStatus @default(BOT_ACTIVE)
@@ -262,18 +331,21 @@ model Conversation {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   facebookPage FacebookPage? @relation(fields: [pageId], references: [pageId])
-  assignedTo User?     @relation("AssignedConversations", fields: [assignedToId], references: [id])
-  messages   Message[]
+  assignedTo   User?         @relation("AssignedConversations", fields: [assignedToId], references: [id])
+  messages     Message[]
 
   @@index([status])
   @@index([lastMessageAt])
   @@index([pageId])
+  @@index([workspaceId])
 }
 
 model Message {
   id             String           @id @default(cuid())
+  workspaceId    String?
   pageId         String?
   conversationId String
   direction      MessageDirection
@@ -283,12 +355,14 @@ model Message {
   metaMessageId  String?          @unique
   createdAt      DateTime         @default(now())
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+  conversation Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   facebookPage FacebookPage? @relation(fields: [pageId], references: [pageId])
 
   @@index([conversationId])
   @@index([createdAt])
   @@index([pageId])
+  @@index([workspaceId])
 }
 
 model FunnelEvent {
@@ -309,6 +383,7 @@ model FunnelEvent {
 
 model Flow {
   id           String      @id @default(cuid())
+  workspaceId  String?
   pageId       String?
   name         String
   triggerType  TriggerType
@@ -317,10 +392,12 @@ model Flow {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
-  steps FlowStep[]
+  steps        FlowStep[]
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
   facebookPage FacebookPage? @relation(fields: [pageId], references: [pageId])
 
   @@index([pageId])
+  @@index([workspaceId])
 }
 
 model FlowStep {
@@ -343,7 +420,8 @@ model FlowStep {
 }
 
 model Offer {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
+  workspaceId   String?
   pageId        String?
   product       String
   customerStage Stage?
@@ -352,19 +430,22 @@ model Offer {
   description   String?
   priceText     String?
   offerText     String
-  priority      Int      @default(0)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  priority      Int           @default(0)
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  workspace     Workspace?    @relation(fields: [workspaceId], references: [id])
   facebookPage  FacebookPage? @relation(fields: [pageId], references: [pageId])
 
   @@index([isActive])
   @@index([triggerTag])
   @@index([pageId])
+  @@index([workspaceId])
 }
 
 model Task {
   id           String     @id @default(cuid())
+  workspaceId  String?
   customerId   String
   assignedToId String?
   type         TaskType   @default(FOLLOW_UP)
@@ -374,11 +455,13 @@ model Task {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  assignedTo User?    @relation("AssignedTasks", fields: [assignedToId], references: [id])
+  workspace  Workspace? @relation(fields: [workspaceId], references: [id])
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo User?      @relation("AssignedTasks", fields: [assignedToId], references: [id])
 
   @@index([status])
   @@index([dueAt])
+  @@index([workspaceId])
 }
 
 // ----------------------------------------------------------------
@@ -426,6 +509,7 @@ enum EmailLogStatus {
 
 model EmailTemplate {
   id            String   @id @default(cuid())
+  workspaceId   String?
   name          String
   subject       String
   preheader     String?
@@ -436,12 +520,16 @@ model EmailTemplate {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  workspace     Workspace?          @relation(fields: [workspaceId], references: [id])
   sequenceSteps EmailSequenceStep[]
   emailLogs     EmailLog[]
+
+  @@index([workspaceId])
 }
 
 model EmailSequence {
   id           String               @id @default(cuid())
+  workspaceId  String?
   name         String
   description  String?
   triggerType  EmailSequenceTrigger
@@ -450,12 +538,14 @@ model EmailSequence {
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 
+  workspace   Workspace?                  @relation(fields: [workspaceId], references: [id])
   steps       EmailSequenceStep[]
   enrollments EmailAutomationEnrollment[]
   emailLogs   EmailLog[]
 
   @@index([triggerType])
   @@index([isActive])
+  @@index([workspaceId])
 }
 
 model EmailSequenceStep {

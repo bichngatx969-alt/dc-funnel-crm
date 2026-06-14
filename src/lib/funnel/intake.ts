@@ -75,14 +75,22 @@ export async function handleMessagingEvent(event: RawMessaging): Promise<void> {
 
   const page = pageId ? await findOrCreateFacebookPage(pageId) : null;
   if (page && !page.botEnabled) return;
+  const workspaceId = page?.workspaceId ?? null;
 
-  const customer = await findOrCreateCustomer(psid, pageId ?? null, referral, page?.pageAccessTokenEncrypted ?? null);
-  const conversation = await findOrCreateOpenConversation(customer.id, pageId ?? null);
+  const customer = await findOrCreateCustomer(
+    psid,
+    pageId ?? null,
+    workspaceId,
+    referral,
+    page?.pageAccessTokenEncrypted ?? null
+  );
+  const conversation = await findOrCreateOpenConversation(customer.id, pageId ?? null, customer.workspaceId);
 
   // Lưu inbound message + raw payload.
   await prisma.message.create({
     data: {
       conversationId: conversation.id,
+      workspaceId: customer.workspaceId,
       pageId: pageId ?? null,
       direction: "INBOUND",
       senderType: "CUSTOMER",
@@ -120,16 +128,21 @@ export async function handleMessagingEvent(event: RawMessaging): Promise<void> {
 async function findOrCreateCustomer(
   psid: string,
   pageId: string | null,
+  workspaceId: string | null,
   referral: Referral,
   pageAccessToken: string | null
 ): Promise<Customer> {
   const existing = await prisma.customer.findFirst({ where: { psid, pageId } });
+  if (existing?.workspaceId === null && workspaceId) {
+    return prisma.customer.update({ where: { id: existing.id }, data: { workspaceId } });
+  }
   if (existing) return existing;
 
   const profile = await fetchUserProfile(psid, pageAccessToken).catch(() => null);
   try {
     return await prisma.customer.create({
       data: {
+        workspaceId,
         pageId,
         psid,
         name: profile?.name ?? null,
@@ -147,13 +160,20 @@ async function findOrCreateCustomer(
   }
 }
 
-async function findOrCreateOpenConversation(customerId: string, pageId: string | null): Promise<Conversation> {
+async function findOrCreateOpenConversation(
+  customerId: string,
+  pageId: string | null,
+  workspaceId: string | null
+): Promise<Conversation> {
   const open = await prisma.conversation.findFirst({
     where: { customerId, pageId, status: { in: ["BOT_ACTIVE", "HUMAN_TAKEOVER"] } },
     orderBy: { lastMessageAt: "desc" },
   });
+  if (open?.workspaceId === null && workspaceId) {
+    return prisma.conversation.update({ where: { id: open.id }, data: { workspaceId } });
+  }
   if (open) return open;
-  return prisma.conversation.create({ data: { customerId, pageId, status: "BOT_ACTIVE" } });
+  return prisma.conversation.create({ data: { workspaceId, customerId, pageId, status: "BOT_ACTIVE" } });
 }
 
 async function findOrCreateFacebookPage(pageId: string) {

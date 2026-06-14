@@ -1,18 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const q = searchParams.get("q")?.trim();
   const pageId = searchParams.get("pageId");
 
-  const where: any = {};
+  const where: any = { workspaceId };
   if (status && status !== "all") where.status = status;
   if (pageId && pageId !== "all") where.pageId = pageId;
   if (q) {

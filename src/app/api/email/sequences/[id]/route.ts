@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireAdmin } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ const TRIGGERS = [
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
+  const workspaceId = await getCurrentWorkspaceId(auth.user);
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
@@ -32,6 +34,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const steps = Array.isArray(body.steps) ? body.steps : null;
 
   try {
+    const existing = await prisma.emailSequence.findFirst({ where: { id, workspaceId } });
+    if (!existing) return jsonError("Không tìm thấy sequence", 404);
     await prisma.$transaction(async (tx) => {
       if (Object.keys(data).length) await tx.emailSequence.update({ where: { id }, data });
       if (steps) {
@@ -64,8 +68,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
+  const workspaceId = await getCurrentWorkspaceId(auth.user);
   const { id } = await params;
   try {
+    const existing = await prisma.emailSequence.findFirst({ where: { id, workspaceId } });
+    if (!existing) return jsonError("Không tìm thấy sequence", 404);
     await prisma.emailSequence.delete({ where: { id } });
     return jsonOk({ id });
   } catch {

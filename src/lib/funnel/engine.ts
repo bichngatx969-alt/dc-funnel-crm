@@ -55,7 +55,11 @@ export async function runFunnelEngine(params: {
   isFirstInbound: boolean;
 }): Promise<void> {
   const vertical = env.defaultVertical;
-  const stepMap = await loadActiveFlowSteps(vertical, params.conversation.pageId);
+  const stepMap = await loadActiveFlowSteps(
+    vertical,
+    params.conversation.pageId,
+    params.conversation.workspaceId
+  );
   const plan = await buildPlan({
     customer: params.customer,
     inbound: params.inbound,
@@ -69,7 +73,11 @@ export async function runFunnelEngine(params: {
 // ----------------------------------------------------------------
 // Nạp các FlowStep: default (code) + override từ DB nếu có
 // ----------------------------------------------------------------
-async function loadActiveFlowSteps(vertical: Vertical, pageId?: string | null): Promise<Map<string, StepDef>> {
+async function loadActiveFlowSteps(
+  vertical: Vertical,
+  pageId?: string | null,
+  workspaceId?: string | null
+): Promise<Map<string, StepDef>> {
   const map = new Map<string, StepDef>();
   for (const s of getFlowDef(vertical).steps) map.set(s.key, s);
 
@@ -78,10 +86,11 @@ async function loadActiveFlowSteps(vertical: Vertical, pageId?: string | null): 
     pageId
       ? {
           triggerValue: vertical,
+          workspaceId,
           isActive: true,
           OR: [{ pageId }, { pageId: null }],
         }
-      : { triggerValue: vertical, isActive: true, pageId: null };
+      : { triggerValue: vertical, workspaceId, isActive: true, pageId: null };
 
   const flow = await prisma.flow.findFirst({
       where: flowWhere,
@@ -405,6 +414,7 @@ async function applyPlan(
     await prisma.task.create({
       data: {
         customerId: customer.id,
+        workspaceId: customer.workspaceId,
         type: t.type,
         title: t.title,
         status: "TODO",
@@ -450,11 +460,13 @@ async function deliver(
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     select: {
+      workspaceId: true,
       pageId: true,
       facebookPage: { select: { pageAccessTokenEncrypted: true } },
     },
   });
   const pageId = conversation?.pageId ?? null;
+  const workspaceId = conversation?.workspaceId ?? null;
   const pageAccessToken = conversation?.facebookPage?.pageAccessTokenEncrypted ?? null;
 
   for (const m of messages) {
@@ -484,6 +496,7 @@ async function deliver(
     await prisma.message.create({
       data: {
         conversationId,
+        workspaceId,
         pageId,
         direction: "OUTBOUND",
         senderType: "BOT",
@@ -501,6 +514,7 @@ async function deliver(
 async function pickOffer(vertical: Vertical, customer: Customer): Promise<OfferLite | null> {
   const offers = await prisma.offer.findMany({
     where: {
+      workspaceId: customer.workspaceId,
       isActive: true,
       OR: [{ pageId: customer.pageId }, { pageId: null }],
     },

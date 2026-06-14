@@ -5,6 +5,7 @@ import { getEmailProvider } from "@/lib/email";
 import { renderTemplate, renderString } from "@/lib/email/renderer";
 import { buildUnsubscribeUrl } from "@/lib/email/unsubscribe";
 import { rateLimit } from "@/lib/ratelimit";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
   const user = auth.user;
+  const workspaceId = await getCurrentWorkspaceId(user);
   if (!isEmailEnabled())
     return jsonError("Email chưa bật (thiếu RESEND_API_KEY / EMAIL_FROM_ADDRESS)", 400);
 
@@ -34,7 +36,9 @@ export async function POST(req: Request) {
   let subject = "";
   let html = "";
   if (body.templateId) {
-    const t = await prisma.emailTemplate.findUnique({ where: { id: String(body.templateId) } });
+    const t = await prisma.emailTemplate.findFirst({
+      where: { id: String(body.templateId), workspaceId },
+    });
     if (!t) return jsonError("Không tìm thấy template", 404);
     const r = renderTemplate(t, ctx);
     subject = r.subject;

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { sendTextMessage } from "@/lib/facebook/send";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +9,15 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
 
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
   const text = String(body.text ?? "").trim();
   if (!text) return jsonError("Nội dung tin nhắn trống");
 
-  const conversation = await prisma.conversation.findUnique({
-    where: { id },
+  const conversation = await prisma.conversation.findFirst({
+    where: { id, workspaceId },
     include: {
       customer: true,
       facebookPage: { select: { pageAccessTokenEncrypted: true } },
@@ -32,6 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const message = await prisma.message.create({
     data: {
       conversationId: id,
+      workspaceId,
       pageId: conversation.pageId,
       direction: "OUTBOUND",
       senderType: "HUMAN",

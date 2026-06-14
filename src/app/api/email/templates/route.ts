@@ -1,18 +1,24 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireAdmin, requireApiUser } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
-  const templates = await prisma.emailTemplate.findMany({ orderBy: { createdAt: "desc" } });
+  const workspaceId = await getCurrentWorkspaceId(user);
+  const templates = await prisma.emailTemplate.findMany({
+    where: { workspaceId },
+    orderBy: { createdAt: "desc" },
+  });
   return jsonOk(templates);
 }
 
 export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
+  const workspaceId = await getCurrentWorkspaceId(auth.user);
 
   const body = await req.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
@@ -22,6 +28,7 @@ export async function POST(req: Request) {
 
   const tpl = await prisma.emailTemplate.create({
     data: {
+      workspaceId,
       name,
       subject,
       bodyHtml,

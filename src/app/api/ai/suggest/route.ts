@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { isAiEnabled } from "@/lib/env";
 import { aiSuggestReply } from "@/lib/ai/suggest";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
 
   if (!isAiEnabled()) {
     return jsonOk({ enabled: false, suggestion: null });
@@ -18,20 +20,21 @@ export async function POST(req: Request) {
   const conversationId = String(body.conversationId ?? "");
   if (!conversationId) return jsonError("Thiếu conversationId");
 
-  const conversation = await prisma.conversation.findUnique({
-    where: { id: conversationId },
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
     include: { customer: true },
   });
   if (!conversation) return jsonError("Không tìm thấy hội thoại", 404);
 
   const [messages, offers, brandProfile] = await Promise.all([
     prisma.message.findMany({
-      where: { conversationId },
+      where: { workspaceId, conversationId },
       orderBy: { createdAt: "desc" },
       take: 12,
     }),
     prisma.offer.findMany({
       where: {
+        workspaceId,
         isActive: true,
         OR: [{ pageId: conversation.pageId }, { pageId: null }],
       },

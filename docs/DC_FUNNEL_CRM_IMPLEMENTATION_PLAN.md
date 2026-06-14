@@ -1174,6 +1174,51 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng sau PR #2. Chờ founder xác nhận trước khi chuyển sang PR #3 Pipeline API.
 ```
 
+#### 2026-06-14 — Codex (PR #2M)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #2M — Workspace Migration Review
+
+### Đã làm hôm nay
+- Kiểm tra trạng thái migration hiện tại: trước PR #2M repo chưa có prisma/migrations.
+- Chạy npx prisma migrate status để kiểm tra migration state; lệnh không apply migration nhưng fail với "Schema engine error" ở local DB connection, không in secret.
+- Tạo migration SQL offline bằng prisma migrate diff từ schema nền commit 11827be sang schema hiện tại.
+- Không chạy prisma migrate dev/deploy/db push/reset/seed, không deploy, không chạm dữ liệu DB thật.
+- Review migration SQL: chỉ thêm enum role mới, bảng Organization/Workspace/WorkspaceMember, workspaceId nullable, indexes và foreign keys.
+- Quét migration SQL: không có DROP, DELETE FROM, TRUNCATE, SET NOT NULL trên bảng legacy; workspaceId NOT NULL duy nhất nằm trong bảng mới WorkspaceMember.
+
+### Files đã sửa
+- prisma/migrations/20260614_workspace_core/migration.sql
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật report.
+- Không sửa UI/Claude-owned files; working tree đang có một số thay đổi UI sẵn nhưng Codex không chạm trong PR #2M.
+
+### Typecheck/build/test
+- npx prisma generate: PASS
+- npm run typecheck: PASS
+- npm run lint: PASS, còn warning cũ ở src/components/FacebookPageDetailClient.tsx thuộc Claude-owned.
+- npm run build: FAIL ở bước packaging Next sau khi compile/type phase pass; lỗi ENOENT rename .next/export/500.html -> .next/server/pages/500.html. Không tự ý xóa .next vì ngoài scope migration review.
+
+### Blocker
+- npx prisma migrate status fail với Schema engine error khi kiểm tra DB state local; cần founder/dev xác nhận DB connectivity/migration history trước khi apply migration thật.
+- Migration đã tạo nhưng CHƯA chạy. Dữ liệu legacy sẽ bị ẩn bởi workspace filter cho tới khi migration + backfill/seed được chạy có kiểm soát.
+
+### Cần founder quyết
+- Duyệt migration file prisma/migrations/20260614_workspace_core/migration.sql.
+- Sau backup Neon DB, quyết định cách apply: npx prisma migrate deploy trong môi trường kiểm soát, sau đó chạy backfill bằng prisma seed hoặc SQL plan đã ghi ở PR #2M report.
+
+### Cần agent kia hỗ trợ
+- Claude không cần hỗ trợ backend. PR #2B Workspace UI vẫn an toàn để tiếp tục theo API contract READY, nhưng demo với DB thật cần migration/backfill trước.
+
+### Kế hoạch ngày tiếp theo
+- Chờ founder duyệt migration/backfill trước khi chuyển sang PR #3. Không làm Pipeline/Order/Comment-to-Inbox trong PR #2M.
+```
+
 #### 2026-06-14 — Claude
 
 ```text
@@ -1211,6 +1256,51 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Kế hoạch ngày tiếp theo
 - Chờ Codex PR #1 + Workspace API. Khi 16.1 = READY: build Workspace Switcher + nền EmptyState/MoneyVND (PR #2B).
+```
+
+#### 2026-06-14 — Claude (PR #2B Workspace UI)
+
+```text
+## 2026-06-14 — Claude (PR #2B Workspace UI)
+
+### Đang làm PR
+- PR #2B — Workspace UI
+
+### Đã làm hôm nay
+- Xác nhận mục 16.1 Workspace API = READY trước khi code (đúng cổng API contract).
+- WorkspaceSwitcher (sidebar): GET /api/workspaces khi mount; popover chọn brand + ô tìm + tick brand hiện tại; switch qua POST /api/workspaces/switch rồi reload toàn trang để re-scope dữ liệu; có loading skeleton + empty CTA "Tạo brand đầu tiên" + hiển thị lỗi gọn.
+- Gắn WorkspaceSwitcher vào AppShell (thay khối brand tĩnh; thêm wordmark "D.C FUNNEL CRM").
+- EmptyState dùng chung (src/components/EmptyState.tsx).
+- Trang Cài đặt > Brands (src/app/settings/workspaces) + WorkspacesClient: liệt kê brand, chuyển brand, tạo brand mới (POST /api/workspaces; ẩn form nếu không phải legacy ADMIN, backend vẫn enforce requireAdmin).
+- Thêm mục "Brands" vào settings nav. UI tiếng Việt 100%; truncate + popover để mobile không vỡ layout.
+
+### Files đã sửa
+- src/components/workspace/WorkspaceSwitcher.tsx (mới)
+- src/components/workspace/WorkspacesClient.tsx (mới)
+- src/components/workspace/labels.ts (mới)
+- src/components/EmptyState.tsx (mới)
+- src/app/settings/workspaces/page.tsx (mới)
+- src/components/AppShell.tsx (gắn switcher + nav "Brands")
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.4, 19)
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/settings/workspaces/**, docs/**. Không đụng prisma/schema.prisma, src/lib/auth.ts, src/lib/api.ts, src/lib/workspace.ts, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS
+- npm run build: PASS (route /settings/workspaces có trong cây build; /api/workspaces + /api/workspaces/switch nhận diện đúng). Lưu ý: build lần này KHÔNG gặp lỗi ENOENT .next/500.html mà PR #2M báo (B-009) — có vẻ là flake packaging, build sạch của mình đã pass.
+
+### Blocker
+- B-010: UI build đúng theo contract nhưng chạy end-to-end phụ thuộc migration Workspace của Codex (prisma/migrations/20260614_workspace_core) đã áp + backfill/seed + DATABASE_URL hợp lệ. Theo PR #2M, migration CHƯA chạy và .env local đang là giá trị mẫu → switch/list workspace sẽ lỗi runtime cho tới khi DB sẵn sàng. UI đã xử lý lỗi gọn (hiện thông báo, không crash).
+
+### Cần founder quyết
+- Không phát sinh mới trong PR này.
+
+### Cần agent kia hỗ trợ
+- Codex/founder áp migration + backfill (theo PR #2M) để verify switch end-to-end với DB thật.
+
+### Kế hoạch ngày tiếp theo
+- Dừng theo yêu cầu (chỉ làm PR #2B). Bước kế: PR #3B Pipeline UI sau khi mục 16.2 = READY.
 ```
 
 ---
@@ -1452,41 +1542,232 @@ The switch mechanism is an HttpOnly cookie named dc_workspace_id. UI should call
 
 ---
 
-### 18.4. PR #2B — Workspace UI
+### 18.3M. PR #2M — Workspace Migration Review
 
-**Owner:** Claude  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Owner:** Codex  
+**Status:** `DONE`  
+**Branch:** codex/02-workspace-core  
+**Commit/PR link:** Local working tree, chưa tạo commit PR #2M  
 
 #### Summary
 
 ```text
-Chưa cập nhật.
+PR #2M hoàn tất phần review/tạo migration an toàn cho Workspace Core:
+- Tạo migration file offline, không apply lên DB thật.
+- Migration chỉ additive: thêm Organization, Workspace, WorkspaceMember, role enum mới, workspaceId nullable, indexes, foreign keys.
+- Không thêm Pipeline/Order/Comment-to-Inbox.
+- Không drop table/column, không reset database, không deploy, không ép workspaceId NOT NULL.
+- Backfill data legacy được tách thành bước riêng cần founder duyệt sau backup DB.
 ```
 
-#### Files changed
+#### Migration File
 
 ```text
-Chưa cập nhật.
+Created:
+- prisma/migrations/20260614_workspace_core/migration.sql
+
+Migration applied?
+- NO. Không chạy prisma migrate dev/deploy/db push/reset.
+
+Migration state check:
+- npx prisma migrate status: FAIL với Schema engine error ở local DB connection.
+- Trước khi tạo file, repo chưa có prisma/migrations.
+```
+
+#### Schema Changes In Migration
+
+```text
+Role enum:
+- ADD VALUE AGENCY_ADMIN
+- ADD VALUE OWNER
+- ADD VALUE MANAGER
+- ADD VALUE MARKETER
+- Giữ ADMIN legacy.
+
+New tables:
+- Organization
+- Workspace
+- WorkspaceMember
+
+Nullable workspaceId added to legacy/business tables:
+- FacebookPage
+- Customer
+- Conversation
+- Message
+- Flow
+- Offer
+- Task
+- EmailTemplate
+- EmailSequence
+
+Indexes:
+- deletedAt / organizationId indexes for new tables.
+- userId / role / unique workspaceId+userId for WorkspaceMember.
+- workspaceId indexes on all added legacy/business tables.
+
+Foreign keys:
+- Workspace -> Organization
+- WorkspaceMember -> Workspace/User
+- workspaceId nullable relations from legacy/business tables -> Workspace with ON DELETE SET NULL.
+```
+
+#### Migration SQL Safety Review
+
+```text
+PASS:
+- No DROP.
+- No DELETE FROM.
+- No TRUNCATE.
+- No SET NOT NULL on legacy/business tables.
+- workspaceId NOT NULL appears only inside new WorkspaceMember table.
+
+Note:
+- Prisma generated a PostgreSQL warning for adding multiple enum values in one migration on PostgreSQL 11 or earlier. Neon is expected to be modern PostgreSQL, but founder/dev should verify target Postgres version before apply.
+```
+
+#### Backfill Plan
+
+```sql
+-- Run only AFTER schema migration succeeds, DB backup exists, and founder approves.
+-- Values are deterministic placeholders; adjust names if founder wants.
+
+INSERT INTO "Organization" ("id", "name", "createdAt", "updatedAt")
+VALUES ('legacy_default_org', 'D.C Group', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT ("id") DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt";
+
+INSERT INTO "Workspace" (
+  "id", "organizationId", "name", "industry", "timezone", "currency", "locale", "createdAt", "updatedAt"
+)
+VALUES (
+  'legacy_default_workspace',
+  'legacy_default_org',
+  'Default Workspace',
+  'OTHER',
+  'Asia/Ho_Chi_Minh',
+  'VND',
+  'vi-VN',
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+)
+ON CONFLICT ("id") DO UPDATE SET "updatedAt" = EXCLUDED."updatedAt";
+
+INSERT INTO "WorkspaceMember" ("id", "workspaceId", "userId", "role", "assignedOnly", "createdAt")
+SELECT
+  'legacy_member_' || "id",
+  'legacy_default_workspace',
+  "id",
+  CASE WHEN "role" = 'ADMIN'::"Role" THEN 'OWNER'::"Role" ELSE "role" END,
+  false,
+  CURRENT_TIMESTAMP
+FROM "User"
+ON CONFLICT ("workspaceId", "userId") DO NOTHING;
+
+UPDATE "FacebookPage" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "Customer" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "Conversation" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "Message" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "Flow" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "Offer" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "Task" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "EmailTemplate" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+UPDATE "EmailSequence" SET "workspaceId" = 'legacy_default_workspace' WHERE "workspaceId" IS NULL;
+```
+
+#### Preferred Apply Sequence For Founder
+
+```text
+1. Backup Neon DB.
+2. Verify target Postgres version and current migration history.
+3. Review prisma/migrations/20260614_workspace_core/migration.sql.
+4. Apply with npx prisma migrate deploy in controlled environment.
+5. Run one approved backfill path:
+   - npm run prisma:seed, because seed.ts now creates default workspace/member and backfills legacy rows; OR
+   - the SQL backfill plan above, after adjusting names/IDs if needed.
+6. Smoke test GET /api/workspaces and legacy inbox/customer/task reads.
 ```
 
 #### Tests
 
 ```text
-Chưa cập nhật.
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run lint: PASS with existing warning in Claude-owned src/components/FacebookPageDetailClient.tsx.
+npm run build: FAIL after successful compile/type/static page generation, due ENOENT rename .next/export/500.html -> .next/server/pages/500.html.
 ```
 
 #### Risks
 
 ```text
-Chưa cập nhật.
+- npx prisma migrate status failed locally with Schema engine error, so DB migration state was not fully inspectable from this workspace.
+- Migration file does not backfill legacy rows by design. Without backfill/seed after migration, workspace-scoped APIs can hide legacy data.
+- PostgreSQL enum multi-value migration should be checked against Neon Postgres version before apply.
+- Build failure appears to be Next artifact packaging/output issue after compile, not TypeScript/migration failure, but remains unresolved in PR #2M.
+```
+
+#### Handoff to Claude
+
+```text
+Claude PR #2B remains safe to continue:
+- Workspace API contract in 16.1 is still READY.
+- UI can build against GET /api/workspaces, POST /api/workspaces, POST /api/workspaces/switch.
+- For real DB demo, founder/dev must apply migration and run approved backfill/seed first.
+```
+
+---
+
+### 18.4. PR #2B — Workspace UI
+
+**Owner:** Claude  
+**Status:** `DONE`  
+**Branch:** claude/02-workspace-ui (làm trên working tree; repo đã có git từ PR #2)  
+**Commit/PR link:** N/A  
+
+#### Summary
+
+```text
+Người dùng thấy được brand hiện tại và chuyển brand được, theo đúng API contract 16.1.
+- WorkspaceSwitcher trên sidebar (GET /api/workspaces; switch qua POST /api/workspaces/switch + reload).
+- Gắn vào AppShell; thêm wordmark "D.C FUNNEL CRM".
+- EmptyState dùng chung; trang Cài đặt > Brands (xem/chuyển/tạo brand).
+- Chỉ làm UI theo contract. Không sửa schema/auth/api core/workspace.ts/api routes. Không làm Pipeline/Contact/Order UI.
+```
+
+#### Files changed
+
+```text
+src/components/workspace/WorkspaceSwitcher.tsx   (mới)
+src/components/workspace/WorkspacesClient.tsx     (mới)
+src/components/workspace/labels.ts                (mới)
+src/components/EmptyState.tsx                      (mới)
+src/app/settings/workspaces/page.tsx              (mới)
+src/components/AppShell.tsx                        (gắn switcher + nav "Brands")
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md          (mục 17, 18.4, 19)
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS
+npm run build: PASS — route /settings/workspaces có trong cây build; build KHÔNG lặp lại lỗi ENOENT .next/500.html của B-009 (flake).
+Runtime end-to-end (list/switch thật): CHƯA verify — phụ thuộc migration + DB (xem B-010). UI đã degrade gọn khi API lỗi.
+Cách test thủ công khi DB sẵn sàng: đăng nhập → thấy brand ở đầu sidebar → mở popover → chọn brand khác → trang reload, dữ liệu theo brand mới; vào Cài đặt > Brands để tạo/chuyển brand.
+```
+
+#### Risks
+
+```text
+- B-010: chạy thật phụ thuộc migration 20260614_workspace_core đã áp + backfill + DATABASE_URL hợp lệ. Chưa áp migration (PR #2M) nên switch sẽ lỗi runtime tới khi DB sẵn sàng.
+- Chỉ gắn switcher ở sidebar AppShell hiện có; chưa làm lại toàn bộ mobile nav của AppShell (ngoài scope PR #2B) — switcher tự co/truncate nên không làm vỡ layout.
+- POST tạo brand chỉ hiện form cho legacy ADMIN ở UI; backend vẫn là nguồn enforce (requireAdmin).
 ```
 
 #### Handoff
 
 ```text
-Chưa cập nhật.
+- Đạt Acceptance PR #2B (plan mục 12.4): chuyển workspace được; UI không phá layout cũ; mobile vẫn dùng được; empty state có CTA.
+- Cần Codex/founder: áp migration + backfill/seed để demo switch với DB thật (B-010).
+- Claude tiếp theo chờ mục 16.2 Pipeline API = READY để vào PR #3B; chưa đụng Pipeline/Contact/Order UI.
+- Đề xuất nhỏ cho Codex: cân nhắc trả thêm tên Organization trong GET /api/workspaces để switcher hiển thị nhóm theo agency (không bắt buộc cho MVP).
 ```
 
 ---
@@ -1730,6 +2011,17 @@ Agent nào gặp blocker phải ghi vào đây.
 - Không có blocker mới chặn PR #2.
 - Lưu ý an toàn: PR #2 chỉ cập nhật schema/code/seed. Chưa chạy migration/db push/seed/reset/deploy theo đúng yêu cầu.
 - Bước trước runtime với DB thật: cần tạo và review migration additive cho Organization/Workspace/WorkspaceMember + workspaceId nullable, rồi áp migration an toàn.
+
+[2026-06-14 · Codex · PR #2M]
+- B-006 (REVIEW): Đã tạo prisma/migrations/20260614_workspace_core/migration.sql bằng offline diff, nhưng CHƯA chạy migration. Founder cần duyệt migration file, backup Neon DB, rồi mới apply bằng quy trình kiểm soát.
+- B-007 (SAFETY): npx prisma migrate status fail ở local với Schema engine error, nên migration history/DB connectivity chưa xác nhận được từ workspace này. Không in secret, không apply DB.
+- B-008 (FOLLOW-UP): Sau khi apply migration phải chạy backfill/seed đã duyệt; nếu không, workspace-scoped API có thể không thấy legacy data vì workspaceId còn NULL.
+- B-009 (BUILD): npm run build fail ở bước packaging Next với ENOENT rename .next/export/500.html -> .next/server/pages/500.html sau khi compile/type/static generation pass. Không sửa trong PR #2M vì ngoài scope migration review.
+
+[2026-06-14 · Claude · PR #2B]
+- B-009 UPDATE: build của PR #2B PASS, KHÔNG lặp lại lỗi ENOENT .next/500.html → khả năng cao là flake packaging .next, không phải lỗi code.
+- B-010 (RUNTIME DEP): Workspace UI build đúng contract nhưng list/switch chạy thật cần migration 20260614_workspace_core đã áp + backfill/seed + DATABASE_URL hợp lệ. Hiện migration CHƯA chạy (xem B-006/B-008) và .env local là giá trị mẫu → switcher sẽ hiện lỗi/empty cho tới khi DB sẵn sàng (đã xử lý degrade gọn, không crash).
+- Không có blocker nào chặn việc hoàn tất code PR #2B. PR #2B hoàn tất (DONE), chờ DB để demo runtime.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)

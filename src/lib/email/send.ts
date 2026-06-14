@@ -22,7 +22,11 @@ export async function pickOfferForCustomer(
   customer: Customer
 ): Promise<{ title: string; offerText: string } | null> {
   const offers = await prisma.offer.findMany({
-    where: { isActive: true, OR: [{ pageId: customer.pageId }, { pageId: null }] },
+    where: {
+      workspaceId: customer.workspaceId,
+      isActive: true,
+      OR: [{ pageId: customer.pageId }, { pageId: null }],
+    },
     orderBy: { priority: "desc" },
   });
   if (!offers.length) return null;
@@ -81,7 +85,9 @@ export async function sendEmailToCustomer(opts: SendToCustomerOpts): Promise<Sen
   let html = "";
   let text: string | undefined;
   if (opts.templateId) {
-    const t = await prisma.emailTemplate.findUnique({ where: { id: opts.templateId } });
+    const t = await prisma.emailTemplate.findFirst({
+      where: { id: opts.templateId, workspaceId: customer.workspaceId },
+    });
     if (!t) return { ok: false, error: "template_not_found" };
     const r = renderTemplate(t, ctx);
     subject = r.subject;

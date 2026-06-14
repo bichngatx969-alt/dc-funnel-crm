@@ -53,12 +53,13 @@ export async function handleFacebookCallback(code: string, state: string, expect
   return connection;
 }
 
-export async function listAvailablePages(connectionId?: string) {
+export async function listAvailablePages(workspaceId: string, connectionId?: string) {
   const connection = connectionId
     ? await prisma.facebookConnection.findUnique({ where: { id: connectionId } })
     : await prisma.facebookConnection.findFirst({ orderBy: { createdAt: "desc" } });
 
   const connectedPages = await prisma.facebookPage.findMany({
+    where: { workspaceId },
     orderBy: { updatedAt: "desc" },
     select: publicPageSelect,
   });
@@ -98,7 +99,7 @@ export async function listAvailablePages(connectionId?: string) {
   }
 }
 
-export async function connectPage(pageId: string) {
+export async function connectPage(pageId: string, workspaceId: string) {
   const connection = await prisma.facebookConnection.findFirst({ orderBy: { createdAt: "desc" } });
   if (!connection?.accessTokenEncrypted || connection.status !== "CONNECTED") {
     throw new Error("Chưa có kết nối Facebook hợp lệ. Vui lòng bấm Kết nối Facebook trước.");
@@ -110,6 +111,13 @@ export async function connectPage(pageId: string) {
   if (!page?.access_token) {
     await audit("connect_page", "FAILED", pageId, "Không tìm thấy Page hoặc thiếu Page Access Token.");
     throw new Error("Không tìm thấy Page hoặc thiếu Page Access Token. Kiểm tra quyền pages_show_list/pages_messaging.");
+  }
+  const existingPage = await prisma.facebookPage.findUnique({
+    where: { pageId: page.id },
+    select: { workspaceId: true },
+  });
+  if (existingPage?.workspaceId && existingPage.workspaceId !== workspaceId) {
+    throw new Error("Fanpage này đã thuộc workspace khác.");
   }
 
   let webhookSubscribed = false;
@@ -128,8 +136,8 @@ export async function connectPage(pageId: string) {
 
   const saved = await prisma.facebookPage.upsert({
     where: { pageId: page.id },
-    update: pageData(page, connection.id, webhookSubscribed, status, lastError),
-    create: pageData(page, connection.id, webhookSubscribed, status, lastError),
+    update: pageData(page, connection.id, workspaceId, webhookSubscribed, status, lastError),
+    create: pageData(page, connection.id, workspaceId, webhookSubscribed, status, lastError),
     select: publicPageSelect,
   });
 
@@ -140,7 +148,9 @@ export async function connectPage(pageId: string) {
   return saved;
 }
 
-export async function disconnectPage(pageId: string) {
+export async function disconnectPage(pageId: string, workspaceId: string) {
+  const existing = await prisma.facebookPage.findFirst({ where: { pageId, workspaceId } });
+  if (!existing) throw new Error("Không tìm thấy Fanpage");
   const page = await prisma.facebookPage.update({
     where: { pageId },
     data: {
@@ -155,7 +165,9 @@ export async function disconnectPage(pageId: string) {
   return page;
 }
 
-export async function toggleBot(pageId: string, botEnabled: boolean) {
+export async function toggleBot(pageId: string, workspaceId: string, botEnabled: boolean) {
+  const existing = await prisma.facebookPage.findFirst({ where: { pageId, workspaceId } });
+  if (!existing) throw new Error("Không tìm thấy Fanpage");
   const page = await prisma.facebookPage.update({
     where: { pageId },
     data: { botEnabled },
@@ -165,9 +177,10 @@ export async function toggleBot(pageId: string, botEnabled: boolean) {
   return page;
 }
 
-export async function runPageHealthCheck(pageId: string) {
-  const page = await prisma.facebookPage.findUnique({ where: { pageId } });
-  if (!page?.pageAccessTokenEncrypted) {
+export async function runPageHealthCheck(pageId: string, workspaceId: string) {
+  const page = await prisma.facebookPage.findFirst({ where: { pageId, workspaceId } });
+  if (!page) throw new Error("Không tìm thấy Fanpage");
+  if (!page.pageAccessTokenEncrypted) {
     const updated = await prisma.facebookPage.update({
       where: { pageId },
       data: {
@@ -223,6 +236,7 @@ export async function runPageHealthCheck(pageId: string) {
 
 export const publicPageSelect = {
   id: true,
+  workspaceId: true,
   pageId: true,
   pageName: true,
   pageUsername: true,
@@ -238,11 +252,13 @@ export const publicPageSelect = {
 function pageData(
   page: FacebookUserPage,
   connectionId: string,
+  workspaceId: string,
   webhookSubscribed: boolean,
   status: "CONNECTED" | "WEBHOOK_NOT_SUBSCRIBED",
   lastError: string | null
 ) {
   return {
+    workspaceId,
     pageId: page.id,
     pageName: page.name,
     pageUsername: page.username ?? null,

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 
@@ -61,7 +62,7 @@ export type SessionUser = {
   id: string;
   email: string;
   name: string | null;
-  role: "ADMIN" | "SALE";
+  role: Role;
 };
 
 export async function getSessionUser(): Promise<SessionUser | null> {

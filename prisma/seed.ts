@@ -1,4 +1,4 @@
-import { PrismaClient, type Stage } from "@prisma/client";
+import { PrismaClient, type Role, type Stage } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { FLOW_DEFS } from "../src/lib/flows/defaults";
 
@@ -12,7 +12,7 @@ async function main() {
   const adminPassword = process.env.ADMIN_PASSWORD || "changeme123";
   const adminName = process.env.ADMIN_NAME || "Admin D.C";
 
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: adminEmail },
     update: { name: adminName },
     create: {
@@ -23,6 +23,9 @@ async function main() {
     },
   });
   console.log("✔ Admin:", adminEmail);
+
+  const defaultWorkspace = await seedDefaultWorkspace(admin.id, admin.role);
+  console.log("✔ Workspace:", defaultWorkspace.name);
 
   // ----------------------------------------------------------------
   // 2) Brand profile mặc định cho instance MVP
@@ -83,9 +86,9 @@ async function main() {
 
   for (const o of offers) {
     const existing = await prisma.offer.findFirst({
-      where: { pageId: null, title: o.title },
+      where: { workspaceId: defaultWorkspace.id, pageId: null, title: o.title },
     });
-    if (!existing) await prisma.offer.create({ data: o });
+    if (!existing) await prisma.offer.create({ data: { ...o, workspaceId: defaultWorkspace.id } });
   }
   console.log("✔ Offers:", offers.length);
 
@@ -93,10 +96,13 @@ async function main() {
   // 4) Flow mặc định theo industry FASHION
   // ----------------------------------------------------------------
   for (const def of [FLOW_DEFS.fashion]) {
-    let flow = await prisma.flow.findFirst({ where: { triggerValue: def.vertical } });
+    let flow = await prisma.flow.findFirst({
+      where: { workspaceId: defaultWorkspace.id, triggerValue: def.vertical },
+    });
     if (!flow) {
       flow = await prisma.flow.create({
         data: {
+          workspaceId: defaultWorkspace.id,
           name: def.name,
           triggerType: "DEFAULT",
           triggerValue: def.vertical,
@@ -123,14 +129,70 @@ async function main() {
     console.log("✔ Flow:", def.name, `(${def.steps.length} steps)`);
   }
 
-  await seedEmail();
+  await seedEmail(defaultWorkspace.id);
+}
+
+async function seedDefaultWorkspace(userId: string, userRole: Role) {
+  let organization = await prisma.organization.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!organization) {
+    organization = await prisma.organization.create({ data: { name: "D.C Group" } });
+  }
+
+  const brandProfile = await prisma.brandProfile.findFirst({ orderBy: { createdAt: "asc" } });
+  let workspace = await prisma.workspace.findFirst({ orderBy: { createdAt: "asc" } });
+  if (!workspace) {
+    workspace = await prisma.workspace.create({
+      data: {
+        organizationId: organization.id,
+        name: brandProfile?.brandName || "D.C Funnel CRM",
+        industry: brandProfile?.industry ?? "OTHER",
+        timezone: "Asia/Ho_Chi_Minh",
+        currency: "VND",
+        locale: "vi-VN",
+      },
+    });
+  }
+
+  await prisma.workspaceMember.upsert({
+    where: { workspaceId_userId: { workspaceId: workspace.id, userId } },
+    update: { role: workspaceRoleForUserRole(userRole), assignedOnly: false },
+    create: {
+      workspaceId: workspace.id,
+      userId,
+      role: workspaceRoleForUserRole(userRole),
+      assignedOnly: false,
+    },
+  });
+
+  await prisma.$transaction([
+    prisma.facebookPage.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.customer.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.conversation.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.message.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.task.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.offer.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.flow.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.emailTemplate.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+    prisma.emailSequence.updateMany({ where: { workspaceId: null }, data: { workspaceId: workspace.id } }),
+  ]);
+
+  return workspace;
+}
+
+function workspaceRoleForUserRole(role: Role): Role {
+  if (role === "ADMIN") return "OWNER";
+  if (role === "AGENCY_ADMIN") return "AGENCY_ADMIN";
+  if (role === "OWNER") return "OWNER";
+  if (role === "MANAGER") return "MANAGER";
+  if (role === "MARKETER") return "MARKETER";
+  return "SALE";
 }
 
 function wrap(inner: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;line-height:1.6">${inner}<hr style="margin-top:24px;border:none;border-top:1px solid #eee"/><p style="font-size:12px;color:#999">{{appName}} · Nếu không muốn nhận email này nữa, <a href="{{unsubscribeUrl}}">bấm để hủy đăng ký</a>.</p></div>`;
 }
 
-async function seedEmail() {
+async function seedEmail(workspaceId: string) {
   const templates = [
     {
       name: "Fashion - Lead follow-up",
@@ -168,8 +230,8 @@ async function seedEmail() {
 
   const idByName: Record<string, string> = {};
   for (const t of templates) {
-    let row = await prisma.emailTemplate.findFirst({ where: { name: t.name } });
-    if (!row) row = await prisma.emailTemplate.create({ data: t });
+    let row = await prisma.emailTemplate.findFirst({ where: { workspaceId, name: t.name } });
+    if (!row) row = await prisma.emailTemplate.create({ data: { ...t, workspaceId } });
     idByName[t.name] = row.id;
   }
   console.log("✔ Email templates:", templates.length);
@@ -185,10 +247,11 @@ async function seedEmail() {
     { name: "Welcome sau khi đồng ý email", triggerType: "FORM_SUBMITTED", triggerValue: null, templateName: "Fashion - Lead follow-up" },
   ];
   for (const s of sequences) {
-    const existing = await prisma.emailSequence.findFirst({ where: { name: s.name } });
+    const existing = await prisma.emailSequence.findFirst({ where: { workspaceId, name: s.name } });
     if (existing) continue;
     await prisma.emailSequence.create({
       data: {
+        workspaceId,
         name: s.name,
         triggerType: s.triggerType,
         triggerValue: s.triggerValue,

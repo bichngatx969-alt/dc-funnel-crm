@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
 import { LogoutButton } from "./LogoutButton";
+import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" },
@@ -13,6 +14,7 @@ const NAV = [
 ];
 
 const SETTINGS_NAV = [
+  { href: "/settings/workspaces", label: "Brands" },
   { href: "/settings/brand", label: "Brand" },
   { href: "/settings/integrations", label: "Integrations" },
   { href: "/settings/integrations/facebook", label: "Facebook Fanpage" },
@@ -30,9 +32,11 @@ export function AppShell({
   return (
     <div className="flex h-screen overflow-hidden">
       <aside className="flex w-56 shrink-0 flex-col border-r bg-white">
-        <div className="border-b px-4 py-4">
-          <div className="font-bold text-brand">D.C Funnel Bot</div>
-          <div className="text-xs text-gray-500">Chatbot phễu Facebook</div>
+        <div className="space-y-2 border-b p-2">
+          <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            D.C FUNNEL CRM
+          </div>
+          <WorkspaceSwitcher />
         </div>
         <nav className="flex-1 space-y-1 p-2">
           {NAV.map((n) => (

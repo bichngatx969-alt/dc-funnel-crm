@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireAdmin, requireApiUser } from "@/lib/api";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,9 @@ const TRIGGERS = [
 export async function GET() {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
+  const workspaceId = await getCurrentWorkspaceId(user);
   const sequences = await prisma.emailSequence.findMany({
+    where: { workspaceId },
     orderBy: { createdAt: "desc" },
     include: {
       steps: {
@@ -31,6 +34,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
+  const workspaceId = await getCurrentWorkspaceId(auth.user);
 
   const body = await req.json().catch(() => ({}));
   const name = String(body.name ?? "").trim();
@@ -42,6 +46,7 @@ export async function POST(req: Request) {
   try {
     const seq = await prisma.emailSequence.create({
       data: {
+        workspaceId,
         name,
         description: body.description ? String(body.description) : null,
         triggerType: body.triggerType,

@@ -181,11 +181,12 @@ Handoff:
 
 | Vùng | Owner | Trạng thái hiện tại |
 |---|---|---|
-| Docs (`docs/**`) | Claude | ✅ PR #1B đang hoàn tất (spec, wireframe, ownership) |
-| Secure & Stabilize (api.ts/env.ts/stats/README/prisma baseline) | Codex | ⏳ PR #1 (theo plan, song song) |
-| Workspace API (`src/lib/workspace.ts`, `api/workspaces`) | Codex | ⛔ chưa bắt đầu — contract `NOT_READY` |
-| Workspace UI (`AppShell`, `components/workspace`, `settings/workspaces`) | Claude | ⛔ chờ Workspace API `READY` |
-| Pipeline/Contact/Order/Comment/Automation/Stats | Codex→Claude | ⛔ theo thứ tự PR, chưa mở |
+| Docs (`docs/**`) | Claude | ✅ PR #1B DONE (spec, wireframe, ownership) |
+| Secure & Stabilize (api.ts/env.ts/stats/README) | Codex | ✅ PR #1 DONE |
+| Workspace API (`src/lib/workspace.ts`, `api/workspaces`) | Codex | ✅ PR #2 DONE — contract 16.1 `READY`. Migration (PR #2M) đã tạo, CHƯA áp (chờ duyệt) |
+| Workspace UI (`AppShell`, `components/workspace`, `settings/workspaces`) | Claude | ✅ PR #2B DONE — typecheck/build PASS; runtime chờ migration+DB (B-010) |
+| Pipeline API/UI (PR #3/#3B) | Codex→Claude | ⛔ chờ 16.2 Pipeline API `READY` |
+| Contact/Order/Comment/Automation/Stats | Codex→Claude | ⛔ theo thứ tự PR, chưa mở |
 
 > Claude cập nhật cột "trạng thái" khi bắt đầu/đóng mỗi PR UI; Codex cập nhật khi API contract đổi trạng thái.
 
