@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { apiGet, apiSend } from "@/lib/client";
 import type { PipelineStage } from "@/components/pipeline/types";
 
-// Nguồn chọn khách: dùng /api/conversations (workspace-scoped) vì Contact list API (16.3) chưa READY.
-// => Chỉ chọn được khách đã có hội thoại. Khi PR #4 Contact API xong sẽ thay bằng picker đầy đủ.
-type ConvItem = {
+// Nguồn chọn khách: GET /api/contacts (Contact list API, PR #4) — chọn được mọi contact của workspace.
+type ContactItem = {
   id: string;
-  customer: { id: string; name: string | null; psid: string; phone: string | null } | null;
+  name: string | null;
+  phone: string | null;
+  psid?: string;
 };
 type CustomerOption = { id: string; label: string };
 
@@ -45,19 +46,13 @@ export function CreateOpportunityModal({
     (async () => {
       setLoadingCustomers(true);
       try {
-        const convs = await apiGet<ConvItem[]>("/api/conversations");
+        const data = await apiGet<{ items: ContactItem[] }>("/api/contacts?pageSize=100");
         if (cancelled) return;
-        const map = new Map<string, CustomerOption>();
-        for (const c of convs) {
-          if (c.customer && !map.has(c.customer.id)) {
-            const name = c.customer.name || `Khách ${c.customer.psid?.slice(-6) ?? ""}`;
-            map.set(c.customer.id, {
-              id: c.customer.id,
-              label: c.customer.phone ? `${name} · ${c.customer.phone}` : name,
-            });
-          }
-        }
-        setCustomers(Array.from(map.values()));
+        const options = (data.items ?? []).map((c) => {
+          const name = c.name || c.phone || `Khách ${c.psid?.slice(-6) ?? ""}`;
+          return { id: c.id, label: c.phone ? `${name} · ${c.phone}` : name };
+        });
+        setCustomers(options);
       } catch {
         if (!cancelled) setCustomers([]);
       } finally {
@@ -129,7 +124,7 @@ export function CreateOpportunityModal({
               <div className="h-10 animate-pulse rounded border bg-gray-100" />
             ) : customers.length === 0 ? (
               <p className="rounded border border-dashed px-3 py-2 text-xs text-gray-400">
-                Chưa có khách nào. Khách được tạo từ inbox — hãy nhận tin nhắn/bình luận trước.
+                Chưa có khách nào. Thêm khách ở mục “Khách hàng” hoặc nhận tin từ inbox trước.
               </p>
             ) : (
               <select

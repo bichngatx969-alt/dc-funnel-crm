@@ -1484,6 +1484,54 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng theo yêu cầu (chỉ PR #3B). Bước kế: PR #4B Contact UI sau khi mục 16.3 = READY.
 ```
 
+#### 2026-06-14 — Claude (PR #4B Contact UI)
+
+```text
+## 2026-06-14 — Claude (PR #4B Contact UI)
+
+### Đang làm PR
+- PR #4B — Contact UI
+
+### Đã làm hôm nay
+- Xác nhận mục 16.3 Contact API = READY; đọc route thật (contacts, :id, notes, timeline) + contact.ts để build khớp shape. Tạo branch claude/04-contact-ui.
+- /contacts: danh sách (GET /api/contacts) — tìm q, lọc stage + tag, pagination, bảng (desktop) + card (mobile); hiển thị tên/SĐT/email/stage/tags/owner/đếm conv-opp-task-note/lần cuối.
+- /contacts/[id]: Contact 360 (GET /api/contacts/:id) — thông tin + owner + fanpage + tags; tabs Tổng quan(timeline)/Hội thoại/Cơ hội/Việc cần làm/Ghi chú.
+- Tạo contact (POST) + sửa contact (PATCH) qua ContactFormModal dùng chung. Ghi chú: POST /api/contacts/:id/notes (prepend + refresh timeline). Timeline: GET /api/contacts/:id/timeline.
+- Cập nhật Pipeline CreateOpportunityModal: chọn khách từ GET /api/contacts (thay /api/conversations) → chọn được mọi contact.
+- Thêm nav "Khách hàng". UI tiếng Việt 100%; bảng→card trên mobile; tái dùng StageBadge/ScoreBadge/Tag + formatVnd.
+
+### Files đã sửa
+- src/components/contacts/types.ts (mới)
+- src/components/contacts/ContactFormModal.tsx (mới)
+- src/components/contacts/ContactsClient.tsx (mới)
+- src/components/contacts/ContactDetailClient.tsx (mới)
+- src/app/contacts/page.tsx (mới)
+- src/app/contacts/[id]/page.tsx (mới)
+- src/components/AppShell.tsx (nav "Khách hàng")
+- src/components/pipeline/CreateOpportunityModal.tsx (picker khách dùng /api/contacts)
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.8, 19)
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/contacts/**, docs/**. Không đụng prisma, auth.ts, api.ts, workspace.ts, contact.ts, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- npm run build: PASS (full, dev server đã tắt) — /contacts + /contacts/[id] có trong cây build. B-014 (lock build PR #3B) đã hết khi dev server dừng.
+
+### Blocker
+- Không có blocker chặn PR #4B.
+- Hạn chế nhẹ: chưa có API list members (users) → form contact chỉ hiển thị owner (không sửa); list contact bỏ filter "theo owner".
+
+### Cần founder quyết
+- Không mới (D-007 dedup phone/email do Codex/founder chốt ở backend).
+
+### Cần agent kia hỗ trợ
+- (Tương lai) Codex cấp API list workspace members để chọn/đổi owner và lọc theo nhân viên (Contact + Pipeline).
+
+### Kế hoạch ngày tiếp theo
+- Dừng theo yêu cầu (chỉ PR #4B). Bước kế: PR #5B Order UI sau khi mục 16.4 = READY.
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -2796,12 +2844,55 @@ UI can rely on:
 ### 18.8. PR #4B — Contact UI
 
 **Owner:** Claude  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`  
+**Branch:** claude/04-contact-ui  
+**Commit/PR link:** N/A  
+
+#### Summary
 
 ```text
-Chưa cập nhật.
+Contact 360 theo API contract 16.3: danh sách khách (search/filter/pagination), chi tiết khách với tabs
+Tổng quan(timeline)/Hội thoại/Cơ hội/Việc cần làm/Ghi chú, tạo & sửa contact, thêm ghi chú nội bộ.
+Cập nhật Pipeline modal chọn khách qua /api/contacts. Không đụng backend/core/schema/api routes.
+```
+
+#### Files changed
+
+```text
+src/components/contacts/types.ts                    (mới)
+src/components/contacts/ContactFormModal.tsx        (mới)
+src/components/contacts/ContactsClient.tsx          (mới)
+src/components/contacts/ContactDetailClient.tsx     (mới)
+src/app/contacts/page.tsx                           (mới)
+src/app/contacts/[id]/page.tsx                      (mới)
+src/components/AppShell.tsx                          (nav "Khách hàng")
+src/components/pipeline/CreateOpportunityModal.tsx  (picker khách dùng /api/contacts)
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md            (mục 17, 18.8, 19)
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS
+npm run build: PASS (full) — /contacts + /contacts/[id] trong cây build.
+Test thủ công: /contacts → tạo contact → mở detail → sửa thông tin → thêm note → xem timeline;
+Pipeline "Tạo cơ hội" chọn được contact qua /api/contacts.
+```
+
+#### Risks
+
+```text
+- Owner contact chỉ hiển thị, chưa cho sửa trên UI (thiếu API list workspace members); filter "theo owner" cũng bỏ vì lý do này.
+- Tags nhập kiểu phân cách dấu phẩy (chưa chip), đủ cho MVP.
+- Dedup phone/email là việc backend/founder (D-007); UI không tự merge.
+```
+
+#### Handoff
+
+```text
+- Đạt Acceptance PR #4B: contact list theo workspace; detail trả hội thoại/task/cơ hội/note + timeline; tạo note; cập nhật field/contact.
+- Bước kế Claude: PR #5B Order UI khi mục 16.4 = READY.
+- Đề nghị Codex (tương lai): API list workspace members để chọn owner + lọc theo nhân viên (Contact, Pipeline).
 ```
 
 ---
@@ -2987,6 +3078,12 @@ Agent nào gặp blocker phải ghi vào đây.
 [2026-06-14 · Codex · PR #4 Contact API + Notes]
 - B-015 RESOLVED: Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_02_contact_api. npx prisma migrate status up to date; runtime smoke test Contact/Note/Timeline PASS.
 - D-007 vẫn OPEN: chưa áp unique/dedup phone/email ở DB trong PR #4 để tránh rủi ro dữ liệu hiện hữu; cần founder chốt quy tắc merge/dedup.
+
+[2026-06-14 · Claude · PR #4B Contact UI]
+- B-014 RESOLVED: full npm run build PASS sau khi dev server dừng (port 3000 free) — xác nhận B-014 là lock môi trường (.next/prisma engine), không phải code.
+- Dependency PR #4 RESOLVED: Pipeline "Tạo cơ hội" đã chuyển picker khách sang GET /api/contacts (chọn được mọi contact, không chỉ khách có hội thoại).
+- Hạn chế còn lại (không chặn): chưa có API list workspace members → Contact UI không sửa owner / không lọc theo nhân viên. Đề nghị Codex cấp khi tiện.
+- PR #4B hoàn tất (DONE).
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
