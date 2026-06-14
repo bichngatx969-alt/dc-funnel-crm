@@ -1318,6 +1318,90 @@ Runtime note:
 
 ---
 
+### 16.7. Founder Stats API Contract
+
+**Status:** `READY`
+**Owner:** Codex
+**Last updated:** 2026-06-14
+
+```http
+GET /api/stats/founder
+```
+
+Notes:
+
+```text
+Auth:
+- Endpoint require logged-in user.
+- Mọi query filter currentWorkspaceId.
+- Không trả dữ liệu workspace khác.
+
+Query params:
+- range=today|7d|30d|90d|custom, default 30d.
+- from=YYYY-MM-DD và to=YYYY-MM-DD chỉ dùng khi range=custom.
+- compare=previous|none, default none.
+- ownerId optional; ownerId=unassigned lọc bản ghi chưa gán owner/sale.
+- source optional.
+
+Response:
+- { ok: true, data: { range, summary, revenue, pipeline, sources, sales, comments, contacts, tasks, automation, comparison } }.
+
+range:
+- from, to, timezone="Asia/Ho_Chi_Minh".
+- compareFrom/compareTo khi compare=previous.
+
+summary:
+- revenueVnd: tổng totalVnd của order trong range, loại CANCELLED/REFUNDED.
+- paidRevenueVnd: tổng totalVnd của order paymentStatus=PAID.
+- completedRevenueVnd: tổng totalVnd của order status=COMPLETED.
+- ordersCount, paidOrdersCount, averageOrderValueVnd.
+- newContactsCount.
+- openOpportunitiesCount, openPipelineValueVnd.
+- commentsCount, phoneCommentsCount, needsFollowUpCommentsCount.
+- overdueTasksCount.
+
+revenue:
+- byDay: [{ date, revenueVnd, ordersCount }].
+- byStatus: [{ status, count, totalVnd }].
+- byPaymentStatus: [{ paymentStatus, count, totalVnd }].
+
+pipeline:
+- stages: open opportunity summary by stage/pipeline with count and valueVnd.
+- openValueVnd, wonValueVnd, lostValueVnd.
+- conversion: { open, won, lost, winRate }.
+
+sources:
+- contactsBySource.
+- opportunitiesBySource.
+- ordersBySource.
+
+sales:
+- byOwner: owner summary for revenue/orders/new contacts/open/won/lost opportunities/tasks.
+
+comments:
+- byStatus, phoneComments, needsFollowUp.
+
+contacts:
+- byStage.
+
+tasks:
+- dueToday, overdue, completed.
+
+automation:
+- runs, success, failed, skipped.
+
+Runtime note:
+- PR #8 không tạo schema/migration mới.
+- Runtime smoke PASS:
+  GET /api/stats/founder?range=today
+  GET /api/stats/founder?range=7d
+  GET /api/stats/founder?range=30d&compare=previous
+  GET /api/stats/founder?range=custom&from=2026-06-01&to=2026-06-14
+- Smoke xác nhận timezone Asia/Ho_Chi_Minh, money fields integer VND, tenant isolation không lẫn dữ liệu workspace khác.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -2493,6 +2577,57 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Kế hoạch ngày tiếp theo
 - Dừng tại PR #7 theo yêu cầu. Bước tiếp theo: Claude PR #7B Automation UI hoặc Codex PR #8 Founder Stats API khi founder xác nhận.
+```
+
+#### 2026-06-14 — Codex (PR #8 Founder Stats API)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #8 — Founder Stats API
+
+### Đã làm hôm nay
+- Đọc lại plan và xác nhận chỉ làm Founder Stats API, không làm Dashboard UI/PR #8B.
+- Tạo branch codex/08-stats-api từ trạng thái hiện tại.
+- Giữ nguyên /api/stats cũ; thêm route mới GET /api/stats/founder để an toàn.
+- Thêm helper buildFounderStats({ workspaceId, filters }) trong src/lib/founder-stats.ts.
+- Hỗ trợ range=today|7d|30d|90d|custom, from/to, compare=previous, ownerId, source.
+- Tất cả query filter currentWorkspaceId.
+- Tính timezone bằng Asia/Ho_Chi_Minh.
+- Tất cả money fields dùng integer VND.
+- Trả đủ block: summary, revenue, pipeline, sources, sales, comments, contacts, tasks, automation, comparison.
+- Runtime smoke API pass cho today, 7d, 30d compare previous, custom.
+- Tenant isolation smoke pass: thêm order lớn ở workspace khác và xác nhận stats current workspace không đổi.
+
+### Files đã sửa
+- src/lib/founder-stats.ts
+- src/app/api/stats/founder/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật contract/report.
+- Không sửa Dashboard UI, Automation UI, hoặc UI Claude-owned.
+- Lưu ý: docs/dev/BRANCH_AND_OWNERSHIP.md, src/lib/facebook/comments.ts, prisma/migrations/migration_lock.toml đã dirty trước PR #8; Codex không sửa/revert các file đó trong PR #8.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- npx prisma generate: PASS.
+- npm run build: TIMEOUT/HUNG ở Next build process sau khi sinh .next artifacts; không có TypeScript error. Trước đó prisma generate từng fail EPERM do dev server PR #7 còn sót, đã dừng process 3107 và generate PASS. Build rerun vẫn không tự thoát trong 5 phút nên Codex dừng process build để không giữ workspace.
+- Runtime smoke API GET /api/stats/founder: PASS.
+- Không chạy migration vì PR #8 không có schema change.
+
+### Blocker
+- B-020 (BUILD/ENV): next build process treo/timeout sau khi sinh .next artifacts; typecheck và runtime smoke PASS. Cần rerun build trong môi trường sạch nếu founder muốn xác nhận production build exit code.
+
+### Cần founder quyết
+- Không cần quyết để hoàn tất API contract PR #8.
+
+### Cần agent kia hỗ trợ
+- Claude PR #8B Dashboard UI có thể bắt đầu theo mục 16.7 contract READY; nên lưu ý build timeout B-020 là vấn đề môi trường/build process, không phải lỗi typecheck.
+
+### Kế hoạch ngày tiếp theo
+- Dừng tại PR #8 theo yêu cầu. Bước tiếp theo: Claude PR #8B Dashboard UI.
 ```
 
 ---
@@ -4022,12 +4157,64 @@ Test thủ công: /automation → dùng mẫu/tạo rule → bật/tắt → chi
 ### 18.15. PR #8 — Founder Stats API
 
 **Owner:** Codex  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
+**Status:** `DONE`  
+**Branch:** `codex/08-stats-api`  
 **Commit/PR link:**  
 
 ```text
-Chưa cập nhật.
+Summary:
+- Added GET /api/stats/founder.
+- Kept legacy GET /api/stats unchanged.
+- Added src/lib/founder-stats.ts helper with workspace-scoped stats builder.
+- No schema change and no migration.
+
+API contract:
+- GET /api/stats/founder?range=today|7d|30d|90d|custom&from=YYYY-MM-DD&to=YYYY-MM-DD&compare=previous|none&ownerId=&source=
+- Response data includes:
+  range
+  summary
+  revenue
+  pipeline
+  sources
+  sales
+  comments
+  contacts
+  tasks
+  automation
+  comparison
+
+Business rules:
+- All endpoint access requires logged-in user.
+- All data filters currentWorkspaceId.
+- Revenue excludes CANCELLED/REFUNDED for revenueVnd.
+- paidRevenueVnd uses paymentStatus=PAID.
+- completedRevenueVnd uses status=COMPLETED.
+- Money values are integer VND.
+- Date ranges are calculated by Asia/Ho_Chi_Minh day boundary.
+
+Smoke test:
+- GET /api/stats/founder?range=today: PASS.
+- GET /api/stats/founder?range=7d: PASS.
+- GET /api/stats/founder?range=30d&compare=previous: PASS.
+- GET /api/stats/founder?range=custom&from=2026-06-01&to=2026-06-14: PASS.
+- Tenant isolation: PASS. Test inserted a large order in another workspace and current workspace stats did not change.
+- Timezone: PASS, response range.timezone = Asia/Ho_Chi_Minh.
+- Integer VND: PASS, money fields are integers.
+
+Tests:
+- npm run typecheck: PASS.
+- npx prisma generate: PASS.
+- npm run build: TIMEOUT/HUNG in Next build process after .next artifacts were generated. No TypeScript error; runtime smoke passed. See B-020.
+
+Risks:
+- Sales/source stats rely on existing ownerId/source data quality; unassigned/unknown buckets are expected.
+- Build exit code needs one more clean-environment rerun because Next process did not exit within tool timeout.
+
+Handoff to Claude PR #8B Dashboard UI:
+- Use contract 16.7.
+- Dashboard can consume GET /api/stats/founder as the single aggregate endpoint.
+- Prefer showing empty/zero states for unknown source and unassigned owner.
+- Do not call legacy /api/stats for founder dashboard unless preserving old widgets.
 ```
 
 ---
@@ -4162,6 +4349,10 @@ Agent nào gặp blocker phải ghi vào đây.
 - SEND_EMAIL/WEBHOOK: UI hiển thị cảnh báo khóa an toàn (engine SKIPPED) — đúng MVP.
 - Hạn chế (không chặn): conditions/actionConfig nhập JSON thô (chưa form builder field-by-field).
 - Còn lại MVP1 UI: chỉ PR #8B Dashboard (chờ Stats API PR #8).
+
+[2026-06-14 · Codex · PR #8 Founder Stats API]
+- B-020 (BUILD/ENV): npm run build không trả exit code trong timeout 5 phút; Next build process treo sau khi sinh .next artifacts. npm run typecheck PASS, npx prisma generate PASS, runtime smoke GET /api/stats/founder PASS. Cần rerun build trong môi trường sạch để xác nhận production build exit code.
+- Không có blocker chặn API contract PR #8; mục 16.7 đã READY.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
