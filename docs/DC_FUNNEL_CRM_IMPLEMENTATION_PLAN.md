@@ -1303,6 +1303,177 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng theo yêu cầu (chỉ làm PR #2B). Bước kế: PR #3B Pipeline UI sau khi mục 16.2 = READY.
 ```
 
+#### 2026-06-14 — Codex (Apply Workspace Migration Safely)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- Apply Workspace Migration Safely — PREFLIGHT BLOCKED
+
+### Đã làm hôm nay
+- Kiểm tra git status: branch codex/02-workspace-core, working tree sạch.
+- Xác nhận commit cuối: pr2 workspace core migration and workspace ui.
+- Xác nhận .env tồn tại và có DATABASE_URL nhưng không in giá trị.
+- Kiểm tra an toàn .env bằng boolean: DATABASE_URL đang được nhận diện là local DB, không phải Neon.
+- Chạy npx prisma generate và npm run typecheck trước migration.
+- Chạy npx prisma migrate status; lệnh không apply migration nhưng fail với Schema engine error.
+- Review lại prisma/migrations/20260614_workspace_core/migration.sql: additive-only, không DROP/DELETE FROM/TRUNCATE/SET NOT NULL trên bảng cũ.
+- Dừng trước migrate deploy theo rule: migration status không ổn và DATABASE_URL chưa trỏ Neon trong local context.
+- Founder đã duyệt chạy migrate deploy nếu migration additive và không in secret, nhưng Codex chạy lại preflight vẫn thấy DATABASE_URL local/không phải Neon nên vẫn CHƯA deploy.
+- Sau khi founder cập nhật lại .env, Codex rerun preflight: DATABASE_URL tồn tại, nhìn đúng Neon, không phải local; không in secret.
+- npx prisma generate: PASS; npm run typecheck: PASS.
+- npx prisma migrate status kết nối được nhưng exit code 1 vì có 1 migration pending chưa apply; output đã được sanitize, không thấy drift/history risk.
+- Founder duyệt chạy npx prisma migrate deploy; Codex đã chạy deploy với output sanitize.
+- npx prisma migrate deploy: FAIL với Prisma P3005. Status sau đó vẫn báo migration pending và không có failed migration.
+- Không chạy seed/backfill vì migration chưa apply thành công.
+
+### Files đã sửa
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật report/blocker.
+- Không sửa code, không sửa UI, không làm PR #3.
+
+### Typecheck/build/test
+- npx prisma generate: PASS
+- npm run typecheck: PASS
+- npx prisma migrate status: FAIL với Schema engine error
+- Rerun sau khi DATABASE_URL đúng Neon: npx prisma migrate status kết nối được, exit code 1 vì 1 migration pending.
+- npx prisma migrate deploy: FAIL với P3005.
+- npm run build: CHƯA chạy vì migration apply/backfill bị chặn ở preflight.
+
+### Blocker
+- B-010 vẫn OPEN: DB chưa sẵn sàng cho runtime workspace.
+- B-011 mới: DATABASE_URL trong .env local hiện nhìn như local database, không phải Neon; migrate status fail. Không được apply migration cho tới khi founder/dev xác nhận lại DATABASE_URL và Prisma migrate status ổn.
+- B-011 target issue đã được founder sửa; preflight Neon pass. Blocker mới là B-012: Prisma P3005 khi deploy vì Neon DB đã có schema nhưng chưa có migration baseline.
+
+### Cần founder quyết
+- Cập nhật/kiểm tra lại .env local để DATABASE_URL trỏ đúng Neon DB đã rotate, rồi yêu cầu Codex chạy lại preflight. Approval deploy đã có điều kiện, nhưng chỉ dùng khi preflight xác nhận đúng target Neon.
+- Duyệt chiến lược baseline Prisma trước khi deploy lại: tạo baseline migration cho schema hiện hữu, mark baseline applied bằng prisma migrate resolve, rồi deploy workspace migration.
+
+### Cần agent kia hỗ trợ
+- Không cần Claude hỗ trợ.
+
+### Kế hoạch ngày tiếp theo
+- Chờ founder duyệt baseline strategy cho non-empty Neon DB (P3005). Sau đó Codex tạo/review baseline an toàn, mark baseline applied nếu được duyệt, rồi deploy workspace migration, backfill/seed, smoke test và build.
+```
+
+#### 2026-06-14 — Codex (Prisma Baseline Strategy)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- Prisma Baseline + Workspace Migration Apply — WAITING_FOUNDER_APPROVAL
+
+### Đã làm hôm nay
+- Kiểm tra git status và migration folder hiện tại.
+- Xác nhận DATABASE_URL tồn tại, nhìn đúng Neon, không in giá trị.
+- Kiểm tra npx prisma migrate status dạng sanitize: trước baseline có 1 migration pending (workspace), không có failed migration.
+- So sánh read-only Neon schema hiện hữu với schema trước Workspace tại commit 11827be: No difference detected.
+- Tạo baseline migration offline từ empty -> schema trước Workspace.
+- Baseline migration mới: prisma/migrations/20260614_baseline_existing_schema/migration.sql.
+- Kiểm tra thứ tự migrations: baseline đứng trước workspace.
+- Review baseline + workspace SQL: không DROP, không DELETE FROM, không TRUNCATE, không SET NOT NULL.
+- Baseline không chứa Organization/Workspace/WorkspaceMember/workspaceId/Pipeline/Order/Comment.
+- Chạy npx prisma migrate status sau khi thêm baseline file: 2 migrations pending (baseline + workspace), không có failed migration.
+- Dừng trước npx prisma migrate resolve theo đúng yêu cầu.
+- Founder duyệt chạy npx prisma migrate resolve --applied 20260614_baseline_existing_schema.
+- Codex chạy migrate resolve với output sanitize: PASS, baseline marked as applied.
+- Chạy npx prisma migrate status sau resolve: chỉ còn 20260614_workspace_core pending; baseline không còn pending; không có failed migration.
+- Founder duyệt chạy npx prisma migrate deploy nếu baseline đã mark applied và workspace migration additive-only.
+- Codex review lại safety gate: baseline không pending, workspace pending, không failed migration, workspace SQL additive-only.
+- Codex chạy npx prisma migrate deploy với output sanitize: PASS, 20260614_workspace_core applied.
+- Chạy npx prisma migrate status sau deploy: PASS, database schema up to date, không pending, không failed migration.
+- Chưa chạy seed/backfill, chưa smoke test runtime vì cần duyệt riêng.
+
+### Files đã sửa
+- prisma/migrations/20260614_baseline_existing_schema/migration.sql
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật report/blocker.
+- Không sửa UI, không làm PR #3, không chạy seed/backfill.
+
+### Typecheck/build/test
+- npx prisma migrate status: PASS kết nối nhưng exit code 1 vì migrations pending như kỳ vọng.
+- npx prisma migrate diff DB hiện hữu -> schema pre-workspace: PASS, No difference detected.
+- npx prisma migrate diff empty -> schema pre-workspace: PASS, tạo baseline SQL.
+- npx prisma migrate resolve --applied 20260614_baseline_existing_schema: PASS
+- npx prisma migrate status sau resolve: connected, 1 pending migration (20260614_workspace_core), no failed migration.
+- npx prisma migrate deploy: PASS, applied 20260614_workspace_core.
+- npx prisma migrate status sau deploy: PASS, schema up to date, no pending/failed migration.
+- npm run build: CHƯA chạy vì đang dừng trước resolve/deploy/backfill.
+
+### Blocker
+- B-012 DONE: baseline resolved và workspace migration deployed.
+- B-008/B-010 vẫn OPEN: seed/backfill chưa chạy, runtime workspace chưa smoke test.
+
+### Cần founder quyết
+- Duyệt chạy backfill: npm run prisma:seed hoặc SQL backfill đã review trong 18.3M.
+
+### Cần agent kia hỗ trợ
+- Không cần Claude hỗ trợ.
+
+### Kế hoạch ngày tiếp theo
+- Nếu founder duyệt backfill: chạy npm run prisma:seed hoặc SQL backfill đã review, sau đó smoke test GET /api/workspaces và kiểm tra legacy Customer/Conversation/Task/FacebookPage có workspaceId.
+```
+
+#### 2026-06-14 — Codex (Workspace Backfill + Runtime Smoke Test)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- Workspace Backfill + Runtime Smoke Test — DONE
+
+### Đã làm hôm nay
+- Kiểm tra git status: branch codex/02-workspace-core; chỉ còn docs report + baseline migration folder uncommitted.
+- Kiểm tra npx prisma migrate status dạng sanitize: schema up to date, không pending, không failed migration.
+- Review seed safety: prisma/seed.ts không có deleteMany/reset/drop/truncate; backfill dùng upsert/create/update/updateMany.
+- Đo pre-count trước seed: 31 legacy rows đang workspaceId NULL trên Customer/Conversation/Message/Flow/Offer/Task/EmailTemplate/EmailSequence.
+- Chạy npm run prisma:seed theo founder approval: PASS.
+- Xác nhận default Organization/Workspace/WorkspaceMember đã có: 1 organization, 1 workspace HICHAOS, 1 workspace member.
+- Xác nhận backfill: 0 workspaceId NULL ở FacebookPage, Customer, Conversation, Message, Flow, Offer, Task, EmailTemplate, EmailSequence.
+- Smoke test local API bằng dev server + session cookie tạm không in token/cookie:
+  - GET /api/workspaces: 200, ok true, 1 workspace, currentWorkspaceId có.
+  - POST /api/workspaces/switch: 200, ok true.
+- Xác nhận dữ liệu cũ còn thấy theo counts: Customer 2, Conversation 2, Message 11, Task 1; không thấy giảm count so với pre-count.
+- Chạy npx prisma generate, npm run typecheck, npm run build.
+- Không làm PR #3 Pipeline.
+
+### Files đã sửa
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật report/blocker.
+- Không sửa code/UI trong bước này.
+
+### Typecheck/build/test
+- npx prisma migrate status: PASS, schema up to date.
+- npm run prisma:seed: PASS.
+- GET /api/workspaces runtime smoke: PASS.
+- POST /api/workspaces/switch runtime smoke: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+
+### Blocker
+- B-008 RESOLVED: seed/backfill đã chạy.
+- B-010 RESOLVED: Workspace runtime smoke test đã pass.
+- Không còn blocker migration/backfill cho Workspace Core.
+
+### Cần founder quyết
+- Không cần quyết định thêm cho Workspace migration/backfill.
+
+### Cần agent kia hỗ trợ
+- Không cần Claude hỗ trợ.
+
+### Kế hoạch ngày tiếp theo
+- Dừng tại Workspace Backfill + Smoke Test. Chỉ chuyển PR #3 Pipeline khi founder yêu cầu riêng.
+```
+
 ---
 
 ## 18. PR Completion Report
@@ -1772,6 +1943,290 @@ Cách test thủ công khi DB sẵn sàng: đăng nhập → thấy brand ở đ
 
 ---
 
+### 18.4M. Apply Workspace Migration Safely
+
+**Owner:** Codex  
+**Status:** `BLOCKED / NOT APPLIED`  
+**Branch:** codex/02-workspace-core  
+**Commit/PR link:** Local working tree, report update chưa commit  
+
+#### Summary
+
+```text
+Apply migration đã dừng ở preflight theo safety rule:
+- Không chạy npx prisma migrate deploy.
+- Không chạy seed/backfill.
+- Không reset database.
+- Không xóa dữ liệu.
+- Không deploy.
+- Không làm PR #3.
+
+Lý do dừng:
+- DATABASE_URL trong .env local có tồn tại nhưng được nhận diện là local DB, không phải Neon.
+- npx prisma migrate status fail với Schema engine error.
+- Theo rule, nếu migration status không ổn hoặc có rủi ro thì dừng và báo founder.
+- Founder đã duyệt migrate deploy có điều kiện sau review additive, nhưng preflight rerun vẫn nhận diện DATABASE_URL là local DB nên deploy không được chạy.
+- Sau khi founder sửa .env, preflight xác nhận DATABASE_URL nhìn đúng Neon và migration SQL an toàn; migrate deploy được chạy theo approval nhưng fail với P3005.
+- Migration vẫn chưa apply; seed/backfill vẫn chưa chạy.
+```
+
+#### Preflight Results
+
+```text
+git status:
+- Branch: codex/02-workspace-core
+- Working tree trước khi update report: clean
+- Last commit: c5d9401 pr2 workspace core migration and workspace ui
+
+DATABASE_URL:
+- Present: YES
+- Value printed: NO
+- Looks local: YES
+- Looks Neon: NO
+
+Commands:
+- npx prisma generate: PASS
+- npm run typecheck: PASS
+- Initial npx prisma migrate status: FAIL with Schema engine error
+- Rerun after DATABASE_URL fix: CONNECTED, exit code 1 because one migration is pending
+- npx prisma migrate deploy: FAIL with P3005
+```
+
+#### Migration SQL Review
+
+```text
+File reviewed:
+- prisma/migrations/20260614_workspace_core/migration.sql
+
+Safety:
+- No DROP.
+- No DELETE FROM.
+- No TRUNCATE.
+- No SET NOT NULL on legacy/business tables.
+- workspaceId columns on legacy/business tables remain nullable.
+- workspaceId NOT NULL appears only inside new WorkspaceMember table.
+
+Scope:
+- Adds Role enum values: AGENCY_ADMIN, OWNER, MANAGER, MARKETER.
+- Adds Organization, Workspace, WorkspaceMember.
+- Adds nullable workspaceId to FacebookPage, Customer, Conversation, Message, Flow, Offer, Task, EmailTemplate, EmailSequence.
+- Adds indexes and foreign keys.
+- No Pipeline/Order/Comment-to-Inbox changes.
+```
+
+#### Applied?
+
+```text
+Migration applied: NO
+Migration deploy attempted: YES, failed with P3005
+Seed/backfill run: NO
+Workspace API runtime smoke test: NO
+Data loss observed: NO successful DB write/migration was executed by this attempt; post-status still shows migration pending and no failed migration.
+```
+
+#### Founder Next Action
+
+```text
+1. Approve a Prisma baseline strategy for the existing non-empty Neon schema.
+2. Likely safe path:
+   - create a baseline migration representing current pre-workspace schema,
+   - mark that baseline as applied with prisma migrate resolve,
+   - keep 20260614_workspace_core as the next pending additive migration,
+   - rerun npx prisma migrate deploy.
+3. After workspace migration succeeds, approve one backfill path: npm run prisma:seed OR reviewed SQL backfill from 18.3M.
+```
+
+---
+
+### 18.4N. Prisma Baseline + Workspace Migration Apply
+
+**Owner:** Codex  
+**Status:** `WORKSPACE MIGRATION DEPLOYED / BACKFILL PENDING`  
+**Branch:** codex/02-workspace-core  
+**Commit/PR link:** Local working tree, baseline file/report chưa commit  
+
+#### Summary
+
+```text
+Prisma baseline strategy đã được chuẩn bị và baseline đã mark applied:
+- Neon DATABASE_URL nhìn đúng target, không local, không in secret.
+- Neon schema hiện hữu khớp schema pre-workspace tại commit 11827be (read-only diff: No difference detected).
+- Đã tạo baseline migration đại diện schema hiện hữu trước Workspace.
+- Baseline SQL không được apply trực tiếp vào Neon; đã mark applied để Prisma biết schema cũ đã tồn tại.
+- Workspace migration 20260614_workspace_core đã deploy thành công.
+- Seed/backfill CHƯA chạy.
+- Không làm PR #3.
+```
+
+#### Migration Files
+
+```text
+Current order:
+1. prisma/migrations/20260614_baseline_existing_schema/migration.sql
+2. prisma/migrations/20260614_workspace_core/migration.sql
+
+Created in this step:
+- prisma/migrations/20260614_baseline_existing_schema/migration.sql
+
+Already existed:
+- prisma/migrations/20260614_workspace_core/migration.sql
+```
+
+#### Safety Review
+
+```text
+Baseline migration:
+- Generated offline from empty -> pre-workspace schema.
+- Contains CREATE TYPE / CREATE TABLE / CREATE INDEX / ADD CONSTRAINT for existing schema.
+- Does not contain Workspace, Organization, WorkspaceMember, workspaceId, Pipeline, Order, Comment.
+- No DROP.
+- No DELETE FROM.
+- No TRUNCATE.
+- No SET NOT NULL.
+
+Workspace migration:
+- Still additive-only as previously reviewed.
+- Adds workspace tables, nullable workspaceId columns, indexes, foreign keys, role enum values.
+- No DROP / DELETE FROM / TRUNCATE / SET NOT NULL on legacy/business tables.
+```
+
+#### Current DB/Migration State
+
+```text
+Before baseline file:
+- npx prisma migrate status: connected to Neon, 1 pending migration (workspace), no failed migration.
+
+After baseline file:
+- npx prisma migrate status: connected to Neon, 2 pending migrations:
+  1. 20260614_baseline_existing_schema
+  2. 20260614_workspace_core
+- No failed migration detected.
+
+After migrate resolve:
+- npx prisma migrate resolve --applied 20260614_baseline_existing_schema: PASS.
+- npx prisma migrate status: connected to Neon, 1 pending migration:
+  1. 20260614_workspace_core
+- Baseline no longer pending.
+- No failed migration detected.
+
+After workspace deploy:
+- npx prisma migrate deploy: PASS, applied 20260614_workspace_core.
+- npx prisma migrate status: PASS, database schema is up to date.
+- No pending migration.
+- No failed migration detected.
+```
+
+#### Applied?
+
+```text
+Baseline migration created: YES
+Baseline marked applied: YES
+Workspace migration deployed: YES
+Seed/backfill run: YES, completed in 18.4O.
+GET /api/workspaces runtime smoke test: YES, completed in 18.4O.
+Data loss observed: No destructive DB command was executed. Migration was additive-only; backfill/smoke details are in 18.4O.
+```
+
+#### Follow-up
+
+```text
+Backfill and runtime smoke test completed in 18.4O.
+```
+
+---
+
+### 18.4O. Workspace Backfill + Runtime Smoke Test
+
+**Owner:** Codex  
+**Status:** `DONE`  
+**Branch:** codex/02-workspace-core  
+**Commit/PR link:** Local working tree, report update chưa commit  
+
+#### Summary
+
+```text
+Workspace Backfill + Runtime Smoke Test hoàn tất:
+- Chạy npm run prisma:seed theo founder approval.
+- Tạo/xác nhận default Organization, Workspace, WorkspaceMember.
+- Gán workspaceId cho legacy data.
+- Smoke test GET /api/workspaces và POST /api/workspaces/switch bằng local dev server + session cookie tạm; không in token/cookie.
+- Không reset database, không xóa dữ liệu, không drop table/column, không deploy app.
+- Không làm PR #3.
+```
+
+#### Backfill Results
+
+```text
+Before seed:
+- Organization: 0
+- Workspace: 0
+- WorkspaceMember: 0
+- Users: 1
+- Legacy workspaceId NULL total measured: 31
+
+After seed:
+- Organization: 1
+- Workspace: 1 (HICHAOS, Asia/Ho_Chi_Minh, VND, vi-VN)
+- WorkspaceMember: 1
+- Users: 1
+- workspaceId NULL remaining across checked tables: 0
+
+Legacy rows assigned workspaceId:
+- FacebookPage: 0 / 0
+- Customer: 2 / 2
+- Conversation: 2 / 2
+- Message: 11 / 11
+- Flow: 3 / 3
+- Offer: 5 / 5
+- Task: 1 / 1
+- EmailTemplate: 4 / 4
+- EmailSequence: 3 / 3
+- Total assigned/measured: 31
+```
+
+#### Runtime Smoke Test
+
+```text
+Local dev server smoke:
+- GET /api/workspaces: PASS, HTTP 200, ok true, 1 workspace, currentWorkspaceId present.
+- POST /api/workspaces/switch: PASS, HTTP 200, ok true.
+- Session token/cookie was generated only in local process memory and not printed.
+```
+
+#### Data Retention Check
+
+```text
+Counts after backfill:
+- Customer: 2
+- Conversation: 2
+- Message: 11
+- Task: 1
+
+Result:
+- Legacy customer/inbox/task-related records are still present.
+- No count decrease observed in checked legacy tables.
+```
+
+#### Tests
+
+```text
+npx prisma migrate status: PASS, schema up to date, no pending/failed migration.
+npm run prisma:seed: PASS.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+```
+
+#### Blockers
+
+```text
+B-008: RESOLVED.
+B-010: RESOLVED.
+Remaining Workspace migration/backfill blockers: none.
+```
+
+---
+
 ### 18.5. PR #3 — Pipeline API
 
 **Owner:** Codex  
@@ -2022,6 +2477,23 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-009 UPDATE: build của PR #2B PASS, KHÔNG lặp lại lỗi ENOENT .next/500.html → khả năng cao là flake packaging .next, không phải lỗi code.
 - B-010 (RUNTIME DEP): Workspace UI build đúng contract nhưng list/switch chạy thật cần migration 20260614_workspace_core đã áp + backfill/seed + DATABASE_URL hợp lệ. Hiện migration CHƯA chạy (xem B-006/B-008) và .env local là giá trị mẫu → switcher sẽ hiện lỗi/empty cho tới khi DB sẵn sàng (đã xử lý degrade gọn, không crash).
 - Không có blocker nào chặn việc hoàn tất code PR #2B. PR #2B hoàn tất (DONE), chờ DB để demo runtime.
+
+[2026-06-14 · Codex · Apply Workspace Migration Safely]
+- B-006 UPDATE (STILL OPEN): Migration file vẫn CHƯA apply. Dừng trước migrate deploy vì preflight chưa đạt.
+- B-008 UPDATE (STILL OPEN): Backfill/seed vẫn CHƯA chạy vì migration chưa apply.
+- B-010 UPDATE (STILL OPEN): Runtime workspace vẫn chưa verify với DB thật; .env có DATABASE_URL nhưng preflight nhận diện là local DB, không phải Neon.
+- B-011 (BLOCKER): npx prisma migrate status vẫn fail với Schema engine error. Founder/dev cần kiểm tra lại DATABASE_URL trỏ đúng Neon DB đã rotate và migration connectivity trước khi Codex xin duyệt apply.
+- B-011 UPDATE: Founder đã duyệt deploy có điều kiện, nhưng Codex rerun preflight vẫn thấy DATABASE_URL local/LooksNeon = false nên KHÔNG chạy migrate deploy.
+- B-006 UPDATE 2 (STILL OPEN): Sau khi founder sửa .env, Codex đã chạy npx prisma migrate deploy theo approval nhưng Prisma trả P3005; migration workspace vẫn CHƯA apply.
+- B-011 UPDATE 2 (TARGET RESOLVED): DATABASE_URL hiện nhìn đúng Neon và không local; lỗi cũ về target DB được giải quyết.
+- B-012 (BLOCKER): Prisma P3005 vì Neon DB đã có schema nhưng chưa có migration baseline. Cần founder duyệt baseline strategy trước khi retry deploy.
+- B-012 UPDATE (WAITING APPROVAL): Đã tạo baseline migration prisma/migrations/20260614_baseline_existing_schema/migration.sql. DB hiện hữu khớp schema pre-workspace. Cần founder duyệt npx prisma migrate resolve --applied 20260614_baseline_existing_schema.
+- B-012 UPDATE 2 (RESOLVED): Founder duyệt và Codex đã chạy npx prisma migrate resolve --applied 20260614_baseline_existing_schema thành công. Status hiện chỉ còn 20260614_workspace_core pending, không có failed migration.
+- B-006/B-008/B-010 vẫn OPEN: workspace migration chưa deploy, seed/backfill chưa chạy, runtime workspace chưa smoke test.
+- B-006 UPDATE 3 (RESOLVED): Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công; 20260614_workspace_core applied. migrate status hiện schema up to date, không pending/failed migration.
+- B-008/B-010 vẫn OPEN: seed/backfill chưa chạy, runtime workspace chưa smoke test.
+- B-008 UPDATE 2 (RESOLVED): Founder duyệt và Codex đã chạy npm run prisma:seed thành công; legacy rows đã gán workspaceId, null còn lại = 0 ở các bảng kiểm tra.
+- B-010 UPDATE 2 (RESOLVED): Runtime smoke test pass: GET /api/workspaces 200 ok, POST /api/workspaces/switch 200 ok. Không còn blocker migration/backfill cho Workspace Core.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
