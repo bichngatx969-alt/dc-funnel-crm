@@ -901,31 +901,116 @@ Role compatibility:
 
 ### 16.2. Pipeline API Contract
 
-**Status:** `NOT_READY / READY / CHANGED`  
+**Status:** `READY`  
 **Owner:** Codex  
-**Last updated:**  
+**Last updated:** 2026-06-14  
 
 ```http
 GET /api/pipelines
+POST /api/pipelines
+GET /api/pipelines/:id
+PATCH /api/pipelines/:id
+
 GET /api/opportunities
 POST /api/opportunities
+PATCH /api/opportunities/:id
 PATCH /api/opportunities/:id/stage
 ```
 
-Response example:
+GET /api/pipelines response:
 
 ```json
 {
-  "pipelines": [],
-  "stages": [],
-  "opportunities": []
+  "ok": true,
+  "data": {
+    "items": [
+      {
+        "id": "pipeline_id",
+        "workspaceId": "workspace_id",
+        "name": "Pipeline thời trang",
+        "industryTemplate": "FASHION",
+        "isDefault": true,
+        "stages": [
+          {
+            "id": "stage_id",
+            "pipelineId": "pipeline_id",
+            "name": "Lead mới",
+            "position": 0,
+            "color": "#60a5fa",
+            "showInReports": true
+          }
+        ],
+        "_count": { "opportunities": 0 }
+      }
+    ],
+    "templates": [
+      {
+        "key": "FASHION",
+        "label": "Thời trang",
+        "pipelineName": "Pipeline thời trang",
+        "stages": []
+      }
+    ]
+  }
+}
+```
+
+Opportunity response shape:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "opportunity": {
+      "id": "opportunity_id",
+      "workspaceId": "workspace_id",
+      "customerId": "customer_id",
+      "pipelineId": "pipeline_id",
+      "stageId": "stage_id",
+      "title": "Cơ hội mới",
+      "valueVnd": 299000,
+      "status": "OPEN",
+      "ownerId": "user_id",
+      "source": "facebook",
+      "expectedCloseAt": null,
+      "lastActivityAt": "2026-06-14T00:00:00.000Z",
+      "closedAt": null,
+      "deletedAt": null
+    }
+  }
 }
 ```
 
 Notes:
 
 ```text
-Điền sau khi Codex hoàn thành PR #3.
+Auth:
+- GET /api/pipelines: require logged-in user.
+- POST/PATCH /api/pipelines: requireAdmin() => ADMIN, AGENCY_ADMIN, OWNER.
+- Opportunity endpoints: require logged-in user.
+
+Tenant isolation:
+- Every query filters currentWorkspaceId from dc_workspace_id/session.
+- Customer, pipeline, stage, owner are validated against current workspace before writes.
+- Users cannot read/write pipeline or opportunity from another workspace.
+
+Pipeline templates:
+- FASHION: Lead mới → Hỏi mẫu/size → Đã gửi set → Đang cân nhắc → Chốt đơn → Giao hàng → Mua lại
+- STUDIO: Lead mới → Tư vấn concept → Báo giá → Chờ cọc → Đã đặt lịch → Đã chụp → Giao ảnh → Xin review
+- SALON: Lead mới → Đã tư vấn → Đã đặt lịch → Đã đến → Đã thanh toán → Chăm sóc lại
+- AGENCY: Lead mới → Đã trao đổi → Audit → Proposal → Đàm phán → Chốt hợp đồng → Onboarding
+
+Behavior:
+- GET /api/pipelines creates a default pipeline if workspace has none, unless ensureDefault=false.
+- POST /api/pipelines accepts { name?, template?, industryTemplate?, isDefault?, stages? }.
+- POST /api/opportunities accepts { customerId, pipelineId?, stageId?, title?, valueVnd?, ownerId?, source?, expectedCloseAt? }.
+- valueVnd is integer VND; API rounds and clamps to >= 0.
+- PATCH /api/opportunities/:id/stage accepts { stageId, status? } and updates lastActivityAt.
+
+Runtime note:
+- Migration 20260614_workspace_core_01_pipeline_api đã deploy thành công.
+- Runtime smoke test PASS: GET /api/pipelines, ensure default pipeline, POST /api/opportunities, PATCH /api/opportunities/:id/stage.
+- DB hiện up to date, không pending/failed migration sau PR #3.
 ```
 
 ---
@@ -1472,6 +1557,72 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Kế hoạch ngày tiếp theo
 - Dừng tại Workspace Backfill + Smoke Test. Chỉ chuyển PR #3 Pipeline khi founder yêu cầu riêng.
+```
+
+#### 2026-06-14 — Codex (PR #3 Pipeline API)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #3 — Pipeline API — DONE
+
+### Đã làm hôm nay
+- Tạo branch codex/03-pipeline-api sau khi commit riêng phần Workspace baseline/backfill completion.
+- Thêm schema additive: OpportunityStatus, Pipeline, PipelineStage, Opportunity.
+- Chọn customerId theo model hiện tại Customer; chưa tạo Contact model riêng.
+- Thêm helper src/lib/pipeline.ts với template ngành FASHION/STUDIO/SALON/AGENCY, ensure default pipeline, validate customer/stage/owner theo workspace.
+- Thêm API Pipeline: GET/POST /api/pipelines, GET/PATCH /api/pipelines/:id.
+- Thêm API Opportunity: GET/POST /api/opportunities, PATCH /api/opportunities/:id, PATCH /api/opportunities/:id/stage.
+- Mọi query/write mới filter currentWorkspaceId hoặc validate entity thuộc current workspace.
+- valueVnd lưu integer đồng; API round/clamp >= 0, không dùng float.
+- Không làm Pipeline UI, Order Lite, Contact UI, Comment-to-Inbox, Automation.
+- Tạo migration offline: prisma/migrations/20260614_workspace_core_01_pipeline_api/migration.sql.
+- Review migration SQL: additive-only; không DROP, DELETE FROM, TRUNCATE, SET NOT NULL; không ON DELETE CASCADE.
+- Founder duyệt migrate deploy; đã chạy npx prisma migrate deploy thành công.
+- npx prisma migrate status sau deploy: schema up to date, không pending/failed migration.
+- Runtime smoke test PASS:
+  GET /api/pipelines 200, ensure default pipeline có 7 stage.
+  POST /api/opportunities 201 tạo opportunity trong currentWorkspaceId.
+  PATCH /api/opportunities/:id/stage 200 chuyển stage thành công.
+- Verify DB: Pipeline và Opportunity thuộc currentWorkspaceId; legacy Customer/Conversation/Task/FacebookPage counts không giảm.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260614_workspace_core_01_pipeline_api/migration.sql
+- src/lib/pipeline.ts
+- src/app/api/pipelines/route.ts
+- src/app/api/pipelines/[id]/route.ts
+- src/app/api/opportunities/route.ts
+- src/app/api/opportunities/[id]/route.ts
+- src/app/api/opportunities/[id]/stage/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật contract/report.
+- Không sửa UI/Claude-owned app/components.
+- Lưu ý: docs/dev/BRANCH_AND_OWNERSHIP.md đang modified ngoài scope trước report PR #3; Codex không sửa/revert file này.
+
+### Typecheck/build/test
+- npx prisma format: PASS
+- npx prisma generate: PASS
+- npm run typecheck: PASS
+- npm run build: PASS
+- npx prisma migrate deploy: PASS, applied 20260614_workspace_core_01_pipeline_api.
+- npx prisma migrate status: PASS, schema up to date, no pending/failed migration.
+- API runtime smoke: PASS.
+
+### Blocker
+- B-013 RESOLVED: Pipeline migration deployed and runtime smoke test passed.
+
+### Cần founder quyết
+- Không cần quyết định thêm cho PR #3 Pipeline API.
+
+### Cần agent kia hỗ trợ
+- Claude PR #3B Pipeline UI có thể bắt đầu từ contract 16.2.
+
+### Kế hoạch ngày tiếp theo
+- Dừng tại PR #3 theo yêu cầu. Bước tiếp theo đề xuất: Claude PR #3B Pipeline UI.
 ```
 
 ---
@@ -2230,38 +2381,85 @@ Remaining Workspace migration/backfill blockers: none.
 ### 18.5. PR #3 — Pipeline API
 
 **Owner:** Codex  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`  
+**Branch:** codex/03-pipeline-api  
+**Commit/PR link:** Local working tree, chưa commit PR #3  
 
 #### Summary
 
 ```text
-Chưa cập nhật.
+PR #3 Pipeline API complete:
+- Added additive schema for Pipeline, PipelineStage, Opportunity and OpportunityStatus.
+- Added industry pipeline templates for FASHION, STUDIO, SALON, AGENCY.
+- Added backend helper src/lib/pipeline.ts for template creation, default pipeline, workspace validation, VND parsing.
+- Added Pipeline APIs:
+  GET /api/pipelines
+  POST /api/pipelines
+  GET /api/pipelines/:id
+  PATCH /api/pipelines/:id
+- Added Opportunity APIs:
+  GET /api/opportunities
+  POST /api/opportunities
+  PATCH /api/opportunities/:id
+  PATCH /api/opportunities/:id/stage
+- Every query/write scopes by currentWorkspaceId or validates related entity belongs to current workspace.
+- No Pipeline UI, Order Lite, Contact UI, Comment-to-Inbox, or Automation work.
+- Migration 20260614_workspace_core_01_pipeline_api deployed successfully.
+- Runtime smoke test passed against local app connected to Neon DB.
 ```
 
 #### API Contract Updated?
 
 ```text
-Chưa cập nhật.
+YES — mục 16.2 Pipeline API Contract đã đặt Status = READY.
+Runtime note: DB migration 20260614_workspace_core_01_pipeline_api applied; API smoke test passed.
 ```
 
 #### Files changed
 
 ```text
-Chưa cập nhật.
+prisma/schema.prisma
+prisma/migrations/20260614_workspace_core_01_pipeline_api/migration.sql
+src/lib/pipeline.ts
+src/app/api/pipelines/route.ts
+src/app/api/pipelines/[id]/route.ts
+src/app/api/opportunities/route.ts
+src/app/api/opportunities/[id]/route.ts
+src/app/api/opportunities/[id]/stage/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
 ```
 
 #### Tests
 
 ```text
-Chưa cập nhật.
+npx prisma format: PASS
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+npx prisma migrate deploy: PASS, applied 20260614_workspace_core_01_pipeline_api.
+npx prisma migrate status: PASS, schema up to date; no pending/failed migration.
+Migration SQL review: PASS additive-only; no DROP, DELETE FROM, TRUNCATE, SET NOT NULL, or ON DELETE CASCADE.
+API smoke test: PASS.
+- GET /api/pipelines: 200, ensured default pipeline with 7 stages.
+- POST /api/opportunities: 201, created opportunity in currentWorkspaceId.
+- PATCH /api/opportunities/:id/stage: 200, moved opportunity stage.
+- DB verification: Pipeline/Opportunity workspaceId matched currentWorkspaceId.
+- Legacy counts did not decrease: Customer 2, Conversation 2, Task 1, FacebookPage 0.
+- Cross-workspace denial not fully exercised because DB currently has 1 active workspace and no other-workspace pipeline; route code still scopes all reads/writes by currentWorkspaceId.
 ```
 
 #### Handoff to Claude
 
 ```text
-Chưa cập nhật.
+Claude PR #3B Pipeline UI can start from contract 16.2.
+
+UI can rely on:
+- GET /api/pipelines returns { items, templates } and auto-creates default pipeline unless ensureDefault=false.
+- Pipeline stages are ordered by position.
+- GET /api/pipelines/:id returns stages + opportunities + stageSummaries.
+- valueVnd is integer VND.
+- Move cards with PATCH /api/opportunities/:id/stage { stageId, status? }.
+- Create opportunity with POST /api/opportunities { customerId, pipelineId?, stageId?, title?, valueVnd?, ownerId?, source?, expectedCloseAt? }.
 ```
 
 ---
@@ -2494,6 +2692,9 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-008/B-010 vẫn OPEN: seed/backfill chưa chạy, runtime workspace chưa smoke test.
 - B-008 UPDATE 2 (RESOLVED): Founder duyệt và Codex đã chạy npm run prisma:seed thành công; legacy rows đã gán workspaceId, null còn lại = 0 ở các bảng kiểm tra.
 - B-010 UPDATE 2 (RESOLVED): Runtime smoke test pass: GET /api/workspaces 200 ok, POST /api/workspaces/switch 200 ok. Không còn blocker migration/backfill cho Workspace Core.
+
+[2026-06-14 · Codex · PR #3 Pipeline API]
+- B-013 RESOLVED: Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_01_pipeline_api. npx prisma migrate status up to date; runtime smoke test Pipeline/Opportunity PASS.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)

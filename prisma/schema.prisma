@@ -72,6 +72,12 @@ enum TaskStatus {
   CANCELLED
 }
 
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+}
+
 enum Industry {
   FASHION
   STUDIO
@@ -124,6 +130,7 @@ model User {
 
   assignedConversations Conversation[]    @relation("AssignedConversations")
   assignedTasks         Task[]            @relation("AssignedTasks")
+  ownedOpportunities    Opportunity[]     @relation("OwnedOpportunities")
   workspaceMemberships  WorkspaceMember[]
 }
 
@@ -160,6 +167,8 @@ model Workspace {
   flows          Flow[]
   offers         Offer[]
   tasks          Task[]
+  pipelines      Pipeline[]
+  opportunities  Opportunity[]
   emailTemplates EmailTemplate[]
   emailSequences EmailSequence[]
 
@@ -306,6 +315,7 @@ model Customer {
   conversations     Conversation[]
   funnelEvents      FunnelEvent[]
   tasks             Task[]
+  opportunities     Opportunity[]
   emailLogs         EmailLog[]
   emailEnrollments  EmailAutomationEnrollment[]
   unsubscribeTokens UnsubscribeToken[]
@@ -462,6 +472,76 @@ model Task {
   @@index([status])
   @@index([dueAt])
   @@index([workspaceId])
+}
+
+model Pipeline {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  name             String
+  industryTemplate String?
+  isDefault        Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id])
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+
+  @@index([workspaceId])
+  @@index([deletedAt])
+  @@index([isDefault])
+}
+
+model PipelineStage {
+  id            String   @id @default(cuid())
+  pipelineId    String
+  name          String
+  position      Int
+  color         String?
+  showInReports Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id])
+  opportunities Opportunity[]
+
+  @@unique([pipelineId, position])
+  @@index([pipelineId])
+}
+
+model Opportunity {
+  id              String            @id @default(cuid())
+  workspaceId     String
+  customerId      String
+  pipelineId      String
+  stageId         String
+  title           String
+  valueVnd        Int               @default(0)
+  status          OpportunityStatus @default(OPEN)
+  ownerId         String?
+  source          String?
+  expectedCloseAt DateTime?
+  lastActivityAt  DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  closedAt        DateTime?
+  deletedAt       DateTime?
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id])
+  customer  Customer      @relation(fields: [customerId], references: [id])
+  pipeline  Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage     PipelineStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  owner     User?         @relation("OwnedOpportunities", fields: [ownerId], references: [id])
+
+  @@index([workspaceId])
+  @@index([pipelineId])
+  @@index([stageId])
+  @@index([customerId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([expectedCloseAt])
 }
 
 // ----------------------------------------------------------------

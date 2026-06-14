@@ -184,7 +184,7 @@ Handoff:
 | Docs (`docs/**`) | Claude | ✅ PR #1B DONE (spec, wireframe, ownership) |
 | Secure & Stabilize (api.ts/env.ts/stats/README) | Codex | ✅ PR #1 DONE |
 | Workspace API (`src/lib/workspace.ts`, `api/workspaces`) | Codex | ✅ PR #2 DONE — contract 16.1 `READY`. Migration (PR #2M) đã tạo, CHƯA áp (chờ duyệt) |
-| Workspace UI (`AppShell`, `components/workspace`, `settings/workspaces`) | Claude | ✅ PR #2B DONE — typecheck/build PASS; runtime chờ migration+DB (B-010) |
+| Workspace UI (`AppShell`, `components/workspace`, `settings/workspaces`) | Claude | ✅ PR #2B DONE — verified (workspace migrate+backfill+smoke test xong); B-010 cleared |
 | Pipeline API/UI (PR #3/#3B) | Codex→Claude | ⛔ chờ 16.2 Pipeline API `READY` |
 | Contact/Order/Comment/Automation/Stats | Codex→Claude | ⛔ theo thứ tự PR, chưa mở |
 
