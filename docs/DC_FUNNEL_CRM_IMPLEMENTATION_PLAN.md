@@ -1084,20 +1084,77 @@ Runtime note:
 
 ### 16.4. Order API Contract
 
-**Status:** `NOT_READY / READY / CHANGED`  
-**Owner:** Codex  
-**Last updated:**  
+**Status:** `READY`
+**Owner:** Codex
+**Last updated:** 2026-06-14
 
 ```http
 GET /api/orders
 POST /api/orders
+GET /api/orders/:id
+PATCH /api/orders/:id
 PATCH /api/orders/:id/status
+
+GET /api/products
+POST /api/products
 ```
 
 Notes:
 
 ```text
-Điền sau khi Codex hoàn thành PR #5.
+Auth:
+- Tất cả endpoint require logged-in user.
+- Tất cả query/write filter currentWorkspaceId hoặc validate entity thuộc current workspace.
+
+Entity:
+- ProductLite: sản phẩm nhẹ cho tạo đơn nhanh, không làm tồn kho.
+- Order: đơn hàng nhẹ gắn customerId, optional opportunityId, optional ownerId.
+- OrderItem: snapshot dòng hàng tại thời điểm tạo đơn.
+
+GET /api/products:
+- Query: q/search, active=true/false, page/pageSize hoặc limit.
+- Response: { ok, data: { items, pagination } }.
+
+POST /api/products body:
+- { name, sku?, priceVnd?, description?, isActive? }.
+- priceVnd là integer VND, API round/clamp >= 0.
+
+GET /api/orders:
+- Query: q/search, customerId, opportunityId, ownerId, status, paymentStatus, page/pageSize.
+- Response: { ok, data: { items, pagination } }.
+
+POST /api/orders body:
+- { customerId, opportunityId?, ownerId?, code?, status?, paymentStatus?, paymentMethod?, items, discountVnd?, shippingFeeVnd?, depositVnd?, note?, shippingName?, shippingPhone?, shippingAddress? }.
+- items: [{ productId?, name?, sku?, quantity, unitPriceVnd?, discountVnd? }].
+- customerId phải thuộc currentWorkspaceId.
+- opportunityId nếu truyền phải thuộc currentWorkspaceId và cùng customerId.
+- ownerId nếu truyền phải là WorkspaceMember trong currentWorkspaceId.
+
+Money:
+- Không dùng float.
+- lineTotalVnd = max(0, quantity * unitPriceVnd - item.discountVnd).
+- subtotalVnd = sum(lineTotalVnd).
+- totalVnd = max(0, subtotalVnd - order.discountVnd + shippingFeeVnd).
+- depositVnd lưu riêng, không trừ khỏi totalVnd trong PR #5.
+
+PATCH /api/orders/:id:
+- Update metadata, shipping, status/payment, discount/shipping/deposit.
+- PR #5 không hỗ trợ cập nhật items sau khi tạo đơn để tránh xóa cứng OrderItem; UI cần tạo đơn mới hoặc chờ item-level API ở PR sau nếu cần sửa dòng hàng.
+- Soft-delete qua { deleted: true }.
+
+PATCH /api/orders/:id/status:
+- Body { status, paymentStatus?, paymentMethod? }.
+- Cập nhật confirmedAt/completedAt/cancelledAt theo status.
+
+Side effects:
+- Khi tạo/cập nhật/order status, cập nhật Customer.lastActivityAt.
+- Nếu order có opportunityId, cập nhật Opportunity.lastActivityAt.
+- Không tự đổi opportunity WON/stage trong PR #5 để tránh side effect phức tạp.
+
+Runtime note:
+- Migration 20260614_workspace_core_03_order_lite_api đã deploy thành công bằng npx prisma migrate deploy.
+- npx prisma migrate status sau deploy: schema up to date, không pending/failed migration.
+- Runtime smoke test PASS: GET/POST products, GET/POST/PATCH orders, PATCH order status; totalVnd integer đúng, ProductLite/Order thuộc currentWorkspaceId, Order gắn customerId đúng workspace, opportunityId cùng workspace/customer, Customer.lastActivityAt được cập nhật.
 ```
 
 ---
@@ -1532,6 +1589,54 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng theo yêu cầu (chỉ PR #4B). Bước kế: PR #5B Order UI sau khi mục 16.4 = READY.
 ```
 
+#### 2026-06-14 — Claude (PR #5B Order UI)
+
+```text
+## 2026-06-14 — Claude (PR #5B Order UI)
+
+### Đang làm PR
+- PR #5B — Order UI
+
+### Đã làm hôm nay
+- Xác nhận mục 16.4 Order API = READY; đọc route thật (orders, :id, :id/status, products) + lib/order.ts (enums, orderInclude, công thức tiền). Tạo branch claude/05-order-ui.
+- /orders: danh sách đơn (GET /api/orders) — tìm q, lọc status + paymentStatus, pagination, bảng (desktop) + card (mobile); hiển thị mã đơn/khách/tổng tiền/trạng thái/thanh toán/ngày/phụ trách.
+- /orders/[id]: chi tiết đơn (GET /api/orders/:id) — khách/cơ hội/owner, bảng dòng hàng, tổng tiền (tạm tính/giảm/ship/tổng/cọc/còn lại), giao hàng + ghi chú; panel đổi trạng thái (PATCH /api/orders/:id/status).
+- OrderFormModal (POST /api/orders): chọn khách qua /api/contacts, cơ hội theo khách (/api/opportunities), dòng hàng chọn/suggest product (/api/products) + nhập tay, tạo nhanh product (POST /api/products), giảm/ship/cọc, thanh toán/trạng thái, giao hàng, ghi chú; preview tổng tiền VND client.
+- Tích hợp Contact detail: tab "Đơn hàng" (GET /api/orders?customerId) + nút "Tạo đơn" (khoá sẵn khách).
+- Thêm nav "Đơn hàng". UI tiếng Việt 100%; bảng→card mobile; modal full-screen sheet. Tôn trọng giới hạn PR #5 (không sửa dòng hàng sau tạo; total do API tính).
+
+### Files đã sửa
+- src/components/orders/types.ts (mới)
+- src/components/orders/OrderFormModal.tsx (mới)
+- src/components/orders/OrdersClient.tsx (mới)
+- src/components/orders/OrderDetailClient.tsx (mới)
+- src/app/orders/page.tsx (mới)
+- src/app/orders/[id]/page.tsx (mới)
+- src/components/AppShell.tsx (nav "Đơn hàng")
+- src/components/contacts/ContactDetailClient.tsx (tab "Đơn hàng" + nút Tạo đơn)
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.10, 19)
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/orders/**, docs/**. Không đụng prisma, auth.ts, api.ts, workspace.ts, order.ts, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- next build: FULL PASS (Compiled successfully + type validation + static pages 5/5 + traces) dù dev server đang chạy. npm run build có bước prisma generate có thể vướng lock dev server (class B-014) nhưng Prisma client đã current.
+
+### Blocker
+- Không có blocker chặn PR #5B.
+- Lưu ý: Order API (PR #5) của Codex đang ở working tree CHƯA commit trên branch codex/05-order-api (M schema.prisma; ?? api/orders, api/products, lib/order.ts, migration). UI build trên đó; Codex/founder cần commit.
+
+### Cần founder quyết
+- Không mới (D-003 tiền VND integer đã áp).
+
+### Cần agent kia hỗ trợ
+- Codex commit Order API (PR #5). (Tương lai) API list members để chọn owner đơn + lọc theo nhân viên.
+
+### Kế hoạch ngày tiếp theo
+- Dừng theo yêu cầu (chỉ PR #5B). Bước kế: PR #6B Comment UI sau khi mục 16.5 = READY.
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -1843,6 +1948,91 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Kế hoạch ngày tiếp theo
 - Dừng tại PR #4 theo yêu cầu. Bước tiếp theo đề xuất: Claude PR #4B Contact UI.
+```
+
+#### 2026-06-14 — Codex (PR #5 Order Lite API)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #5 — Order Lite API — DONE
+
+### Đã làm hôm nay
+- Tạo branch codex/05-order-api từ trạng thái hiện tại sau PR #4B.
+- Thêm schema additive: ProductLite, Order, OrderItem.
+- Thêm enum OrderStatus, PaymentStatus, PaymentMethod.
+- Thêm helper src/lib/order.ts cho validate workspace/customer/opportunity/owner/product, normalize items, tính tiền integer VND, sinh mã đơn.
+- Thêm API Product:
+  GET /api/products
+  POST /api/products
+- Thêm API Order:
+  GET /api/orders
+  POST /api/orders
+  GET /api/orders/:id
+  PATCH /api/orders/:id
+  PATCH /api/orders/:id/status
+- Mọi endpoint require logged-in user.
+- Mọi query/write filter currentWorkspaceId hoặc validate entity thuộc current workspace.
+- Order validate customerId thuộc workspace; opportunityId thuộc workspace và cùng customerId; ownerId là WorkspaceMember.
+- totalVnd tính từ items, discount, shippingFee bằng integer VND; không dùng float.
+- Không làm kho/tồn kho/kế toán/COD reconciliation.
+- Không hard-delete dữ liệu; Order/Product dùng deletedAt.
+- Khi tạo/cập nhật/status order: cập nhật Customer.lastActivityAt; nếu có opportunityId, cập nhật Opportunity.lastActivityAt.
+- Không tự đổi opportunity WON/stage để tránh side effect phức tạp.
+- Tạo migration additive: prisma/migrations/20260614_workspace_core_03_order_lite_api/migration.sql.
+- Review migration SQL: additive-only; không DROP, DELETE FROM, TRUNCATE, SET NOT NULL; không ON DELETE CASCADE.
+- Founder duyệt migrate deploy; Codex đã chạy npx prisma migrate deploy thành công.
+- Sau deploy, npx prisma migrate status báo schema up to date, không pending/failed migration.
+- Runtime smoke test API thật PASS:
+  GET /api/products
+  POST /api/products
+  GET /api/orders
+  POST /api/orders
+  GET /api/orders/:id
+  PATCH /api/orders/:id
+  PATCH /api/orders/:id/status
+- Smoke xác nhận ProductLite/Order thuộc currentWorkspaceId, Order gắn customerId đúng workspace, opportunityId cùng workspace/customer, totalVnd integer đúng 290000, Customer.lastActivityAt được cập nhật, dữ liệu cũ không giảm count.
+- Chặn PATCH /api/orders/:id với items trong PR #5 để tránh xóa cứng OrderItem; cần item-level API sau nếu muốn sửa dòng hàng.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260614_workspace_core_03_order_lite_api/migration.sql
+- src/lib/order.ts
+- src/app/api/products/route.ts
+- src/app/api/orders/route.ts
+- src/app/api/orders/[id]/route.ts
+- src/app/api/orders/[id]/status/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật contract/report.
+- Không sửa UI/Claude-owned app/components.
+- Lưu ý: docs/dev/BRANCH_AND_OWNERSHIP.md đang modified từ PR #4B trước khi Codex bắt đầu PR #5; Codex không sửa/revert file này.
+
+### Typecheck/build/test
+- npx prisma format: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- npx prisma migrate status trước deploy: connected, 1 pending migration 20260614_workspace_core_03_order_lite_api, no failed migration.
+- Migration safety scan: PASS additive-only.
+- npx prisma migrate deploy: PASS; applied 20260614_workspace_core_03_order_lite_api.
+- npx prisma migrate status sau deploy: PASS; schema up to date, không pending/failed migration.
+- API runtime smoke: PASS.
+
+### Blocker
+- B-016 RESOLVED: Founder đã duyệt; migration deploy và runtime smoke test API thật đều PASS.
+
+### Cần founder quyết
+- D-003 vẫn OPEN nhưng PR #5 đã triển khai theo đề xuất: lưu tiền VND bằng integer đồng.
+- Không cần founder quyết thêm để hoàn tất PR #5.
+
+### Cần agent kia hỗ trợ
+- Claude PR #5B Order UI có thể bắt đầu theo mục 16.4 contract đã READY + runtime PASS.
+
+### Kế hoạch ngày tiếp theo
+- Dừng tại PR #5 theo yêu cầu. Bước tiếp theo: Claude PR #5B Order UI; nếu cần sửa dòng hàng trong đơn, đề xuất Codex PR sau thêm item-level API soft-safe.
 ```
 
 ---
@@ -2900,12 +3090,102 @@ Pipeline "Tạo cơ hội" chọn được contact qua /api/contacts.
 ### 18.9. PR #5 — Order Lite API
 
 **Owner:** Codex  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`
+**Branch:** codex/05-order-api
+**Commit/PR link:** Local working tree, chưa commit PR #5
+
+#### Summary
 
 ```text
-Chưa cập nhật.
+PR #5 Order Lite API complete:
+- Added additive schema for ProductLite, Order, OrderItem.
+- Added enums OrderStatus, PaymentStatus, PaymentMethod.
+- Added src/lib/order.ts helper for workspace validation, product/item normalization, integer VND totals, order code generation.
+- Added Product APIs:
+  GET /api/products
+  POST /api/products
+- Added Order APIs:
+  GET /api/orders
+  POST /api/orders
+  GET /api/orders/:id
+  PATCH /api/orders/:id
+  PATCH /api/orders/:id/status
+- Every endpoint requires logged-in user and scopes reads/writes to currentWorkspaceId.
+- Order validates customerId, opportunityId, ownerId, products within current workspace.
+- Totals are calculated from items with integer VND; no float.
+- Migration 20260614_workspace_core_03_order_lite_api deployed successfully.
+- Runtime smoke test passed for products/orders/order status.
+- PATCH /api/orders/:id intentionally rejects item replacement in PR #5 to avoid hard-deleting OrderItem rows.
+- No Order UI, inventory, accounting, COD reconciliation, Comment-to-Inbox, Automation, or Dashboard work.
+```
+
+#### API Contract Updated?
+
+```text
+YES — mục 16.4 Order API Contract đã đặt Status = READY.
+Runtime note: DB migration 20260614_workspace_core_03_order_lite_api has been deployed and API smoke test passed.
+```
+
+#### Files changed
+
+```text
+prisma/schema.prisma
+prisma/migrations/20260614_workspace_core_03_order_lite_api/migration.sql
+src/lib/order.ts
+src/app/api/products/route.ts
+src/app/api/orders/route.ts
+src/app/api/orders/[id]/route.ts
+src/app/api/orders/[id]/status/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests
+
+```text
+npx prisma format: PASS
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+npx prisma migrate status before deploy: PASS connection, 20260614_workspace_core_03_order_lite_api pending; no failed migration.
+Migration SQL review: PASS additive-only; no DROP, DELETE FROM, TRUNCATE, SET NOT NULL, or ON DELETE CASCADE.
+npx prisma migrate deploy: PASS; applied 20260614_workspace_core_03_order_lite_api.
+npx prisma migrate status after deploy: PASS; schema up to date, no pending/failed migration.
+API smoke test: PASS.
+
+Smoke coverage:
+- GET /api/products: PASS
+- POST /api/products: PASS, ProductLite currentWorkspaceId verified.
+- GET /api/orders: PASS
+- POST /api/orders: PASS, Order currentWorkspaceId/customer/opportunity verified.
+- GET /api/orders/:id: PASS
+- PATCH /api/orders/:id: PASS for metadata/shipping/discount; item replacement returns 400 by design.
+- PATCH /api/orders/:id/status: PASS, confirmedAt set, Customer.lastActivityAt updated.
+- totalVnd integer VND verified: 290000 before and after metadata patch.
+```
+
+#### Risks / Debt
+
+```text
+- D-003 remains formally OPEN, but code stores VND as integer đồng per proposal.
+- No inventory/accounting/COD reconciliation in PR #5 by design.
+- Opportunity status/stage is not auto-updated from orders to avoid hidden side effects.
+- Editing existing OrderItem rows is deferred; PR #5 blocks item replacement to avoid hard delete. Add item-level soft-safe API later if the UI needs it.
+```
+
+#### Handoff to Claude
+
+```text
+Claude PR #5B Order UI can use contract 16.4 now; migration deploy + runtime smoke passed.
+
+UI can rely on:
+- GET /api/products returns { items, pagination } with q/search and active filters.
+- POST /api/products creates lightweight product records.
+- GET /api/orders returns { items, pagination } with filters q/search, customerId, opportunityId, ownerId, status, paymentStatus.
+- POST /api/orders creates order with items and calculated totals.
+- GET /api/orders/:id returns order detail with customer, opportunity, owner, items, product snapshot.
+- PATCH /api/orders/:id updates metadata, shipping, payment, discount/shipping/deposit; do not send items in PR #5 because item replacement is intentionally blocked to avoid hard delete.
+- PATCH /api/orders/:id/status updates status/payment and timestamps.
+- Display values as integer VND; deposit is stored separately and does not reduce totalVnd in PR #5.
 ```
 
 ---
@@ -2913,12 +3193,57 @@ Chưa cập nhật.
 ### 18.10. PR #5B — Order UI
 
 **Owner:** Claude  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`  
+**Branch:** claude/05-order-ui  
+**Commit/PR link:** N/A  
+
+#### Summary
 
 ```text
-Chưa cập nhật.
+Order Lite UI theo API contract 16.4: danh sách đơn (search/filter/pagination), chi tiết đơn + đổi trạng thái,
+modal tạo đơn nhanh (chọn khách/cơ hội, dòng hàng + product suggest + tạo nhanh product, giảm/ship/cọc,
+thanh toán/trạng thái, giao hàng, preview tổng tiền VND). Tích hợp tab "Đơn hàng" + nút Tạo đơn trong Contact detail.
+Tôn trọng giới hạn PR #5: không sửa dòng hàng sau khi tạo; totalVnd do API tính.
+```
+
+#### Files changed
+
+```text
+src/components/orders/types.ts                       (mới)
+src/components/orders/OrderFormModal.tsx             (mới)
+src/components/orders/OrdersClient.tsx               (mới)
+src/components/orders/OrderDetailClient.tsx          (mới)
+src/app/orders/page.tsx                              (mới)
+src/app/orders/[id]/page.tsx                         (mới)
+src/components/AppShell.tsx                           (nav "Đơn hàng")
+src/components/contacts/ContactDetailClient.tsx      (tab "Đơn hàng" + Tạo đơn)
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md             (mục 17, 18.10, 19)
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS
+next build: FULL PASS (Compiled successfully + types valid + static pages 5/5 + traces collected).
+npm run build: bước prisma generate có thể vướng lock khi dev server chạy (B-014); Prisma client đã current.
+Test thủ công: /orders → tạo product nhanh → tạo đơn cho contact → xem chi tiết → đổi trạng thái → tổng tiền VND đúng; từ Contact detail tab "Đơn hàng" + Tạo đơn.
+```
+
+#### Risks
+
+```text
+- Order API (PR #5) của Codex đang ở working tree CHƯA commit (branch codex/05-order-api): M schema.prisma; ?? api/orders, api/products, lib/order.ts, migration. UI build trên đó; cần Codex/founder commit.
+- Không sửa dòng hàng sau khi tạo đơn (giới hạn PR #5) — UI có ghi chú, cần sửa thì tạo đơn mới.
+- Chưa chọn owner đơn trên UI (thiếu API list members) — API mặc định owner = current user.
+- Tồn kho/kế toán/đối soát COD: ngoài scope, không làm.
+```
+
+#### Handoff
+
+```text
+- Đạt Acceptance PR #5B: tạo product nhanh; tạo đơn cho contact; xem chi tiết; đổi trạng thái; tổng tiền VND đúng; tích hợp Contact detail.
+- Cần Codex: commit Order API (PR #5). (Tương lai) API list members cho owner/lọc nhân viên.
+- Bước kế Claude: PR #6B Comment UI khi mục 16.5 = READY.
 ```
 
 ---
@@ -3084,6 +3409,16 @@ Agent nào gặp blocker phải ghi vào đây.
 - Dependency PR #4 RESOLVED: Pipeline "Tạo cơ hội" đã chuyển picker khách sang GET /api/contacts (chọn được mọi contact, không chỉ khách có hội thoại).
 - Hạn chế còn lại (không chặn): chưa có API list workspace members → Contact UI không sửa owner / không lọc theo nhân viên. Đề nghị Codex cấp khi tiện.
 - PR #4B hoàn tất (DONE).
+
+[2026-06-14 · Codex · PR #5 Order Lite API]
+- B-016 RESOLVED: Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_03_order_lite_api. npx prisma migrate status up to date; runtime smoke test Product/Order/Order status PASS.
+- D-003 vẫn OPEN trong bảng quyết định, nhưng PR #5 đã triển khai tiền VND bằng integer đồng theo đề xuất hiện tại.
+
+[2026-06-14 · Claude · PR #5B Order UI]
+- B-017 (ENV/HANDOFF): Order API (PR #5) của Codex đang nằm trong working tree CHƯA commit trên branch codex/05-order-api (M schema.prisma; ?? src/app/api/orders, src/app/api/products, src/lib/order.ts, prisma/migrations/...order_lite_api). Claude tạo claude/05-order-ui mang theo để build/test UI; Codex/founder cần commit phần Order API.
+- Build: next build FULL PASS (compiled + types + static pages 5/5). npm run build có thể vướng prisma generate khi dev server chạy (class B-014); Prisma client đã current.
+- Hạn chế (không chặn): chưa chọn owner đơn trên UI vì thiếu API list workspace members; API mặc định owner = current user.
+- PR #5B hoàn tất (DONE).
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)

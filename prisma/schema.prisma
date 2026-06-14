@@ -78,6 +78,31 @@ enum OpportunityStatus {
   LOST
 }
 
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PAID
+  FULFILLING
+  SHIPPED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  COD
+  BANK_TRANSFER
+  CASH
+  OTHER
+}
+
 enum Industry {
   FASHION
   STUDIO
@@ -132,6 +157,7 @@ model User {
   assignedTasks         Task[]            @relation("AssignedTasks")
   ownedCustomers        Customer[]        @relation("OwnedCustomers")
   ownedOpportunities    Opportunity[]     @relation("OwnedOpportunities")
+  ownedOrders           Order[]           @relation("OwnedOrders")
   authoredNotes         Note[]            @relation("AuthoredNotes")
   workspaceMemberships  WorkspaceMember[]
 }
@@ -172,6 +198,8 @@ model Workspace {
   pipelines      Pipeline[]
   opportunities  Opportunity[]
   notes          Note[]
+  products       ProductLite[]
+  orders         Order[]
   emailTemplates EmailTemplate[]
   emailSequences EmailSequence[]
 
@@ -326,6 +354,7 @@ model Customer {
   funnelEvents      FunnelEvent[]
   tasks             Task[]
   opportunities     Opportunity[]
+  orders            Order[]
   notes             Note[]
   emailLogs         EmailLog[]
   emailEnrollments  EmailAutomationEnrollment[]
@@ -569,6 +598,7 @@ model Opportunity {
   pipeline  Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
   stage     PipelineStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
   owner     User?         @relation("OwnedOpportunities", fields: [ownerId], references: [id])
+  orders    Order[]
 
   @@index([workspaceId])
   @@index([pipelineId])
@@ -578,6 +608,90 @@ model Opportunity {
   @@index([status])
   @@index([deletedAt])
   @@index([expectedCloseAt])
+}
+
+model ProductLite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  sku         String?
+  priceVnd    Int       @default(0)
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  orderItems OrderItem[]
+
+  @@index([workspaceId])
+  @@index([sku])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model Order {
+  id              String         @id @default(cuid())
+  workspaceId     String
+  customerId      String
+  opportunityId   String?
+  ownerId         String?
+  code            String
+  status          OrderStatus    @default(DRAFT)
+  paymentStatus   PaymentStatus  @default(UNPAID)
+  paymentMethod   PaymentMethod?
+  subtotalVnd     Int            @default(0)
+  discountVnd     Int            @default(0)
+  shippingFeeVnd  Int            @default(0)
+  depositVnd      Int            @default(0)
+  totalVnd        Int            @default(0)
+  note            String?
+  shippingName    String?
+  shippingPhone   String?
+  shippingAddress String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  confirmedAt     DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  deletedAt       DateTime?
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  owner       User?        @relation("OwnedOrders", fields: [ownerId], references: [id], onDelete: SetNull)
+  items       OrderItem[]
+
+  @@unique([workspaceId, code])
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([opportunityId])
+  @@index([ownerId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model OrderItem {
+  id           String   @id @default(cuid())
+  orderId      String
+  productId    String?
+  name         String
+  sku          String?
+  quantity     Int      @default(1)
+  unitPriceVnd Int      @default(0)
+  discountVnd  Int      @default(0)
+  lineTotalVnd Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  order   Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  product ProductLite? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 // ----------------------------------------------------------------
