@@ -1959,6 +1959,49 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng theo yêu cầu (chỉ PR #7B). Còn lại cuối MVP1 UI: PR #8B Dashboard sau khi Codex có Stats API (PR #8) READY.
 ```
 
+#### 2026-06-14 — Claude (PR #8B Dashboard UI)
+
+```text
+## 2026-06-14 — Claude (PR #8B Founder Dashboard UI)
+
+### Đang làm PR
+- PR #8B — Founder Dashboard UI
+
+### Đã làm hôm nay
+- Xác nhận mục 16.7 Founder Stats API = READY; đọc route + lib/founder-stats.ts để lấy đúng shape. Tạo branch claude/08-dashboard-ui.
+- Thay /dashboard từ truy vấn prisma trực tiếp (cũ, single-brand, KHÔNG scope workspace) → server shell mỏng + FounderDashboardClient gọi GET /api/stats/founder (đã scope workspace).
+- Bộ lọc thời gian: Hôm nay / 7 / 30 / 90 ngày / Tùy chọn (from-to + Áp dụng) + toggle "So với kỳ trước" (compare=previous, hiện %Δ trên card).
+- 8 summary card: Doanh thu, Đã thanh toán, Đơn hàng, Giá trị TB/đơn, Khách mới, Pipeline đang mở, Comment có SĐT, Việc quá hạn.
+- Section: Doanh thu (theo ngày dạng cột + theo trạng thái đơn + theo thanh toán), Pipeline (open/won/lost/win rate + giá trị theo stage), Nguồn (contact/opportunity/order), Sale (bảng theo nhân viên), Bình luận, Việc cần làm, Tự động hóa, Khách theo giai đoạn.
+- Chart bằng CSS thuần (bar ngang + cột theo ngày) — KHÔNG thêm dependency. VND format vi-VN (formatVnd) + compact cho nhãn trục.
+- Quick links sang /pipeline /orders /contacts /comments /automation. Empty/loading/error state đầy đủ; mobile bảng cuộn ngang.
+
+### Files đã sửa
+- src/components/dashboard/types.ts (mới)
+- src/components/dashboard/FounderDashboardClient.tsx (mới)
+- src/app/dashboard/page.tsx (viết lại: bỏ prisma trực tiếp, dùng stats API)
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.16, 19)
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/dashboard/**, docs/**. Không đụng prisma, auth.ts, api.ts, workspace.ts, founder-stats.ts, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- next build: FULL PASS (Compiled + types valid + static 5/5 + traces); /dashboard trong cây build. Lưu ý: B-020 (Codex báo build treo) KHÔNG tái hiện ở lần build sạch của mình — next build exit OK ~61s.
+
+### Blocker
+- Không có blocker chặn PR #8B.
+
+### Cần founder quyết
+- Không.
+
+### Cần agent kia hỗ trợ
+- Không. (Tương lai: API list members để dashboard lọc theo từng sale; stats API đã hỗ trợ ownerId nhưng UI chưa có picker nhân viên.)
+
+### Kế hoạch ngày tiếp theo
+- HOÀN TẤT toàn bộ MVP1 UI (PR #1B → #8B). Chờ founder review/merge các nhánh claude/* và Codex commit phần backend còn ở working tree (vd founder-stats.ts).
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -4222,12 +4265,50 @@ Handoff to Claude PR #8B Dashboard UI:
 ### 18.16. PR #8B — Dashboard UI
 
 **Owner:** Claude  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`  
+**Branch:** claude/08-dashboard-ui  
+**Commit/PR link:** N/A  
+
+#### Summary
 
 ```text
-Chưa cập nhật.
+Founder Dashboard theo API contract 16.7: /dashboard gọi GET /api/stats/founder (workspace-scoped) với bộ lọc
+thời gian (today/7d/30d/90d/custom) + so sánh kỳ trước; 8 summary card; section doanh thu/pipeline/nguồn/sale/
+bình luận/việc cần làm/automation/khách theo giai đoạn; chart bằng CSS thuần (không thêm dependency); quick links.
+Thay dashboard cũ (prisma trực tiếp, không scope workspace).
+```
+
+#### Files changed
+
+```text
+src/components/dashboard/types.ts                    (mới)
+src/components/dashboard/FounderDashboardClient.tsx  (mới)
+src/app/dashboard/page.tsx                            (viết lại — dùng stats API, bỏ prisma trực tiếp)
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md             (mục 17, 18.16, 19)
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS
+next build: FULL PASS (Compiled + types valid + static 5/5 + traces); /dashboard trong cây build (exit OK ~61s, không tái hiện B-020).
+Test thủ công: /dashboard → đổi range today/7d/30d/90d/custom → bật so sánh kỳ trước → kiểm VND vi-VN → empty/loading/error → quick links → mobile bảng cuộn ngang.
+```
+
+#### Risks
+
+```text
+- Chart bằng CSS thuần (bar/cột) — đơn giản, đủ cho "nhìn 30 giây"; chưa có chart tương tác.
+- Dashboard lọc theo workspace hiện tại; chưa có picker theo từng sale (stats API hỗ trợ ownerId, cần API list members để dựng picker).
+- /dashboard cũ dùng prisma trực tiếp không scope workspace đã được thay → giảm rủi ro lẫn dữ liệu đa-tenant.
+```
+
+#### Handoff
+
+```text
+- Đạt mục tiêu PR #8B: founder xem nhanh doanh thu/pipeline/sale/comment/task/automation theo khoảng thời gian.
+- 🏁 Hoàn tất toàn bộ MVP1 UI (PR #1B → #8B).
+- Việc vận hành còn lại (không thuộc UI): founder review/merge nhánh claude/*; Codex commit backend còn ở working tree (founder-stats.ts, comments.ts); smoke D-002 (reply/hide cần Meta pages_manage_engagement).
 ```
 
 ---
@@ -4353,6 +4434,12 @@ Agent nào gặp blocker phải ghi vào đây.
 [2026-06-14 · Codex · PR #8 Founder Stats API]
 - B-020 (BUILD/ENV): npm run build không trả exit code trong timeout 5 phút; Next build process treo sau khi sinh .next artifacts. npm run typecheck PASS, npx prisma generate PASS, runtime smoke GET /api/stats/founder PASS. Cần rerun build trong môi trường sạch để xác nhận production build exit code.
 - Không có blocker chặn API contract PR #8; mục 16.7 đã READY.
+
+[2026-06-14 · Claude · PR #8B Dashboard UI]
+- B-020 UPDATE: next build sạch của PR #8B PASS (exit OK ~61s) — không tái hiện treo build; nhiều khả năng do môi trường/cache lần trước.
+- PR #8B hoàn tất (DONE): /dashboard dùng GET /api/stats/founder (workspace-scoped), bộ lọc range + so sánh kỳ trước, 8 card + section doanh thu/pipeline/nguồn/sale/comment/task/automation, chart CSS thuần. typecheck + next build FULL PASS.
+- Đã thay /dashboard cũ (prisma trực tiếp, không scope workspace) → fix luôn rủi ro lẫn dữ liệu đa-tenant trên trang dashboard.
+- 🏁 MVP1 UI HOÀN TẤT (PR #1B, #2B, #3B, #4B, #5B, #6B, #7B, #8B). Việc còn lại: founder merge nhánh claude/*; Codex commit backend ở working tree; smoke D-002 (Meta perms).
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
