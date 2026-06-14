@@ -15,8 +15,16 @@ import {
   type ContactNote,
   type TimelineItem,
 } from "@/components/contacts/types";
+import { OrderFormModal } from "@/components/orders/OrderFormModal";
+import {
+  ORDER_STATUS_CLASS,
+  ORDER_STATUS_LABEL,
+  PAYMENT_STATUS_CLASS,
+  PAYMENT_STATUS_LABEL,
+  type Order,
+} from "@/components/orders/types";
 
-type Tab = "timeline" | "conversations" | "opportunities" | "tasks" | "notes";
+type Tab = "timeline" | "conversations" | "opportunities" | "tasks" | "notes" | "orders";
 
 const TASK_STATUS_LABEL: Record<string, string> = { TODO: "Cần làm", DONE: "Xong", CANCELLED: "Huỷ" };
 const OPP_STATUS_LABEL: Record<string, string> = { OPEN: "Đang mở", WON: "Đã chốt", LOST: "Thất bại" };
@@ -36,6 +44,8 @@ export function ContactDetailClient({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [noteBusy, setNoteBusy] = useState(false);
+  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [showOrder, setShowOrder] = useState(false);
 
   const loadDetail = useCallback(async () => {
     setError(null);
@@ -56,13 +66,22 @@ export function ContactDetailClient({ id }: { id: string }) {
     }
   }, [id]);
 
+  const loadOrders = useCallback(async () => {
+    try {
+      const data = await apiGet<{ items: Order[] }>(`/api/orders?customerId=${id}&pageSize=100`);
+      setOrders(data.items ?? []);
+    } catch {
+      setOrders([]);
+    }
+  }, [id]);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadDetail(), loadTimeline()]);
+      await Promise.all([loadDetail(), loadTimeline(), loadOrders()]);
       setLoading(false);
     })();
-  }, [loadDetail, loadTimeline]);
+  }, [loadDetail, loadTimeline, loadOrders]);
 
   async function addNote(e: FormEvent) {
     e.preventDefault();
@@ -120,9 +139,14 @@ export function ContactDetailClient({ id }: { id: string }) {
         <Link href="/contacts" className="text-sm text-gray-500 hover:text-gray-800">
           ‹ Danh sách khách
         </Link>
-        <button onClick={() => setEditing(true)} className="rounded border px-3 py-1.5 text-sm font-medium hover:bg-gray-50">
-          Sửa thông tin
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowOrder(true)} className="rounded bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-dark">
+            Tạo đơn
+          </button>
+          <button onClick={() => setEditing(true)} className="rounded border px-3 py-1.5 text-sm font-medium hover:bg-gray-50">
+            Sửa thông tin
+          </button>
+        </div>
       </div>
 
       {/* Header + thông tin */}
@@ -163,6 +187,7 @@ export function ContactDetailClient({ id }: { id: string }) {
         <TabBtn active={tab === "opportunities"} onClick={() => setTab("opportunities")} label={`Cơ hội (${counts.opportunities})`} />
         <TabBtn active={tab === "tasks"} onClick={() => setTab("tasks")} label={`Việc cần làm (${counts.tasks})`} />
         <TabBtn active={tab === "notes"} onClick={() => setTab("notes")} label={`Ghi chú (${counts.notes})`} />
+        <TabBtn active={tab === "orders"} onClick={() => setTab("orders")} label={`Đơn hàng (${orders?.length ?? 0})`} />
       </div>
 
       {tab === "timeline" && (
@@ -319,6 +344,46 @@ export function ContactDetailClient({ id }: { id: string }) {
         </Section>
       )}
 
+      {tab === "orders" && (
+        <Section>
+          <div className="mb-3 flex justify-end">
+            <button onClick={() => setShowOrder(true)} className="rounded bg-brand px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-dark">
+              + Tạo đơn
+            </button>
+          </div>
+          {orders === null ? (
+            <p className="text-sm text-gray-400">Đang tải…</p>
+          ) : orders.length === 0 ? (
+            <EmptyState title="Chưa có đơn hàng" description="Khi khách chốt, bấm “Tạo đơn” để lên đơn nhanh cho khách này." />
+          ) : (
+            <ul className="space-y-2">
+              {orders.map((o) => (
+                <li key={o.id}>
+                  <Link
+                    href={`/orders/${o.id}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border p-3 hover:bg-gray-50"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-mono text-xs text-gray-600">{o.code}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ORDER_STATUS_CLASS[o.status] ?? "bg-gray-100 text-gray-700"}`}>
+                          {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${PAYMENT_STATUS_CLASS[o.paymentStatus] ?? "bg-gray-100 text-gray-700"}`}>
+                          {PAYMENT_STATUS_LABEL[o.paymentStatus] ?? o.paymentStatus}
+                        </span>
+                        <span className="text-[11px] text-gray-400">{fmtDate(o.createdAt)}</span>
+                      </div>
+                    </div>
+                    <span className="shrink-0 font-bold text-brand-dark">{formatVnd(o.totalVnd)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      )}
+
       {editing && (
         <ContactFormModal
           mode="edit"
@@ -327,6 +392,18 @@ export function ContactDetailClient({ id }: { id: string }) {
           onSaved={(saved) => {
             setEditing(false);
             setDetail(saved);
+            loadTimeline();
+          }}
+        />
+      )}
+
+      {showOrder && (
+        <OrderFormModal
+          lockedCustomer={{ id: c.id, name: c.name, phone: c.phone }}
+          onClose={() => setShowOrder(false)}
+          onCreated={() => {
+            setShowOrder(false);
+            loadOrders();
             loadTimeline();
           }}
         />
