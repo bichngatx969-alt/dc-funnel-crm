@@ -10,6 +10,7 @@ const NAV = [
   { href: "/contacts", label: "Khách hàng", key: "contacts" },
   { href: "/pipeline", label: "Pipeline", key: "pipeline" },
   { href: "/orders", label: "Đơn hàng", key: "orders" },
+  { href: "/automation", label: "Tự động hóa", key: "automation" },
   { href: "/offers", label: "Offers", key: "offers" },
   { href: "/flows", label: "Flows", key: "flows" },
   { href: "/email", label: "Email", key: "email" },

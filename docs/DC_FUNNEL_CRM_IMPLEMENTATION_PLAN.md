@@ -1828,6 +1828,53 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng theo yêu cầu (chỉ PR #6B). Bước kế: PR #7B Automation UI sau khi Codex có Automation API (PR #7) READY.
 ```
 
+#### 2026-06-14 — Claude (PR #7B Automation UI)
+
+```text
+## 2026-06-14 — Claude (PR #7B Automation UI)
+
+### Đang làm PR
+- PR #7B — Automation UI
+
+### Đã làm hôm nay
+- Xác nhận mục 16.6 Automation API = READY; đọc route thật (rules, :id, test, runs) + lib/automation.ts (enums trigger/action/run, templates, engine). Tạo branch claude/07-automation-ui.
+- /automation: tab "Quy tắc" + "Lịch sử chạy". Tab Quy tắc: mục "Mẫu có sẵn" (GET ?templates=true) bấm tạo nhanh; bộ lọc q/trigger/action/isActive; danh sách rule với switch bật/tắt (PATCH isActive), nhãn "Khi… → …", runCount/lastRunAt; CTA tạo quy tắc.
+- RuleFormModal (tạo/sửa/từ template): name/description/triggerType/actionType + conditionsJson/actionConfigJson textarea JSON có validate client; cảnh báo khóa an toàn cho SEND_EMAIL/WEBHOOK.
+- /automation/[id]: chi tiết rule + sửa + bật/tắt + chạy thử dry-run (POST /test mặc định dryRun=true, hiển thị SUCCESS/SKIPPED/FAILED + output JSON) + lịch sử chạy của rule.
+- RunsList tái dùng: lọc theo status, hiển thị thời gian/rule/trigger/nguồn/kết quả/lỗi; empty state.
+- Nhãn tiếng Việt cho mọi trigger/action/status; badge Đang bật/Đã tắt/Thành công/Bỏ qua/Lỗi. Thêm nav "Tự động hóa". Mobile-friendly.
+
+### Files đã sửa
+- src/components/automation/types.ts (mới)
+- src/components/automation/RuleFormModal.tsx (mới)
+- src/components/automation/RunsList.tsx (mới)
+- src/components/automation/AutomationClient.tsx (mới)
+- src/components/automation/RuleDetailClient.tsx (mới)
+- src/app/automation/page.tsx, src/app/automation/[id]/page.tsx (mới)
+- src/components/AppShell.tsx (nav "Tự động hóa")
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.14, 19)
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/automation/**, docs/**. Không đụng prisma, auth.ts, api.ts, workspace.ts, automation.ts, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- next build: FULL PASS (Compiled + types valid + static 5/5 + traces); /automation + /automation/[id] có trong cây build.
+
+### Blocker
+- Không có blocker chặn PR #7B.
+- SEND_EMAIL/WEBHOOK: engine khóa an toàn (SKIPPED); UI hiển thị cảnh báo "chưa gửi thật trong MVP".
+
+### Cần founder quyết
+- Không mới.
+
+### Cần agent kia hỗ trợ
+- (Tương lai) bật SEND_EMAIL/WEBHOOK thật khi có consent/config; API list members để gợi ý customerId/owner trong actionConfig.
+
+### Kế hoạch ngày tiếp theo
+- Dừng theo yêu cầu (chỉ PR #7B). Còn lại cuối MVP1 UI: PR #8B Dashboard sau khi Codex có Stats API (PR #8) READY.
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -3921,12 +3968,53 @@ Handoff to Claude PR #7B Automation UI:
 ### 18.14. PR #7B — Automation UI
 
 **Owner:** Claude  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`  
+**Branch:** claude/07-automation-ui  
+**Commit/PR link:** N/A  
+
+#### Summary
 
 ```text
-Chưa cập nhật.
+Automation UI theo API contract 16.6: /automation (tab Quy tắc + Mẫu có sẵn + Lịch sử chạy) với toggle bật/tắt,
+bộ lọc, tạo rule (blank/từ template); /automation/[id] chi tiết + sửa + chạy thử dry-run + lịch sử chạy của rule.
+JSON conditions/actionConfig có validate client. SEND_EMAIL/WEBHOOK hiển thị cảnh báo khóa an toàn (engine SKIPPED).
+```
+
+#### Files changed
+
+```text
+src/components/automation/types.ts                   (mới)
+src/components/automation/RuleFormModal.tsx          (mới)
+src/components/automation/RunsList.tsx               (mới)
+src/components/automation/AutomationClient.tsx       (mới)
+src/components/automation/RuleDetailClient.tsx       (mới)
+src/app/automation/page.tsx, src/app/automation/[id]/page.tsx   (mới)
+src/components/AppShell.tsx                           (nav "Tự động hóa")
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md             (mục 17, 18.14, 19)
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS
+next build: FULL PASS (Compiled + types valid + static 5/5 + traces); /automation + /automation/[id] trong cây build.
+Test thủ công: /automation → dùng mẫu/tạo rule → bật/tắt → chi tiết → chạy thử dryRun=true (hiện SUCCESS/SKIPPED/FAILED + output) → xem AutomationRun mới; nhập conditions/actionConfig JSON lỗi → UI báo lỗi, không crash.
+```
+
+#### Risks
+
+```text
+- SEND_EMAIL/WEBHOOK: chỉ hiển thị cảnh báo + engine SKIPPED, không gửi thật (đúng MVP/PR #7).
+- conditionsJson/actionConfigJson nhập JSON thô (chưa form builder field-by-field) — đủ cho MVP, có validate JSON client.
+- Tên template từ API là ASCII; UI map nhãn tiếng Việt cho 4 mẫu đã biết, fallback tên API nếu mẫu lạ.
+```
+
+#### Handoff
+
+```text
+- Đạt mục tiêu PR #7B: xem/tạo/bật-tắt rule, tạo từ template, chạy thử dry-run, xem lịch sử run.
+- Bước kế (cuối MVP1 UI): PR #8B Dashboard khi Codex có Stats API (PR #8) READY.
+- Đề nghị Codex (tương lai): bật SEND_EMAIL/WEBHOOK thật khi có consent/config; API list members + danh mục contact để actionConfig chọn customerId/owner thay vì nhập JSON.
 ```
 
 ---
@@ -4068,6 +4156,12 @@ Agent nào gặp blocker phải ghi vào đây.
 - Runtime smoke hook PASS: CONTACT_CREATED, CONTACT_STAGE_CHANGED, OPPORTUNITY_STAGE_CHANGED, ORDER_CREATED, ORDER_STATUS_CHANGED, COMMENT_CREATED, COMMENT_HAS_PHONE.
 - SEND_EMAIL/WEBHOOK vẫn SKIPPED, không gửi thật.
 - Không còn blocker chặn PR #7 backend.
+
+[2026-06-14 · Claude · PR #7B Automation UI]
+- PR #7B hoàn tất (DONE): /automation (Quy tắc + Mẫu + Lịch sử chạy) + /automation/[id] (chi tiết + sửa + dry-run test); toggle bật/tắt; conditions/actionConfig JSON có validate. typecheck + next build FULL PASS.
+- SEND_EMAIL/WEBHOOK: UI hiển thị cảnh báo khóa an toàn (engine SKIPPED) — đúng MVP.
+- Hạn chế (không chặn): conditions/actionConfig nhập JSON thô (chưa form builder field-by-field).
+- Còn lại MVP1 UI: chỉ PR #8B Dashboard (chờ Stats API PR #8).
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
