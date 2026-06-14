@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
+import { evaluateAutomationRules } from "@/lib/automation";
 import {
   contactDetailInclude,
   normalizeEmail,
@@ -41,7 +42,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.customer.findFirst({
     where: { id, workspaceId, deletedAt: null },
-    select: { id: true },
+    select: { id: true, currentStage: true },
   });
   if (!existing) return jsonError("Không tìm thấy contact", 404);
 
@@ -113,6 +114,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data,
     include: contactDetailInclude(workspaceId),
   });
+
+  if (data.currentStage && data.currentStage !== existing.currentStage) {
+    await evaluateAutomationRules({
+      workspaceId,
+      triggerType: "CONTACT_STAGE_CHANGED",
+      sourceType: "CONTACT",
+      sourceId: contact.id,
+      payload: {
+        customerId: contact.id,
+        previousStage: existing.currentStage,
+        stage: contact.currentStage,
+        ownerId: contact.ownerId,
+        tags: contact.tags,
+      },
+    }).catch((error) => console.error("CONTACT_STAGE_CHANGED automation failed", error));
+  }
 
   return jsonOk({ contact });
 }

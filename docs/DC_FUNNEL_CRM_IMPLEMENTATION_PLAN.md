@@ -1238,6 +1238,86 @@ Runtime note:
 
 ---
 
+### 16.6. Automation API Contract
+
+**Status:** `READY`
+**Owner:** Codex
+**Last updated:** 2026-06-14
+
+```http
+GET /api/automation/rules
+POST /api/automation/rules
+GET /api/automation/rules/:id
+PATCH /api/automation/rules/:id
+POST /api/automation/rules/:id/test
+GET /api/automation/runs
+```
+
+Notes:
+
+```text
+Auth:
+- Tất cả API /api/automation/** require logged-in user.
+- Mọi query/write filter currentWorkspaceId.
+- Không đọc/sửa rule/run workspace khác.
+
+Schema:
+- AutomationRule(workspaceId, name, description?, triggerType, actionType, conditionsJson?, actionConfigJson?, isActive, runCount, lastRunAt?, createdById?, deletedAt?).
+- AutomationRun(workspaceId, ruleId, triggerType, sourceType?, sourceId?, status, inputJson?, outputJson?, error?, createdAt).
+- Trigger: CONTACT_CREATED, CONTACT_STAGE_CHANGED, OPPORTUNITY_CREATED, OPPORTUNITY_STAGE_CHANGED, ORDER_CREATED, ORDER_STATUS_CHANGED, COMMENT_CREATED, COMMENT_HAS_PHONE, TASK_DUE_SOON, MANUAL_TEST.
+- Action: CREATE_TASK, ADD_TAG, UPDATE_CONTACT_STAGE, CREATE_NOTE, MARK_COMMENT_FOLLOWUP, SEND_EMAIL, WEBHOOK, NOOP.
+- Run status: SUCCESS, FAILED, SKIPPED.
+
+GET /api/automation/rules:
+- Query: q/search, triggerType, actionType, isActive=true/false, templates=true, page/pageSize hoặc limit.
+- Response: { ok, data: { items, templates?, pagination } }.
+
+POST /api/automation/rules:
+- Body: { name, description?, triggerType, actionType, conditionsJson?, actionConfigJson?, isActive? }.
+- createdById = current user; workspaceId = currentWorkspaceId.
+
+GET /api/automation/rules/:id:
+- Trả rule scoped by currentWorkspaceId, include createdBy + run count.
+
+PATCH /api/automation/rules/:id:
+- Body cho phép cập nhật name/description/triggerType/actionType/conditionsJson/actionConfigJson/isActive/deleted.
+- Soft-delete bằng { deleted: true }.
+
+POST /api/automation/rules/:id/test:
+- Default dryRun=true để không tạo task/tag/note/comment update thật.
+- Vẫn ghi AutomationRun với triggerType=MANUAL_TEST để có audit.
+- Body: { payload?, sourceType?, sourceId?, dryRun? }.
+
+GET /api/automation/runs:
+- Query: ruleId, triggerType, sourceType, sourceId, status, page/pageSize hoặc limit.
+- Response: { ok, data: { items, pagination } }.
+
+Engine:
+- Function dùng chung: evaluateAutomationRules({ workspaceId, triggerType, sourceType?, sourceId?, payload?, dryRun? }).
+- ConditionsJson hỗ trợ match key-value đơn giản, gồm hasPhone/status/stage/stageId/customerId nếu payload có.
+- SEND_EMAIL và WEBHOOK hiện trả SKIPPED với reason external_side_effect_disabled_in_pr7 để tránh gửi email/webhook thật khi chưa có consent/config rõ.
+
+Hooks đã gắn thật:
+- CONTACT_CREATED sau POST /api/contacts.
+- CONTACT_STAGE_CHANGED sau PATCH /api/contacts/:id nếu currentStage đổi.
+- OPPORTUNITY_STAGE_CHANGED sau PATCH /api/opportunities/:id/stage.
+- ORDER_CREATED sau POST /api/orders.
+- ORDER_STATUS_CHANGED sau PATCH /api/orders/:id/status.
+- COMMENT_CREATED và COMMENT_HAS_PHONE sau webhook feed/comment tạo comment mới.
+
+Runtime note:
+- Migration 20260614_workspace_core_05_automation_api đã deploy thành công bằng npx prisma migrate deploy.
+- npx prisma migrate status sau deploy: schema up to date, không pending/failed migration.
+- Runtime smoke API PASS: GET/POST rules, GET/PATCH rule detail, POST rule test dryRun=true, GET runs.
+- Smoke engine PASS: tạo rule MANUAL_TEST + NOOP, test dryRun=true ghi AutomationRun; rule/run thuộc currentWorkspaceId.
+- Tenant isolation PASS: API trả 404 khi đọc rule thuộc workspace không có membership.
+- Hook smoke PASS: CONTACT_CREATED, CONTACT_STAGE_CHANGED, OPPORTUNITY_STAGE_CHANGED, ORDER_CREATED, ORDER_STATUS_CHANGED, COMMENT_CREATED, COMMENT_HAS_PHONE đều ghi AutomationRun SUCCESS khi có rule active.
+- COMMENT_HAS_PHONE smoke xác nhận FacebookComment hasPhone=true, needsFollowUp=true, gắn Customer và Conversation đúng workspace.
+- SEND_EMAIL và WEBHOOK vẫn trả SKIPPED, không gửi email/webhook thật.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -2230,6 +2310,142 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Kế hoạch ngày tiếp theo
 - Dừng tại PR #6 theo yêu cầu. Bước tiếp theo: Claude PR #6B Comment UI; founder/dev cần reconnect/resubscribe Page để cấp pages_manage_engagement/feed nếu muốn demo hide/reply thật.
+```
+
+#### 2026-06-14 — Codex (PR #7 Automation Rule Engine)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #7 — Automation Rule Engine — CODE_READY / MIGRATION_PENDING
+
+### Đã làm hôm nay
+- Đọc lại plan và xác nhận PR #7 chỉ làm backend/API/schema, không làm Automation UI hoặc Dashboard.
+- Tạo branch codex/07-automation-api.
+- Thêm schema AutomationRule, AutomationRun và enum AutomationTriggerType/AutomationActionType/AutomationRunStatus/AutomationSourceType.
+- Tạo migration additive prisma/migrations/20260614_workspace_core_05_automation_api/migration.sql.
+- Tạo engine dùng chung evaluateAutomationRules() và testAutomationRule().
+- Tạo API: GET/POST /api/automation/rules, GET/PATCH /api/automation/rules/:id, POST /api/automation/rules/:id/test, GET /api/automation/runs.
+- Test endpoint mặc định dryRun=true, không tạo task/tag/note/update comment thật; vẫn ghi AutomationRun audit với triggerType=MANUAL_TEST.
+- Chặn side effect ngoài hệ thống: SEND_EMAIL và WEBHOOK trả SKIPPED trong PR #7, không gửi email/webhook thật.
+- Gắn hook thật cho CONTACT_CREATED, CONTACT_STAGE_CHANGED, OPPORTUNITY_STAGE_CHANGED, ORDER_CREATED, ORDER_STATUS_CHANGED, COMMENT_CREATED, COMMENT_HAS_PHONE.
+- Cập nhật mục 16.6 Automation API Contract = READY.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260614_workspace_core_05_automation_api/migration.sql
+- src/lib/automation.ts
+- src/lib/facebook/comments.ts
+- src/app/api/automation/rules/route.ts
+- src/app/api/automation/rules/[id]/route.ts
+- src/app/api/automation/rules/[id]/test/route.ts
+- src/app/api/automation/runs/route.ts
+- src/app/api/contacts/route.ts
+- src/app/api/contacts/[id]/route.ts
+- src/app/api/opportunities/[id]/stage/route.ts
+- src/app/api/orders/route.ts
+- src/app/api/orders/[id]/status/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật contract/report.
+- Không sửa UI/Claude-owned app/components.
+- Lưu ý: docs/dev/BRANCH_AND_OWNERSHIP.md đang modified từ trước PR #7; Codex không sửa/revert file này.
+
+### Typecheck/build/test
+- npx prisma format: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- npx prisma migrate status: CONNECTED / PENDING; exit code 1 vì còn 1 pending migration 20260614_workspace_core_05_automation_api; no failed migration.
+- Migration safety scan: PASS additive-only; không DROP, DELETE FROM, TRUNCATE, SET NOT NULL, ON DELETE CASCADE.
+- Runtime smoke API: CHƯA CHẠY vì migration chưa được founder duyệt/apply.
+
+### Blocker
+- B-019: cần founder duyệt npx prisma migrate deploy cho migration 20260614_workspace_core_05_automation_api trước khi smoke runtime Automation API.
+
+### Cần founder quyết
+- Duyệt apply migration PR #7 nếu đồng ý nội dung additive-only.
+- Sau migration, có thể duyệt smoke test tạo rule NOOP/test dry-run và rule CREATE_TASK dry-run.
+
+### Cần agent kia hỗ trợ
+- Claude PR #7B Automation UI có thể bắt đầu theo API contract 16.6 sau khi migration/runtime smoke PASS; nếu bắt đầu trước, chỉ nên build theo mock/empty state.
+
+### Kế hoạch ngày tiếp theo
+- Khi founder duyệt: chạy npx prisma migrate deploy, npx prisma migrate status, npx prisma generate, npm run typecheck, npm run build, smoke GET/POST/PATCH/test/runs.
+```
+
+#### 2026-06-14 — Codex (PR #7 Migration Apply + Runtime Smoke)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #7 — Automation Rule Engine — DONE
+
+### Đã làm hôm nay
+- Kiểm tra git status và xác nhận branch codex/07-automation-api.
+- Kiểm tra DATABASE_URL tồn tại, nhìn đúng Neon, không in secret.
+- Chạy npx prisma migrate status trước deploy: connected, chỉ còn pending migration 20260614_workspace_core_05_automation_api.
+- Review lại migration safety scan: không DROP, DELETE FROM, TRUNCATE, SET NOT NULL, ON DELETE CASCADE.
+- Founder đã duyệt, Codex chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_05_automation_api.
+- Chạy lại npx prisma migrate status: schema up to date, không pending/failed migration.
+- Chạy lại npx prisma generate, npm run typecheck, npm run build: PASS.
+- Runtime smoke Automation API qua dev server tạm port 3107:
+  GET /api/automation/rules
+  POST /api/automation/rules
+  GET /api/automation/rules/:id
+  PATCH /api/automation/rules/:id
+  POST /api/automation/rules/:id/test
+  GET /api/automation/runs
+- Smoke engine:
+  tạo rule MANUAL_TEST + NOOP
+  test dryRun=true
+  xác nhận AutomationRun được ghi
+  xác nhận rule/run thuộc currentWorkspaceId
+  xác nhận API không đọc rule workspace khác (404)
+- Smoke hook:
+  CONTACT_CREATED
+  CONTACT_STAGE_CHANGED
+  OPPORTUNITY_STAGE_CHANGED
+  ORDER_CREATED
+  ORDER_STATUS_CHANGED
+  COMMENT_CREATED
+  COMMENT_HAS_PHONE
+- Xác nhận SEND_EMAIL và WEBHOOK action trả SKIPPED, không gửi email/webhook thật.
+- Dừng dev server tạm sau smoke.
+
+### Files đã sửa
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật runtime report.
+- Không sửa Automation UI, Dashboard/Stats, hoặc UI Claude-owned.
+- docs/dev/BRANCH_AND_OWNERSHIP.md vẫn đang modified từ trước PR #7; Codex không sửa/revert file này.
+
+### Typecheck/build/test
+- npx prisma migrate deploy: PASS; applied 20260614_workspace_core_05_automation_api.
+- npx prisma migrate status sau deploy: PASS; schema up to date.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- Runtime smoke API: PASS.
+- Runtime smoke hooks: PASS.
+
+### Blocker
+- B-019 RESOLVED.
+- Không còn blocker chặn PR #7 backend.
+
+### Cần founder quyết
+- Không cần thêm để đóng PR #7.
+- Quyết định sản phẩm sau PR #7: khi nào bật SEND_EMAIL/WEBHOOK thật và policy consent/config tương ứng.
+
+### Cần agent kia hỗ trợ
+- Claude PR #7B Automation UI có thể bắt đầu theo mục 16.6 contract READY + runtime backend smoke PASS.
+
+### Kế hoạch ngày tiếp theo
+- Dừng tại PR #7 theo yêu cầu. Bước tiếp theo: Claude PR #7B Automation UI hoặc Codex PR #8 Founder Stats API khi founder xác nhận.
 ```
 
 ---
@@ -3609,12 +3825,95 @@ Test thủ công: /comments → lọc "Có SĐT" → mở chi tiết → PATCH c
 ### 18.13. PR #7 — Automation Rule Engine
 
 **Owner:** Codex  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
+**Status:** `DONE`  
+**Branch:** `codex/07-automation-api`  
 **Commit/PR link:**  
 
 ```text
-Chưa cập nhật.
+Summary:
+- Added AutomationRule and AutomationRun backend foundation for workspace-scoped rule execution.
+- Added reusable evaluateAutomationRules() engine and dry-run test flow.
+- Added Automation API:
+  GET /api/automation/rules
+  POST /api/automation/rules
+  GET /api/automation/rules/:id
+  PATCH /api/automation/rules/:id
+  POST /api/automation/rules/:id/test
+  GET /api/automation/runs
+- Added built-in rule template payloads for:
+  Comment có SĐT -> tạo task gọi lại
+  Lead mới -> tạo task follow-up
+  Đơn hoàn tất -> thêm tag khách hàng
+  Cơ hội đổi stage -> ghi note
+- Hooked real triggers after safe writes:
+  CONTACT_CREATED
+  CONTACT_STAGE_CHANGED
+  OPPORTUNITY_STAGE_CHANGED
+  ORDER_CREATED
+  ORDER_STATUS_CHANGED
+  COMMENT_CREATED
+  COMMENT_HAS_PHONE
+- SEND_EMAIL and WEBHOOK actions intentionally return SKIPPED in PR #7 to avoid real external side effects without consent/config.
+
+Schema changes:
+- New enums:
+  AutomationTriggerType
+  AutomationActionType
+  AutomationRunStatus
+  AutomationSourceType
+- New models:
+  AutomationRule
+  AutomationRun
+- Added Prisma relations:
+  Workspace.automationRules
+  Workspace.automationRuns
+  User.createdAutomationRules
+
+Migration:
+- Created prisma/migrations/20260614_workspace_core_05_automation_api/migration.sql.
+- Migration reviewed additive-only:
+  no DROP
+  no DELETE FROM
+  no TRUNCATE
+  no SET NOT NULL
+  no ON DELETE CASCADE
+- Migration deployed successfully with npx prisma migrate deploy.
+- npx prisma migrate status after deploy: schema up to date, no pending/failed migration.
+
+Tests:
+- npx prisma format: PASS
+- npx prisma generate: PASS
+- npm run typecheck: PASS
+- npm run build: PASS
+- npx prisma migrate status before deploy: CONNECTED / PENDING; only 20260614_workspace_core_05_automation_api pending.
+- npx prisma migrate deploy: PASS.
+- npx prisma migrate status after deploy: PASS, schema up to date.
+- Runtime smoke API: PASS.
+- Runtime smoke engine: PASS.
+- Runtime smoke hooks: PASS.
+
+Runtime smoke details:
+- GET /api/automation/rules: PASS.
+- POST /api/automation/rules: PASS.
+- GET /api/automation/rules/:id: PASS.
+- PATCH /api/automation/rules/:id: PASS.
+- POST /api/automation/rules/:id/test dryRun=true: PASS, AutomationRun recorded.
+- GET /api/automation/runs: PASS.
+- Tenant isolation: PASS, reading another workspace's rule returned 404.
+- Hook triggers recorded SUCCESS runs for CONTACT_CREATED, CONTACT_STAGE_CHANGED, OPPORTUNITY_STAGE_CHANGED, ORDER_CREATED, ORDER_STATUS_CHANGED, COMMENT_CREATED, COMMENT_HAS_PHONE.
+- COMMENT_HAS_PHONE smoke set FacebookComment.hasPhone=true and needsFollowUp=true, with Customer and Conversation linked in currentWorkspaceId.
+- SEND_EMAIL and WEBHOOK actions returned SKIPPED; no real email/webhook sent.
+
+Risks:
+- Active automation rules can create tasks/tags/notes/comment follow-up flags after migration; default state has no seeded active rules.
+- Test endpoint defaults dryRun=true, but still writes AutomationRun audit records.
+- Email/webhook actions are placeholders returning SKIPPED; no real email/webhook send in PR #7.
+
+Handoff to Claude PR #7B Automation UI:
+- Use API contract 16.6.
+- UI can list/create/edit/toggle rules, show runs, and call test endpoint with dryRun=true.
+- Do not show SEND_EMAIL/WEBHOOK as live actions unless UI labels them disabled/coming soon.
+- Backend runtime is ready for PR #7B UI.
 ```
 
 ---
@@ -3762,6 +4061,13 @@ Agent nào gặp blocker phải ghi vào đây.
 - Build: next build FULL PASS (compiled + types + static 5/5).
 - Hạn chế (không chặn): "Mở hội thoại" từ comment trỏ /inbox chung (chưa deep-link đúng conversation).
 - PR #6B hoàn tất (DONE).
+
+[2026-06-14 · Codex · PR #7 Automation Rule Engine]
+- B-019 RESOLVED: Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_05_automation_api.
+- Runtime smoke Automation API PASS: GET/POST/PATCH/test/runs.
+- Runtime smoke hook PASS: CONTACT_CREATED, CONTACT_STAGE_CHANGED, OPPORTUNITY_STAGE_CHANGED, ORDER_CREATED, ORDER_STATUS_CHANGED, COMMENT_CREATED, COMMENT_HAS_PHONE.
+- SEND_EMAIL/WEBHOOK vẫn SKIPPED, không gửi thật.
+- Không còn blocker chặn PR #7 backend.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)

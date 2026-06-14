@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
+import { evaluateAutomationRules } from "@/lib/automation";
 import {
   normalizeOrderStatus,
   normalizePaymentMethod,
@@ -19,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.order.findFirst({
     where: { id, workspaceId, deletedAt: null },
-    select: { id: true, customerId: true, opportunityId: true },
+    select: { id: true, customerId: true, opportunityId: true, status: true, ownerId: true },
   });
   if (!existing) return jsonError("Không tìm thấy đơn hàng", 404);
 
@@ -55,6 +56,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
     { timeout: 15000 }
   );
+
+  await evaluateAutomationRules({
+    workspaceId,
+    triggerType: "ORDER_STATUS_CHANGED",
+    sourceType: "ORDER",
+    sourceId: order.id,
+    payload: {
+      orderId: order.id,
+      customerId: order.customerId,
+      opportunityId: order.opportunityId,
+      ownerId: order.ownerId,
+      previousStatus: existing.status,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      totalVnd: order.totalVnd,
+    },
+  }).catch((error) => console.error("ORDER_STATUS_CHANGED automation failed", error));
 
   return jsonOk({ order });
 }

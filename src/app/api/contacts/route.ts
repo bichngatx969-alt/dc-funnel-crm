@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
+import { evaluateAutomationRules } from "@/lib/automation";
 import {
   contactListSelect,
   createManualPsid,
@@ -134,6 +135,19 @@ export async function POST(req: Request) {
       data: createData,
       select: contactListSelect,
     });
+    await evaluateAutomationRules({
+      workspaceId,
+      triggerType: "CONTACT_CREATED",
+      sourceType: "CONTACT",
+      sourceId: contact.id,
+      payload: {
+        customerId: contact.id,
+        ownerId: contact.ownerId,
+        stage: contact.currentStage,
+        source: contact.source,
+        tags: contact.tags,
+      },
+    }).catch((error) => console.error("CONTACT_CREATED automation failed", error));
     return jsonOk({ contact }, 201);
   } catch {
     return jsonError("Không tạo được contact; kiểm tra dữ liệu trùng hoặc không hợp lệ", 400);

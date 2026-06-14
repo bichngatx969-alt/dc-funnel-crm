@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
+import { evaluateAutomationRules } from "@/lib/automation";
 import {
   calculateOrderTotals,
   generateOrderCode,
@@ -163,6 +164,22 @@ export async function POST(req: Request) {
     },
     { timeout: 15000 }
   );
+
+  await evaluateAutomationRules({
+    workspaceId,
+    triggerType: "ORDER_CREATED",
+    sourceType: "ORDER",
+    sourceId: order.id,
+    payload: {
+      orderId: order.id,
+      customerId: order.customerId,
+      opportunityId: order.opportunityId,
+      ownerId: order.ownerId,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      totalVnd: order.totalVnd,
+    },
+  }).catch((error) => console.error("ORDER_CREATED automation failed", error));
 
   return jsonOk({ order }, 201);
 }

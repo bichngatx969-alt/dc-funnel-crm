@@ -147,6 +147,45 @@ enum FacebookCommentStatus {
   ARCHIVED
 }
 
+enum AutomationTriggerType {
+  CONTACT_CREATED
+  CONTACT_STAGE_CHANGED
+  OPPORTUNITY_CREATED
+  OPPORTUNITY_STAGE_CHANGED
+  ORDER_CREATED
+  ORDER_STATUS_CHANGED
+  COMMENT_CREATED
+  COMMENT_HAS_PHONE
+  TASK_DUE_SOON
+  MANUAL_TEST
+}
+
+enum AutomationActionType {
+  CREATE_TASK
+  ADD_TAG
+  UPDATE_CONTACT_STAGE
+  CREATE_NOTE
+  MARK_COMMENT_FOLLOWUP
+  SEND_EMAIL
+  WEBHOOK
+  NOOP
+}
+
+enum AutomationRunStatus {
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum AutomationSourceType {
+  CONTACT
+  OPPORTUNITY
+  ORDER
+  COMMENT
+  TASK
+  MANUAL
+}
+
 // ----------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------
@@ -160,13 +199,14 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  assignedConversations Conversation[]    @relation("AssignedConversations")
-  assignedTasks         Task[]            @relation("AssignedTasks")
-  ownedCustomers        Customer[]        @relation("OwnedCustomers")
-  ownedOpportunities    Opportunity[]     @relation("OwnedOpportunities")
-  ownedOrders           Order[]           @relation("OwnedOrders")
-  authoredNotes         Note[]            @relation("AuthoredNotes")
-  workspaceMemberships  WorkspaceMember[]
+  assignedConversations  Conversation[]    @relation("AssignedConversations")
+  assignedTasks          Task[]            @relation("AssignedTasks")
+  ownedCustomers         Customer[]        @relation("OwnedCustomers")
+  ownedOpportunities     Opportunity[]     @relation("OwnedOpportunities")
+  ownedOrders            Order[]           @relation("OwnedOrders")
+  authoredNotes          Note[]            @relation("AuthoredNotes")
+  createdAutomationRules AutomationRule[]  @relation("CreatedAutomationRules")
+  workspaceMemberships   WorkspaceMember[]
 }
 
 model Organization {
@@ -209,6 +249,8 @@ model Workspace {
   notes            Note[]
   products         ProductLite[]
   orders           Order[]
+  automationRules  AutomationRule[]
+  automationRuns   AutomationRun[]
   emailTemplates   EmailTemplate[]
   emailSequences   EmailSequence[]
 
@@ -775,6 +817,60 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+model AutomationRule {
+  id               String                @id @default(cuid())
+  workspaceId      String
+  name             String
+  description      String?
+  triggerType      AutomationTriggerType
+  actionType       AutomationActionType
+  conditionsJson   Json?
+  actionConfigJson Json?
+  isActive         Boolean               @default(true)
+  runCount         Int                   @default(0)
+  lastRunAt        DateTime?
+  createdById      String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  deletedAt        DateTime?
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  createdBy User?           @relation("CreatedAutomationRules", fields: [createdById], references: [id], onDelete: SetNull)
+  runs      AutomationRun[]
+
+  @@index([workspaceId])
+  @@index([triggerType])
+  @@index([actionType])
+  @@index([isActive])
+  @@index([createdById])
+  @@index([deletedAt])
+}
+
+model AutomationRun {
+  id          String                @id @default(cuid())
+  workspaceId String
+  ruleId      String
+  triggerType AutomationTriggerType
+  sourceType  AutomationSourceType?
+  sourceId    String?
+  status      AutomationRunStatus
+  inputJson   Json?
+  outputJson  Json?
+  error       String?
+  createdAt   DateTime              @default(now())
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([ruleId])
+  @@index([triggerType])
+  @@index([sourceType])
+  @@index([sourceId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 // ----------------------------------------------------------------

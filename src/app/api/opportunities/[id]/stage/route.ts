@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
+import { evaluateAutomationRules } from "@/lib/automation";
 import {
   getStageInWorkspace,
   normalizeOpportunityStatus,
@@ -40,6 +41,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     },
     include: opportunityInclude,
   });
+
+  await evaluateAutomationRules({
+    workspaceId,
+    triggerType: "OPPORTUNITY_STAGE_CHANGED",
+    sourceType: "OPPORTUNITY",
+    sourceId: opportunity.id,
+    payload: {
+      opportunityId: opportunity.id,
+      customerId: opportunity.customerId,
+      ownerId: opportunity.ownerId,
+      pipelineId: opportunity.pipelineId,
+      previousStageId: existing.stageId,
+      stageId: opportunity.stageId,
+      status: opportunity.status,
+      valueVnd: opportunity.valueVnd,
+    },
+  }).catch((error) => console.error("OPPORTUNITY_STAGE_CHANGED automation failed", error));
 
   return jsonOk({ opportunity });
 }
