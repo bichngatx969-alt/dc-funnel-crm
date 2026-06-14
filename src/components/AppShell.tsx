@@ -6,6 +6,7 @@ import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" },
   { href: "/inbox", label: "Inbox", key: "inbox" },
+  { href: "/pipeline", label: "Pipeline", key: "pipeline" },
   { href: "/offers", label: "Offers", key: "offers" },
   { href: "/flows", label: "Flows", key: "flows" },
   { href: "/email", label: "Email", key: "email" },
