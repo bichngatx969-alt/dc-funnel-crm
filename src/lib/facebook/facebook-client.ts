@@ -5,6 +5,7 @@ const REQUIRED_SCOPES = [
   "pages_show_list",
   "pages_manage_metadata",
   "pages_messaging",
+  "pages_manage_engagement",
 ];
 
 type GraphTokenResponse = {
@@ -87,7 +88,7 @@ export async function getUserPages(userAccessToken: string): Promise<FacebookUse
 
 export async function subscribePageToApp(pageId: string, pageAccessToken: string): Promise<{ success: boolean }> {
   return graphPost<{ success?: boolean }>(`/${pageId}/subscribed_apps`, {
-    subscribed_fields: "messages,messaging_postbacks,messaging_optins,message_deliveries",
+    subscribed_fields: "messages,messaging_postbacks,messaging_optins,message_deliveries,feed",
     access_token: pageAccessToken,
   }).then((res) => ({ success: Boolean(res.success) }));
 }

@@ -140,6 +140,13 @@ enum IntegrationAuditStatus {
   FAILED
 }
 
+enum FacebookCommentStatus {
+  OPEN
+  REPLIED
+  HIDDEN
+  ARCHIVED
+}
+
 // ----------------------------------------------------------------
 // Models
 // ----------------------------------------------------------------
@@ -186,22 +193,24 @@ model Workspace {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization   Organization      @relation(fields: [organizationId], references: [id])
-  members        WorkspaceMember[]
-  facebookPages  FacebookPage[]
-  customers      Customer[]
-  conversations  Conversation[]
-  messages       Message[]
-  flows          Flow[]
-  offers         Offer[]
-  tasks          Task[]
-  pipelines      Pipeline[]
-  opportunities  Opportunity[]
-  notes          Note[]
-  products       ProductLite[]
-  orders         Order[]
-  emailTemplates EmailTemplate[]
-  emailSequences EmailSequence[]
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  members          WorkspaceMember[]
+  facebookPages    FacebookPage[]
+  facebookPosts    FacebookPost[]
+  facebookComments FacebookComment[]
+  customers        Customer[]
+  conversations    Conversation[]
+  messages         Message[]
+  flows            Flow[]
+  offers           Offer[]
+  tasks            Task[]
+  pipelines        Pipeline[]
+  opportunities    Opportunity[]
+  notes            Note[]
+  products         ProductLite[]
+  orders           Order[]
+  emailTemplates   EmailTemplate[]
+  emailSequences   EmailSequence[]
 
   @@index([organizationId])
   @@index([deletedAt])
@@ -280,6 +289,8 @@ model FacebookPage {
   customers     Customer[]
   conversations Conversation[]
   messages      Message[]
+  posts         FacebookPost[]
+  comments      FacebookComment[]
   flows         Flow[]
   offers        Offer[]
 
@@ -316,6 +327,76 @@ model IntegrationAuditLog {
   @@index([provider])
   @@index([targetPageId])
   @@index([createdAt])
+}
+
+model FacebookPost {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  pageId            String
+  externalPostId    String
+  permalink         String?
+  message           String?
+  externalCreatedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  facebookPage FacebookPage      @relation(fields: [pageId], references: [pageId], onDelete: Restrict)
+  comments     FacebookComment[]
+
+  @@unique([workspaceId, pageId, externalPostId])
+  @@index([workspaceId])
+  @@index([pageId])
+  @@index([externalPostId])
+  @@index([deletedAt])
+}
+
+model FacebookComment {
+  id                String                @id @default(cuid())
+  workspaceId       String
+  pageId            String
+  postId            String?
+  customerId        String?
+  conversationId    String?
+  externalPostId    String
+  externalCommentId String
+  parentCommentId   String?
+  message           String?
+  fromName          String?
+  fromId            String?
+  permalink         String?
+  status            FacebookCommentStatus @default(OPEN)
+  hasPhone          Boolean               @default(false)
+  needsFollowUp     Boolean               @default(false)
+  isHidden          Boolean               @default(false)
+  repliedAt         DateTime?
+  hiddenAt          DateTime?
+  externalCreatedAt DateTime?
+  rawPayloadJson    Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  deletedAt         DateTime?
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  facebookPage FacebookPage  @relation(fields: [pageId], references: [pageId], onDelete: Restrict)
+  post         FacebookPost? @relation(fields: [postId], references: [id], onDelete: SetNull)
+  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, pageId, externalCommentId])
+  @@index([workspaceId])
+  @@index([pageId])
+  @@index([postId])
+  @@index([customerId])
+  @@index([conversationId])
+  @@index([externalPostId])
+  @@index([parentCommentId])
+  @@index([status])
+  @@index([hasPhone])
+  @@index([needsFollowUp])
+  @@index([createdAt])
+  @@index([deletedAt])
 }
 
 model Customer {
@@ -356,6 +437,7 @@ model Customer {
   opportunities     Opportunity[]
   orders            Order[]
   notes             Note[]
+  facebookComments  FacebookComment[]
   emailLogs         EmailLog[]
   emailEnrollments  EmailAutomationEnrollment[]
   unsubscribeTokens UnsubscribeToken[]
@@ -406,11 +488,12 @@ model Conversation {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
-  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  facebookPage FacebookPage? @relation(fields: [pageId], references: [pageId])
-  assignedTo   User?         @relation("AssignedConversations", fields: [assignedToId], references: [id])
-  messages     Message[]
+  workspace        Workspace?        @relation(fields: [workspaceId], references: [id])
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  facebookPage     FacebookPage?     @relation(fields: [pageId], references: [pageId])
+  assignedTo       User?             @relation("AssignedConversations", fields: [assignedToId], references: [id])
+  messages         Message[]
+  facebookComments FacebookComment[]
 
   @@index([status])
   @@index([lastMessageAt])

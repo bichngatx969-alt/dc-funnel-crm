@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { handleFacebookFeedChange } from "@/lib/facebook/comments";
 import { verifySignature } from "@/lib/facebook/verify";
 import { handleMessagingEvent } from "@/lib/funnel/intake";
 import { prisma } from "@/lib/prisma";
@@ -59,6 +60,36 @@ export async function POST(req: Request): Promise<Response> {
         const page = pageId
           ? await prisma.facebookPage.findUnique({ where: { pageId } })
           : null;
+        const changes = Array.isArray(entry.changes) ? entry.changes : [];
+        for (const change of changes) {
+          const eventType = change?.field ? `feed:${change.field}` : "feed:unknown";
+          const log = await prisma.facebookWebhookLog.create({
+            data: {
+              pageId,
+              eventType,
+              payloadJson: change as object,
+              processingStatus: "RECEIVED",
+            },
+          });
+
+          if (!page) {
+            await markWebhookLog(log.id, "IGNORED", "Fanpage chưa được kết nối trong CRM.");
+            continue;
+          }
+          if (page.status !== "CONNECTED" && page.status !== "WEBHOOK_NOT_SUBSCRIBED") {
+            await markWebhookLog(log.id, "IGNORED", `Fanpage status hiện tại: ${page.status}.`);
+            continue;
+          }
+
+          try {
+            await handleFacebookFeedChange(pageId, change);
+            await markWebhookLog(log.id, "PROCESSED");
+          } catch (err) {
+            console.error("[WEBHOOK] Lỗi xử lý 1 feed/comment event:", err);
+            await markWebhookLog(log.id, "FAILED", err instanceof Error ? err.message : String(err));
+          }
+        }
+
         const events = Array.isArray(entry.messaging) ? entry.messaging : [];
         for (const event of events) {
           const eventType = event.message
