@@ -183,10 +183,22 @@ Handoff:
 |---|---|---|
 | Docs (`docs/**`) | Claude | ✅ PR #1B DONE (spec, wireframe, ownership) |
 | Secure & Stabilize (api.ts/env.ts/stats/README) | Codex | ✅ PR #1 DONE |
-| Workspace API (`src/lib/workspace.ts`, `api/workspaces`) | Codex | ✅ PR #2 DONE — contract 16.1 `READY`. Migration (PR #2M) đã tạo, CHƯA áp (chờ duyệt) |
-| Workspace UI (`AppShell`, `components/workspace`, `settings/workspaces`) | Claude | ✅ PR #2B DONE — verified (workspace migrate+backfill+smoke test xong); B-010 cleared |
-| Pipeline API/UI (PR #3/#3B) | Codex→Claude | ⛔ chờ 16.2 Pipeline API `READY` |
-| Contact/Order/Comment/Automation/Stats | Codex→Claude | ⛔ theo thứ tự PR, chưa mở |
+| Workspace API (`src/lib/workspace.ts`, `api/workspaces`) | Codex | ✅ PR #2 DONE — contract 16.1 `READY`; migration applied + backfill + smoke test PASS |
+| Workspace UI (`AppShell`, `components/workspace`, `settings/workspaces`) | Claude | ✅ PR #2B DONE — verified; B-010 cleared |
+| Pipeline API (PR #3) | Codex | ✅ DONE — contract 16.2 `READY`; migrate deploy + smoke test PASS |
+| Pipeline UI (PR #3B) | Claude | ✅ DONE — Kanban + tạo/đổi stage/trạng thái |
+| Contact API (PR #4) | Codex | ✅ DONE — contract 16.3 `READY`; migrate deploy + smoke test PASS |
+| Contact UI (PR #4B) | Claude | ✅ DONE — list + 360 detail + notes + timeline; typecheck + full build PASS |
+| Order API (PR #5) | Codex | ✅ DONE — contract 16.4 `READY`; migrate deploy + smoke test PASS (working tree chưa commit trên codex/05-order-api) |
+| Order UI (PR #5B) | Claude | ✅ DONE — list + detail + đổi trạng thái + modal tạo đơn; tích hợp Contact tab "Đơn hàng"; typecheck + next build PASS |
+| Comment API (PR #6) | Codex | ✅ DONE — contract 16.5 `READY`; migrate deploy + smoke test PASS (Graph reply/hide chờ Meta perms — D-002) |
+| Comment UI (PR #6B) | Claude | ✅ DONE — list + filter nhanh + chi tiết + reply/ẩn/follow-up; tích hợp Contact tab "Bình luận"; typecheck + next build PASS |
+| Automation API (PR #7) | Codex | ✅ DONE — contract 16.6 `READY`; migrate deploy + smoke + hooks PASS (SEND_EMAIL/WEBHOOK khóa an toàn) |
+| Automation UI (PR #7B) | Claude | ✅ DONE — rules + templates + toggle + dry-run test + runs; typecheck + next build PASS |
+| Founder Stats API (PR #8) | Codex | ✅ DONE — contract 16.7 `READY`; smoke PASS (founder-stats.ts còn ở working tree, cần commit) |
+| Founder Dashboard UI (PR #8B) | Claude | ✅ DONE — range + so sánh kỳ trước + 8 card + sections + chart CSS; typecheck + next build PASS |
+
+> 🏁 **MVP1 UI hoàn tất** (PR #1B, #2B, #3B, #4B, #5B, #6B, #7B, #8B). Việc còn lại là vận hành: founder merge nhánh `claude/*`, Codex commit backend ở working tree, smoke D-002 (Meta pages_manage_engagement cho reply/hide comment).
 
 > Claude cập nhật cột "trạng thái" khi bắt đầu/đóng mỗi PR UI; Codex cập nhật khi API contract đổi trạng thái.
 

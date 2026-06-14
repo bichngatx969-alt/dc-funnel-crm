@@ -2002,6 +2002,47 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - HOÀN TẤT toàn bộ MVP1 UI (PR #1B → #8B). Chờ founder review/merge các nhánh claude/* và Codex commit phần backend còn ở working tree (vd founder-stats.ts).
 ```
 
+#### 2026-06-14 — Claude (Final MVP1 Stabilization)
+
+```text
+## 2026-06-14 — Claude (Final MVP1 Stabilization)
+
+### Phạm vi
+- Bước ổn định cuối MVP1: kiểm git, commit leftover (chọn lọc), typecheck/generate/build, smoke route + API, kiểm tenant isolation (mức code), kiểm D-002. KHÔNG thêm feature.
+
+### Git (không dùng git add .)
+- Phân loại dirty đầu bước:
+  - Backend/Codex: src/lib/founder-stats.ts (PR#8, untracked — thiếu trong commit cf25ff8), src/lib/facebook/comments.ts (PR#7 hook automation COMMENT_CREATED/COMMENT_HAS_PHONE, modified).
+  - Docs: docs/dev/BRANCH_AND_OWNERSHIP.md (Claude).
+  - Migration: prisma/migrations/migration_lock.toml (untracked).
+  - File lạ ngoài scope: không có.
+  - UI/Claude: không còn — PR #8B đã commit (c9dc7a8).
+- Commit đã tạo:
+  - fb8b6a4 "complete pr8 founder stats api" — bổ sung src/lib/founder-stats.ts (route cf25ff8 phụ thuộc lib này; nay PR#8 build độc lập được).
+  - "docs: final mvp1 stabilization report" — cập nhật plan + BRANCH ownership.
+- CHƯA commit (đề nghị Codex, KHÔNG gộp vào commit pr8 sai nhãn): src/lib/facebook/comments.ts (PR#7 hook), prisma/migrations/migration_lock.toml (artifact prisma).
+
+### Tests
+- npm run typecheck: PASS.
+- npx prisma generate: PASS (~5s).
+- npm run build: PASS (exit 0, ~49s; Compiled + types valid + static 5/5 + traces). B-020 (Codex báo build treo) KHÔNG tái hiện.
+
+### Smoke (dev server tạm, đã tắt sau khi xong — PID 19324 terminated, port 3000 free)
+- Routes (chưa đăng nhập, kỳ vọng redirect 307): /dashboard, /contacts, /pipeline, /orders, /comments, /automation, /settings/workspaces → 7/7 = 307 PASS.
+- APIs (chưa đăng nhập, kỳ vọng 401): /api/workspaces, /api/contacts, /api/pipelines, /api/orders, /api/comments, /api/automation/rules, /api/stats/founder?range=30d → 7/7 = 401 PASS.
+- Ghi chú: vài lần đầu trả 000 do next dev cold-compile vượt timeout curl; warm retest đều 307/401. Production build đã xác nhận tất cả route compile + có trong route tree.
+
+### Tenant isolation
+- Mức code: mọi API nghiệp vụ đều getCurrentWorkspaceId(user) + filter workspaceId (review xuyên suốt); cross-workspace bị 404 (Codex smoke PR#2..#8 báo PASS).
+- Mức runtime đa-workspace qua UI (switch brand + đối chiếu data) cần phiên đăng nhập + seed nhiều workspace → kiểm trong môi trường founder. Không tự fake.
+
+### D-002 (Meta reply/hide comment)
+- OPEN. Môi trường này chưa có pages_manage_engagement/page token thật → KHÔNG smoke reply/hide thật, KHÔNG fake pass. UI đã xử lý lỗi rõ khi thiếu quyền.
+
+### Blocker / việc sau MVP1
+- Xem mục 19.2 (blocker còn mở) + 19.3 (việc sau MVP1).
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -4440,6 +4481,13 @@ Agent nào gặp blocker phải ghi vào đây.
 - PR #8B hoàn tất (DONE): /dashboard dùng GET /api/stats/founder (workspace-scoped), bộ lọc range + so sánh kỳ trước, 8 card + section doanh thu/pipeline/nguồn/sale/comment/task/automation, chart CSS thuần. typecheck + next build FULL PASS.
 - Đã thay /dashboard cũ (prisma trực tiếp, không scope workspace) → fix luôn rủi ro lẫn dữ liệu đa-tenant trên trang dashboard.
 - 🏁 MVP1 UI HOÀN TẤT (PR #1B, #2B, #3B, #4B, #5B, #6B, #7B, #8B). Việc còn lại: founder merge nhánh claude/*; Codex commit backend ở working tree; smoke D-002 (Meta perms).
+
+[2026-06-14 · Claude · Final MVP1 Stabilization]
+- Tests: typecheck + prisma generate + npm run build PASS (exit 0). B-020 KHÔNG tái hiện → môi trường, không phải lỗi code.
+- Smoke PASS: 7/7 route → 307, 7/7 API → 401 (warm). 000 ban đầu = next dev cold-compile timeout, không phải lỗi route.
+- B-021 (HOUSEKEEPING, OPEN): còn 2 file Codex chưa commit — src/lib/facebook/comments.ts (PR#7 hook automation), prisma/migrations/migration_lock.toml. Đề nghị Codex commit (không gộp vào pr8). Git CHƯA hoàn toàn sạch tới khi 2 file này được commit.
+- D-002 (OPEN): reply/hide comment cần Meta pages_manage_engagement + page token thật; chưa smoke được trong môi trường này. Không fake.
+- Tenant isolation: code-level PASS (mọi query filter workspaceId); runtime đa-workspace cần kiểm trong env founder (đăng nhập + ≥2 workspace có data).
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -4457,6 +4505,28 @@ Khi Codex hoàn tất Workspace Core và mục 16.1 = READY, Claude sẽ build t
 
 Tiền đề bắt buộc trước khi code: 16.1 READY (endpoint + response mẫu + currentWorkspaceId), xác nhận cơ chế switch,
 và xác nhận field role trả về để render nhãn quyền. Nếu thiếu, ghi blocker và chỉ làm phần tĩnh.
+```
+
+---
+
+### 19.3. Việc sau MVP1 (post-MVP1 backlog)
+
+```text
+Vận hành / hoàn tất ngay:
+- Codex commit 2 file leftover: src/lib/facebook/comments.ts (hook automation PR#7), prisma/migrations/migration_lock.toml.
+- Founder review + merge các nhánh claude/01..08 (UI) vào main theo merge rule (mục 7).
+- Cấp Meta pages_manage_engagement + reconnect Fanpage để đóng D-002 (smoke reply/hide comment thật).
+- Kiểm tenant isolation đầu cuối: đăng nhập, tạo >=2 workspace có data, switch và đối chiếu dashboard/contact/order/pipeline không lẫn.
+
+Nên có sớm (P1, ngoài MVP1):
+- API list workspace members -> picker owner cho Contact/Order/Pipeline + lọc dashboard theo sale.
+- Deep-link conversation trong Inbox (comment "Mở hội thoại" trỏ đúng hội thoại thay vì /inbox chung).
+- Realtime inbox (thay polling) nếu cần.
+- Bật SEND_EMAIL/WEBHOOK automation thật khi có consent/config (đang SKIPPED an toàn).
+- Form builder field-by-field cho automation conditions/actionConfig (thay nhập JSON thô).
+- Reports/export CSV; chart tương tác cho dashboard.
+
+Ngoài scope (giữ nguyên KHÔNG làm): Zalo OA, POS/kho/kế toán/đối soát COD, marketplace, LMS/Course, Voice AI, flow builder canvas, broadcast hàng loạt, affiliate.
 ```
 
 ---
