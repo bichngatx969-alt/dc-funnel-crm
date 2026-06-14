@@ -130,7 +130,9 @@ model User {
 
   assignedConversations Conversation[]    @relation("AssignedConversations")
   assignedTasks         Task[]            @relation("AssignedTasks")
+  ownedCustomers        Customer[]        @relation("OwnedCustomers")
   ownedOpportunities    Opportunity[]     @relation("OwnedOpportunities")
+  authoredNotes         Note[]            @relation("AuthoredNotes")
   workspaceMemberships  WorkspaceMember[]
 }
 
@@ -169,6 +171,7 @@ model Workspace {
   tasks          Task[]
   pipelines      Pipeline[]
   opportunities  Opportunity[]
+  notes          Note[]
   emailTemplates EmailTemplate[]
   emailSequences EmailSequence[]
 
@@ -288,19 +291,24 @@ model IntegrationAuditLog {
 }
 
 model Customer {
-  id            String   @id @default(cuid())
-  workspaceId   String?
-  pageId        String?
-  psid          String
-  name          String?
-  phone         String?
-  avatarUrl     String?
-  source        String?
-  firstCampaign String?
-  firstPostId   String?
-  currentStage  Stage    @default(COLD)
-  leadScore     Int      @default(0)
-  tags          String[] @default([])
+  id               String    @id @default(cuid())
+  workspaceId      String?
+  ownerId          String?
+  pageId           String?
+  psid             String
+  name             String?
+  phone            String?
+  gender           String?
+  birthday         DateTime?
+  address          String?
+  customFieldsJson Json?
+  avatarUrl        String?
+  source           String?
+  firstCampaign    String?
+  firstPostId      String?
+  currentStage     Stage     @default(COLD)
+  leadScore        Int       @default(0)
+  tags             String[]  @default([])
 
   // Email
   email          String?
@@ -308,26 +316,54 @@ model Customer {
   unsubscribedAt DateTime?
   emailStatus    EmailStatus @default(SUBSCRIBED)
 
-  lastInteractionAt DateTime @default(now())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  lastInteractionAt DateTime  @default(now())
+  lastActivityAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
 
   conversations     Conversation[]
   funnelEvents      FunnelEvent[]
   tasks             Task[]
   opportunities     Opportunity[]
+  notes             Note[]
   emailLogs         EmailLog[]
   emailEnrollments  EmailAutomationEnrollment[]
   unsubscribeTokens UnsubscribeToken[]
   workspace         Workspace?                  @relation(fields: [workspaceId], references: [id])
+  owner             User?                       @relation("OwnedCustomers", fields: [ownerId], references: [id], onDelete: SetNull)
   facebookPage      FacebookPage?               @relation(fields: [pageId], references: [pageId])
 
   @@unique([pageId, psid])
   @@index([currentStage])
   @@index([lastInteractionAt])
+  @@index([lastActivityAt])
   @@index([email])
+  @@index([ownerId])
+  @@index([deletedAt])
   @@index([pageId])
   @@index([workspaceId])
+}
+
+model Note {
+  id          String    @id @default(cuid())
+  workspaceId String
+  customerId  String
+  authorId    String?
+  body        String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  customer  Customer  @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  author    User?     @relation("AuthoredNotes", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([deletedAt])
 }
 
 model Conversation {

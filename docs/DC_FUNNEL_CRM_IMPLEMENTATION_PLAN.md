@@ -840,9 +840,9 @@ Codex bắt buộc cập nhật mục này sau mỗi backend PR.
 
 ### 16.1. Workspace API Contract
 
-**Status:** `READY`  
+**Status:** `READY`
 **Owner:** Codex  
-**Last updated:** 2026-06-14  
+**Last updated:** 2026-06-14
 
 ```http
 GET /api/workspaces
@@ -901,9 +901,9 @@ Role compatibility:
 
 ### 16.2. Pipeline API Contract
 
-**Status:** `READY`  
-**Owner:** Codex  
-**Last updated:** 2026-06-14  
+**Status:** `READY`
+**Owner:** Codex
+**Last updated:** 2026-06-14
 
 ```http
 GET /api/pipelines
@@ -1017,20 +1017,67 @@ Runtime note:
 
 ### 16.3. Contact API Contract
 
-**Status:** `NOT_READY / READY / CHANGED`  
-**Owner:** Codex  
-**Last updated:**  
+**Status:** `READY`
+**Owner:** Codex
+**Last updated:** 2026-06-14
 
 ```http
 GET /api/contacts
+POST /api/contacts
 GET /api/contacts/:id
+PATCH /api/contacts/:id
 POST /api/contacts/:id/notes
+GET /api/contacts/:id/timeline
 ```
 
 Notes:
 
 ```text
-Điền sau khi Codex hoàn thành PR #4.
+Entity:
+- Dùng model Customer hiện tại làm Contact entity để tránh rename/migration lớn.
+- Thêm field additive nullable: ownerId, gender, birthday, address, customFieldsJson, lastActivityAt, deletedAt.
+- Thêm Note model cho ghi chú nội bộ theo workspace/contact.
+- Tag vẫn giữ Customer.tags String[] trong PR #4; chuẩn hóa Tag/ContactTag để lại debt vì thay đổi lan sang funnel/email/stats.
+
+Auth:
+- Tất cả endpoint require logged-in user.
+- Tất cả query/write filter currentWorkspaceId hoặc validate entity thuộc current workspace.
+
+GET /api/contacts query:
+- q/search: tìm theo name, phone, email, psid.
+- tag: filter Customer.tags has tag.
+- stage: COLD/WARM/HOT/CUSTOMER/LOST.
+- ownerId: user id hoặc "unassigned".
+- page/pageSize hoặc limit: pagination cơ bản, pageSize max 100.
+
+GET /api/contacts response:
+- { ok, data: { items, pagination } }
+- Contact list item gồm thông tin cơ bản, owner, facebookPage, _count conversations/tasks/opportunities/notes.
+
+POST /api/contacts body:
+- { name?, phone?, email?, ownerId?, gender?, birthday?, address?, customFieldsJson?, tags?, currentStage?, leadScore?, source?, pageId? }
+- Cần ít nhất name, phone hoặc email.
+- Nếu không có psid, API tạo psid dạng manual:<uuid> để giữ unique(pageId, psid) hiện hữu.
+
+GET /api/contacts/:id:
+- Trả Contact 360: thông tin khách, owner, facebookPage, conversations + messages gần nhất, tasks, opportunities, notes.
+
+PATCH /api/contacts/:id:
+- Update các field Contact 360; hỗ trợ soft-delete qua { deleted: true }.
+- Owner và pageId được validate trong currentWorkspaceId.
+
+POST /api/contacts/:id/notes:
+- Body { body } hoặc { text } hoặc { note }.
+- Tạo note nội bộ, authorId = current user, update Customer.lastActivityAt.
+
+GET /api/contacts/:id/timeline:
+- Trả timeline gộp note.created, conversation.activity, task.activity, opportunity.activity.
+- Query limit max 100.
+
+Runtime note:
+- Migration 20260614_workspace_core_02_contact_api đã deploy thành công.
+- Runtime smoke test PASS: GET/POST/PATCH Contacts, POST Note, GET Timeline.
+- DB hiện up to date, không pending/failed migration sau PR #4.
 ```
 
 ---
@@ -1388,6 +1435,55 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng theo yêu cầu (chỉ làm PR #2B). Bước kế: PR #3B Pipeline UI sau khi mục 16.2 = READY.
 ```
 
+#### 2026-06-14 — Claude (PR #3B Pipeline UI)
+
+```text
+## 2026-06-14 — Claude (PR #3B Pipeline UI)
+
+### Đang làm PR
+- PR #3B — Pipeline UI
+
+### Đã làm hôm nay
+- Xác nhận mục 16.2 Pipeline API = READY; đọc route thật (pipelines, pipelines/:id, opportunities, opportunities/:id/stage) để build khớp shape. Tạo branch claude/03-pipeline-ui.
+- Trang /pipeline (Kanban): GET /api/pipelines (chọn default), GET /api/pipelines/:id (stages + opportunities), render cột theo position, thẻ theo stage.
+- Thẻ hiển thị: tên cơ hội, tên khách + SĐT, giá trị VND, nguồn, owner, last activity, trạng thái OPEN/WON/LOST.
+- Đổi stage: kéo-thả (HTML5 DnD, desktop) + dropdown "Chuyển giai đoạn" trên thẻ (fallback + mobile), cập nhật lạc quan, lỗi thì revert. Gọi PATCH /api/opportunities/:id/stage.
+- Đổi trạng thái OPEN/WON/LOST trên thẻ (PATCH stage kèm status).
+- Nút "Tạo cơ hội" + "+" trên mỗi cột → modal tạo opportunity (POST /api/opportunities). Chọn khách qua /api/conversations (Contact list API chưa READY).
+- Tổng giá trị VND theo cột tính client-side từ opportunities (khớp stageSummaries). Empty states: chưa có pipeline (chọn mẫu ngành), cột rỗng, lỗi tải (Thử lại).
+- util formatVnd (vi-VN). Thêm mục "Pipeline" vào sidebar nav. UI tiếng Việt 100%; board cuộn ngang, modal full-screen sheet trên mobile.
+
+### Files đã sửa
+- src/components/money.ts (mới)
+- src/components/pipeline/types.ts (mới)
+- src/components/pipeline/PipelineBoard.tsx (mới)
+- src/components/pipeline/CreateOpportunityModal.tsx (mới)
+- src/components/pipeline/PipelineClient.tsx (mới)
+- src/app/pipeline/page.tsx (mới)
+- src/components/AppShell.tsx (thêm nav Pipeline)
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.6, 19)
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/pipeline/**, docs/**. Không đụng prisma, auth.ts, api.ts, workspace.ts, pipeline.ts, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- next build: "Compiled successfully" + "Checking validity of types" PASS. Full npm run build chặn ở prisma generate (EPERM) và prerender "/" (ENOENT) do DEV SERVER đang chạy (PID 8984, port 3000) khóa Prisma engine DLL + .next — môi trường, không phải code (giống B-009). KHÔNG kill dev server của founder.
+
+### Blocker
+- B-014 (ENV, không chặn code): full production build cần dừng dev server để giải phóng lock .next/prisma engine.
+- Phụ thuộc nhẹ: form chọn khách dùng /api/conversations vì Contact list API (16.3) chưa READY → chỉ chọn được khách đã có hội thoại.
+
+### Cần founder quyết
+- Không phát sinh mới.
+
+### Cần agent kia hỗ trợ
+- (PR #4) Codex cung cấp GET /api/contacts để form Tạo cơ hội chọn được mọi khách, không chỉ khách đã có hội thoại.
+
+### Kế hoạch ngày tiếp theo
+- Dừng theo yêu cầu (chỉ PR #3B). Bước kế: PR #4B Contact UI sau khi mục 16.3 = READY.
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -1623,6 +1719,82 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Kế hoạch ngày tiếp theo
 - Dừng tại PR #3 theo yêu cầu. Bước tiếp theo đề xuất: Claude PR #3B Pipeline UI.
+```
+
+#### 2026-06-14 — Codex (PR #4 Contact API + Notes)
+
+```text
+## 2026-06-14 — Codex
+
+### Đang làm PR
+- PR #4 — Contact API + Notes — DONE
+
+### Đã làm hôm nay
+- Tạo branch codex/04-contact-api từ trạng thái hiện tại sau PR #3B.
+- Dùng Customer model hiện tại làm Contact entity, không rename model để tránh migration lớn.
+- Thêm field additive nullable cho Customer: ownerId, gender, birthday, address, customFieldsJson, lastActivityAt, deletedAt.
+- Thêm Note model: workspaceId, customerId, authorId nullable, body, timestamps, deletedAt.
+- Thêm helper src/lib/contact.ts cho normalize input, pagination, owner/page validation, Contact 360 include, timeline builder.
+- Thêm API:
+  GET /api/contacts
+  POST /api/contacts
+  GET /api/contacts/:id
+  PATCH /api/contacts/:id
+  POST /api/contacts/:id/notes
+  GET /api/contacts/:id/timeline
+- Mọi endpoint require logged-in user.
+- Mọi query/write chính filter currentWorkspaceId; nested Contact 360 include cũng filter workspaceId cho conversations/messages/tasks/opportunities/notes.
+- Không làm Contact UI, Order Lite, Comment-to-Inbox, Automation, Dashboard.
+- Không chuẩn hóa Tag/ContactTag trong PR này; giữ Customer.tags String[] để tránh lan rộng sang funnel/email/stats, ghi debt.
+- Tạo migration additive: prisma/migrations/20260614_workspace_core_02_contact_api/migration.sql.
+- Review migration SQL: additive-only; không DROP, DELETE FROM, TRUNCATE, SET NOT NULL; không ON DELETE CASCADE.
+- Founder duyệt migrate deploy; đã chạy npx prisma migrate deploy thành công.
+- npx prisma migrate status sau deploy: schema up to date, không pending/failed migration.
+- Runtime smoke test PASS:
+  GET /api/contacts 200.
+  POST /api/contacts 201 tạo contact trong currentWorkspaceId.
+  GET /api/contacts/:id 200 trả Contact 360.
+  PATCH /api/contacts/:id 200 cập nhật stage/address/customFieldsJson.
+  POST /api/contacts/:id/notes 201 tạo note trong currentWorkspaceId.
+  GET /api/contacts/:id/timeline 200 có note.created.
+- Verify DB: Contact và Note thuộc currentWorkspaceId; nested Contact 360 cùng workspace; legacy counts không giảm.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260614_workspace_core_02_contact_api/migration.sql
+- src/lib/contact.ts
+- src/app/api/contacts/route.ts
+- src/app/api/contacts/[id]/route.ts
+- src/app/api/contacts/[id]/notes/route.ts
+- src/app/api/contacts/[id]/timeline/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật contract/report.
+- Không sửa UI/Claude-owned app/components.
+- Lưu ý: docs/dev/BRANCH_AND_OWNERSHIP.md đang modified từ PR #3B trước khi Codex bắt đầu PR #4; Codex không sửa/revert file này.
+
+### Typecheck/build/test
+- npx prisma format: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- npx prisma migrate deploy: PASS, applied 20260614_workspace_core_02_contact_api.
+- npx prisma migrate status: PASS, schema up to date, no pending/failed migration.
+- Migration safety scan: PASS additive-only.
+- API runtime smoke: PASS.
+
+### Blocker
+- B-015 RESOLVED: Contact migration deployed and runtime smoke test passed.
+
+### Cần founder quyết
+- D-007 vẫn OPEN: có dùng phone/email làm khóa dedup/merge contact trong cùng workspace không. PR #4 chưa thêm unique constraint để tránh rủi ro dữ liệu.
+
+### Cần agent kia hỗ trợ
+- Claude PR #4B Contact UI có thể bắt đầu từ contract 16.3.
+
+### Kế hoạch ngày tiếp theo
+- Dừng tại PR #4 theo yêu cầu. Bước tiếp theo đề xuất: Claude PR #4B Contact UI.
 ```
 
 ---
@@ -2467,32 +2639,57 @@ UI can rely on:
 ### 18.6. PR #3B — Pipeline UI
 
 **Owner:** Claude  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`
+**Branch:** claude/03-pipeline-ui
+**Commit/PR link:** N/A
 
 #### Summary
 
 ```text
-Chưa cập nhật.
+Màn Pipeline Kanban theo API contract 16.2: xem cơ hội theo từng giai đoạn, tạo cơ hội, đổi giai đoạn
+(kéo-thả desktop + dropdown fallback/mobile), đổi trạng thái OPEN/WON/LOST, tổng giá trị VND theo cột.
+Empty states + util formatVnd + mục nav "Pipeline". Không đụng backend/core/schema/api routes.
 ```
 
 #### Files changed
 
 ```text
-Chưa cập nhật.
+src/components/money.ts                              (mới)
+src/components/pipeline/types.ts                     (mới)
+src/components/pipeline/PipelineBoard.tsx            (mới)
+src/components/pipeline/CreateOpportunityModal.tsx   (mới)
+src/components/pipeline/PipelineClient.tsx           (mới)
+src/app/pipeline/page.tsx                            (mới)
+src/components/AppShell.tsx                          (thêm nav "Pipeline")
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md            (mục 17, 18.6, 19)
 ```
 
 #### Tests
 
 ```text
-Chưa cập nhật.
+npm run typecheck: PASS
+next build: "Compiled successfully" + "Checking validity of types" PASS.
+Full npm run build: chặn ở prisma generate (EPERM) + prerender "/" (ENOENT) do dev server đang chạy khóa
+.next/prisma engine — môi trường, không phải code (B-014, giống B-009).
+Test thủ công (dev server đang chạy localhost:3000): mở /pipeline → pipeline mặc định + 7 stage →
+tạo cơ hội → chuyển stage (kéo-thả/select) → đổi trạng thái → reload dữ liệu vẫn đúng.
+```
+
+#### Risks
+
+```text
+- B-014: cần dừng dev server để có full production build xanh hoàn toàn.
+- Form chọn khách tạm dùng /api/conversations (Contact list API 16.3 chưa READY) → chỉ chọn được khách đã có hội thoại.
+- Drag-drop dùng HTML5 native; mobile/an toàn dùng dropdown "Chuyển giai đoạn" (không phụ thuộc kéo-thả).
+- valueVnd nhập integer đồng; hiển thị Intl vi-VN.
 ```
 
 #### Handoff
 
 ```text
-Chưa cập nhật.
+- Đạt Acceptance PR #3B (plan 14.4): founder thấy tiền theo từng stage; sale chuyển được stage; empty state rõ; mobile/tablet cuộn ngang không vỡ.
+- Bước kế Claude: PR #4B Contact UI khi mục 16.3 = READY.
+- Đề nghị Codex (PR #4): cung cấp GET /api/contacts để form Tạo cơ hội chọn được mọi khách (không chỉ khách đã có hội thoại).
 ```
 
 ---
@@ -2500,12 +2697,98 @@ Chưa cập nhật.
 ### 18.7. PR #4 — Contact API + Notes
 
 **Owner:** Codex  
-**Status:** `TODO / IN_PROGRESS / DONE / BLOCKED`  
-**Branch:**  
-**Commit/PR link:**  
+**Status:** `DONE`
+**Branch:** codex/04-contact-api
+**Commit/PR link:** Local working tree, chưa commit PR #4
+
+#### Summary
 
 ```text
-Chưa cập nhật.
+PR #4 Contact API + Notes complete:
+- Kept Customer as Contact entity to avoid risky model rename.
+- Added additive Customer fields: ownerId, gender, birthday, address, customFieldsJson, lastActivityAt, deletedAt.
+- Added Note model for internal notes scoped by workspace/customer.
+- Added src/lib/contact.ts helper for input normalization, workspace owner/page validation, pagination, Contact 360 include, and timeline assembly.
+- Added Contact APIs:
+  GET /api/contacts
+  POST /api/contacts
+  GET /api/contacts/:id
+  PATCH /api/contacts/:id
+  POST /api/contacts/:id/notes
+  GET /api/contacts/:id/timeline
+- Contact list supports q/search, tag, stage, ownerId, page/pageSize pagination.
+- Contact detail returns customer info, conversations/messages, tasks, opportunities, notes.
+- Timeline returns note, conversation/message, task, and opportunity activity.
+- Every endpoint requires a logged-in user and scopes reads/writes to currentWorkspaceId.
+- No Contact UI, Order Lite, Comment-to-Inbox, Automation, or Dashboard work.
+- Tag normalization into Tag/ContactTag deferred as debt; existing Customer.tags String[] remains source of truth.
+- Migration 20260614_workspace_core_02_contact_api deployed successfully.
+- Runtime smoke test passed against local app connected to Neon DB.
+```
+
+#### API Contract Updated?
+
+```text
+YES — mục 16.3 Contact API Contract đã đặt Status = READY.
+Runtime note: DB migration 20260614_workspace_core_02_contact_api applied; API smoke test passed.
+```
+
+#### Files changed
+
+```text
+prisma/schema.prisma
+prisma/migrations/20260614_workspace_core_02_contact_api/migration.sql
+src/lib/contact.ts
+src/app/api/contacts/route.ts
+src/app/api/contacts/[id]/route.ts
+src/app/api/contacts/[id]/notes/route.ts
+src/app/api/contacts/[id]/timeline/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests
+
+```text
+npx prisma format: PASS
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+npx prisma migrate deploy: PASS, applied 20260614_workspace_core_02_contact_api.
+npx prisma migrate status: PASS, schema up to date; no pending/failed migration.
+Migration SQL review: PASS additive-only; no DROP, DELETE FROM, TRUNCATE, SET NOT NULL, or ON DELETE CASCADE.
+API smoke test: PASS.
+- GET /api/contacts: 200.
+- POST /api/contacts: 201, created smoke contact in currentWorkspaceId.
+- GET /api/contacts/:id: 200, returned Contact 360.
+- PATCH /api/contacts/:id: 200, updated contact stage/address/customFieldsJson.
+- POST /api/contacts/:id/notes: 201, created note in currentWorkspaceId.
+- GET /api/contacts/:id/timeline: 200, returned note.created timeline item.
+- Search/filter smoke: q + tag + stage returned created contact.
+- DB verification: Contact/Note workspaceId matched currentWorkspaceId; Contact 360 nested data matched workspace.
+- Legacy counts did not decrease: Customer 2->3 (smoke contact added), Conversation 2->2, Task 1->1, Opportunity 1->1, Note 0->1.
+```
+
+#### Risks / Debt
+
+```text
+- D-007 remains open: phone/email dedup/merge rule not enforced in DB yet.
+- Tag/ContactTag normalization deferred to avoid broad refactor across funnel/email/stats.
+- Existing legacy customer routes under /api/customers remain for compatibility.
+- Smoke test created one real contact and one note tagged/source runtime-smoke-test.
+```
+
+#### Handoff to Claude
+
+```text
+Claude PR #4B Contact UI can start from contract 16.3.
+
+UI can rely on:
+- GET /api/contacts returns { items, pagination } with filters q/search, tag, stage, ownerId, page/pageSize.
+- POST /api/contacts accepts name/phone/email plus optional ownerId, gender, birthday, address, customFieldsJson, tags, currentStage.
+- GET /api/contacts/:id returns Contact 360 data: conversations, tasks, opportunities, notes.
+- PATCH /api/contacts/:id updates Contact 360 fields and supports soft-delete via { deleted: true }.
+- POST /api/contacts/:id/notes creates internal note with current user as author.
+- GET /api/contacts/:id/timeline returns mixed activity items sorted newest-first.
 ```
 
 ---
@@ -2695,6 +2978,15 @@ Agent nào gặp blocker phải ghi vào đây.
 
 [2026-06-14 · Codex · PR #3 Pipeline API]
 - B-013 RESOLVED: Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_01_pipeline_api. npx prisma migrate status up to date; runtime smoke test Pipeline/Opportunity PASS.
+
+[2026-06-14 · Claude · PR #3B Pipeline UI]
+- B-014 (BUILD/ENV, không chặn code): full npm run build fail ở prisma generate (EPERM rename query_engine dll) và prerender "/" (ENOENT) vì dev server đang chạy (PID 8984, port 3000) khóa .next + prisma engine. typecheck PASS và next build "Compiled successfully" + type validation PASS → code hợp lệ. Cần dừng dev server để build production xanh hoàn toàn (cùng loại với B-009). Không kill dev server của founder.
+- Phụ thuộc PR #4: form Tạo cơ hội chọn khách qua /api/conversations vì Contact list API (16.3) chưa READY; nâng lên GET /api/contacts khi có.
+- PR #3B hoàn tất (DONE).
+
+[2026-06-14 · Codex · PR #4 Contact API + Notes]
+- B-015 RESOLVED: Founder duyệt và Codex đã chạy npx prisma migrate deploy thành công cho 20260614_workspace_core_02_contact_api. npx prisma migrate status up to date; runtime smoke test Contact/Note/Timeline PASS.
+- D-007 vẫn OPEN: chưa áp unique/dedup phone/email ở DB trong PR #4 để tránh rủi ro dữ liệu hiện hữu; cần founder chốt quy tắc merge/dedup.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
