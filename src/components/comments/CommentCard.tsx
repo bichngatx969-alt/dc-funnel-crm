@@ -75,9 +75,13 @@ export function CommentCard({ comment, onChange }: { comment: Comment; onChange:
   }
 
   return (
-    <div className={`rounded-xl border bg-white p-3 ${c.needsFollowUp ? "border-l-4 border-l-rose-400" : ""}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+    <div className={`dc-card p-3 ${c.needsFollowUp ? "border-l-4 border-l-rose-400" : ""}`}>
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sky-400 to-indigo-500 text-sm font-bold text-white">
+          {commenterName(c).slice(0, 1).toUpperCase()}
+        </span>
+        <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+          <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium text-gray-900">{commenterName(c)}</span>
             {c.hasPhone && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Có SĐT</span>}
@@ -89,7 +93,8 @@ export function CommentCard({ comment, onChange }: { comment: Comment; onChange:
           </div>
           <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{c.message || "(không có nội dung)"}</p>
         </div>
-        <span className="shrink-0 text-[11px] text-gray-400">{fmtDateTime(c.externalCreatedAt ?? c.createdAt)}</span>
+          <span className="shrink-0 text-[11px] text-gray-400">{fmtDateTime(c.externalCreatedAt ?? c.createdAt)}</span>
+        </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">

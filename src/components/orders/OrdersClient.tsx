@@ -59,6 +59,13 @@ export function OrdersClient() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Quick action từ topbar: /orders?new=1 -> mở modal tạo đơn.
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1") {
+      setShowCreate(true);
+    }
+  }, []);
+
   const hasFilter = Boolean(q.trim() || status || paymentStatus);
 
   return (

@@ -2043,6 +2043,47 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Xem mục 19.2 (blocker còn mở) + 19.3 (việc sau MVP1).
 ```
 
+#### 2026-06-15 — Claude (PR #9A UI Refresh)
+
+```text
+## 2026-06-15 — Claude (PR #9A UI Refresh — Design System)
+
+### Đang làm PR
+- PR #9A — UI Refresh (Apple / Windows 11 / Messenger inspired). CHỈ UI/UX; không feature mới; không đụng backend/Prisma/API.
+
+### Đã làm hôm nay
+- Tạo branch claude/09a-ui-refresh.
+- Foundation: globals.css (font hệ thống, nền gradient dịu, token .dc-glass / .dc-card / .dc-muted, scrollbar mảnh); tailwind.config (fontFamily sans, shadow soft/glass, radius 4xl); layout metadata "D.C FUNNEL CRM".
+- Design system primitives: src/components/layout/{icons.tsx (icon inline SVG — KHÔNG thêm dependency), nav.ts (IA gom 7 nhóm phòng ban + resolveActiveHref), SidebarGroup, PageHeader, Surface, QuickAction}; src/components/ui/{Button, Badge}.
+- AppShell viết lại (client): sidebar kính nổi bo góc lớn + nav gom nhóm (Tổng quan/Sale/Marketing/Sản phẩm/Kế toán/Nhân sự/Cài đặt); active theo usePathname (prefix dài nhất — đúng cả route con & settings); collapse/expand (desktop) + drawer (mobile); topbar glass: workspace switcher, search placeholder, quick actions (Tạo khách/Tạo đơn/Comment có SĐT), user + đăng xuất.
+- Mục chưa có backend (Sản phẩm, Bộ sưu tập, Kế toán, Nhân sự, Bảo mật, Hệ thống) hiển thị "Sắp ra mắt" (disabled) — KHÔNG tạo backend.
+- Polish: EmptyState (icon trong khối bo tròn); PageHeader + max-w cho 7 trang list; 4 trang detail bọc max-w; CommentCard thêm avatar tròn + dc-card (Messenger).
+- Wire quick action qua query param client-only (không đổi logic nghiệp vụ): /contacts?new=1 & /orders?new=1 mở modal tạo; /comments?filter=hasPhone set bộ lọc nhanh.
+
+### Files đã sửa
+- Mới: src/components/layout/{icons.tsx, nav.ts, SidebarGroup.tsx, PageHeader.tsx, Surface.tsx, QuickAction.tsx}; src/components/ui/{Button.tsx, Badge.tsx}.
+- Sửa component: src/components/AppShell.tsx (rewrite), EmptyState.tsx, comments/CommentCard.tsx, contacts/ContactsClient.tsx, orders/OrdersClient.tsx, comments/CommentsClient.tsx.
+- Sửa nền: src/app/globals.css, tailwind.config.ts, src/app/layout.tsx.
+- Sửa page (PageHeader + max-w): dashboard, contacts (+[id]), orders (+[id]), comments (+[id]), automation (+[id]), pipeline, settings/workspaces.
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17, 18.17).
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Chỉ src/components/**, src/app/** (UI), globals.css, tailwind.config.ts, layout.tsx, docs/**. Không đụng prisma, src/lib/auth.ts/api.ts/workspace.ts/facebook/**, src/app/api/**.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- npm run build: PASS (exit 0) — Compiled 35.3s + type validation + static 5/5 + traces. Route tree còn ĐỦ mọi route cũ (không mất route). (Ghi chú: lần build nền đầu bị orphan khi phiên tạm dừng; đã kill node + xóa .next + build lại sạch → PASS.)
+
+### Blocker
+- Không có blocker mới (UI-only). D-002 + việc sau MVP1 giữ như mục 19.
+
+### Cần founder quyết / Cần Codex
+- Không. Tương lai: nối search topbar + quick action vào API khi có; mục Sản phẩm/Kế toán/Nhân sự cần backend riêng (đang "Sắp ra mắt").
+
+### Kế hoạch ngày tiếp theo
+- Dừng PR #9A. Chờ founder review giao diện + merge nhánh claude/09a-ui-refresh.
+```
+
 #### 2026-06-14 — Codex (Apply Workspace Migration Safely)
 
 ```text
@@ -4350,6 +4391,61 @@ Test thủ công: /dashboard → đổi range today/7d/30d/90d/custom → bật 
 - Đạt mục tiêu PR #8B: founder xem nhanh doanh thu/pipeline/sale/comment/task/automation theo khoảng thời gian.
 - 🏁 Hoàn tất toàn bộ MVP1 UI (PR #1B → #8B).
 - Việc vận hành còn lại (không thuộc UI): founder review/merge nhánh claude/*; Codex commit backend còn ở working tree (founder-stats.ts, comments.ts); smoke D-002 (reply/hide cần Meta pages_manage_engagement).
+```
+
+---
+
+### 18.17. PR #9A — UI Refresh (Design System)
+
+**Owner:** Claude
+**Status:** `DONE`
+**Branch:** claude/09a-ui-refresh
+**Commit/PR link:** N/A
+
+#### Summary
+
+```text
+UI/UX refresh cảm hứng Apple (tối giản, thoáng, font hệ thống) + Windows 11 (sidebar/panel kính bo góc, shadow mềm)
++ Messenger (avatar, card, quick action cho comment). AppShell viết lại: nav gom 7 nhóm phòng ban, glass sidebar
+collapse/expand + drawer mobile, topbar (workspace, search placeholder, quick actions). Design tokens + primitives
+(Surface/PageHeader/QuickAction/SidebarGroup/Button/Badge/EmptyState + icon inline SVG). KHÔNG đổi logic nghiệp vụ,
+KHÔNG đụng backend/API/Prisma, KHÔNG thêm dependency.
+```
+
+#### Files changed
+
+```text
+Mới: src/components/layout/{icons,nav,SidebarGroup,PageHeader,Surface,QuickAction}, src/components/ui/{Button,Badge}
+Sửa: src/components/AppShell.tsx (rewrite), EmptyState.tsx, comments/CommentCard.tsx,
+     contacts/ContactsClient.tsx, orders/OrdersClient.tsx, comments/CommentsClient.tsx
+Nền: src/app/globals.css, tailwind.config.ts, src/app/layout.tsx
+Page: dashboard, contacts(+[id]), orders(+[id]), comments(+[id]), automation(+[id]), pipeline, settings/workspaces
+Docs: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (17, 18.17)
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS
+npm run build: PASS (exit 0) — Compiled 35.3s + types valid + static 5/5 + traces; route tree đủ mọi route cũ (không mất route).
+Manual: cần founder mở /dashboard /contacts /pipeline /orders /comments /automation /settings/workspaces, kiểm sidebar active, workspace switcher, responsive mobile (drawer), quick actions.
+```
+
+#### Risks
+
+```text
+- AppShell chuyển sang client component (dùng usePathname) — children server vẫn render bình thường; đã build PASS.
+- Trang cũ (offers/flows/email/tasks/settings khác) chưa restyle sâu nhưng vẫn chạy trong shell mới, không vỡ.
+- Glass/backdrop-blur: trình duyệt cũ không hỗ trợ sẽ fallback nền mờ — không ảnh hưởng chức năng.
+- Quick action dùng query param client-only; không đổi API/logic.
+```
+
+#### Handoff
+
+```text
+- Acceptance PR #9A đạt: nav gom nhóm phòng ban; không mất route; mobile không vỡ; không backend changes; typecheck/build PASS.
+- Đề nghị founder review giao diện trên trình duyệt + merge nhánh claude/09a-ui-refresh.
+- Việc sau (ngoài PR #9A): nối search/quick action vào dữ liệu thật; restyle sâu trang cũ; module Sản phẩm/Kế toán/Nhân sự (đang "Sắp ra mắt").
 ```
 
 ---

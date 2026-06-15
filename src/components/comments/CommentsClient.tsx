@@ -57,6 +57,15 @@ export function CommentsClient() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Quick action từ topbar: /comments?filter=hasPhone -> set bộ lọc nhanh.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const f = new URLSearchParams(window.location.search).get("filter");
+    if (f && ["hasPhone", "needsFollowUp", "replied", "hidden", "all"].includes(f)) {
+      setQuick(f as QuickFilter);
+    }
+  }, []);
+
   function updateItem(updated: Comment) {
     setItems((list) => list.map((it) => (it.id === updated.id ? updated : it)));
   }

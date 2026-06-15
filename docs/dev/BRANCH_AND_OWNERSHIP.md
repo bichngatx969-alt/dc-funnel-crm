@@ -197,6 +197,7 @@ Handoff:
 | Automation UI (PR #7B) | Claude | ✅ DONE — rules + templates + toggle + dry-run test + runs; typecheck + next build PASS |
 | Founder Stats API (PR #8) | Codex | ✅ DONE — contract 16.7 `READY`; smoke PASS (founder-stats.ts còn ở working tree, cần commit) |
 | Founder Dashboard UI (PR #8B) | Claude | ✅ DONE — range + so sánh kỳ trước + 8 card + sections + chart CSS; typecheck + next build PASS |
+| UI Refresh (PR #9A) | Claude | ✅ DONE — design system + glass sidebar (nav 7 nhóm phòng ban) + topbar + polish; không đụng backend; typecheck + build PASS |
 
 > 🏁 **MVP1 UI hoàn tất** (PR #1B, #2B, #3B, #4B, #5B, #6B, #7B, #8B). Việc còn lại là vận hành: founder merge nhánh `claude/*`, Codex commit backend ở working tree, smoke D-002 (Meta pages_manage_engagement cho reply/hide comment).
 

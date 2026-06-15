@@ -56,6 +56,13 @@ export function ContactsClient() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Quick action từ topbar: /contacts?new=1 -> mở modal tạo khách.
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("new") === "1") {
+      setShowCreate(true);
+    }
+  }, []);
+
   const hasFilter = Boolean(q.trim() || tag.trim() || stage);
 
   function resetToFirstPage() {

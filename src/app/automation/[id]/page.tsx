@@ -12,7 +12,7 @@ export default async function AutomationRulePage({ params }: { params: Promise<{
 
   return (
     <AppShell user={user} active="automation">
-      <div className="p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl p-4 sm:p-6">
         <RuleDetailClient id={id} />
       </div>
     </AppShell>

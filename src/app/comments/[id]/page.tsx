@@ -12,7 +12,7 @@ export default async function CommentDetailPage({ params }: { params: Promise<{ 
 
   return (
     <AppShell user={user} active="comments">
-      <div className="p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl p-4 sm:p-6">
         <CommentDetailClient id={id} />
       </div>
     </AppShell>

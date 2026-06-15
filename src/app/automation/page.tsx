@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { AutomationClient } from "@/components/automation/AutomationClient";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +12,11 @@ export default async function AutomationPage() {
 
   return (
     <AppShell user={user} active="automation">
-      <div className="p-4 sm:p-6">
-        <div className="mb-3">
-          <h1 className="text-2xl font-bold">Tự động hóa</h1>
-          <p className="text-sm text-gray-500">
-            Đặt quy tắc “khi… thì…” để hệ thống tự làm việc lặp lại: nhắc follow-up, gắn tag, ghi chú, xử lý comment.
-          </p>
-        </div>
+      <div className="mx-auto max-w-7xl p-4 sm:p-6">
+        <PageHeader
+          title="Tự động hóa"
+          subtitle="Đặt quy tắc “khi… thì…” để hệ thống tự làm việc lặp lại: nhắc follow-up, gắn tag, ghi chú, xử lý comment."
+        />
         <AutomationClient />
       </div>
     </AppShell>

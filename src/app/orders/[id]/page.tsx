@@ -12,7 +12,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   return (
     <AppShell user={user} active="orders">
-      <div className="p-4 sm:p-6">
+      <div className="mx-auto max-w-5xl p-4 sm:p-6">
         <OrderDetailClient id={id} />
       </div>
     </AppShell>

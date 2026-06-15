@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersClient } from "@/components/orders/OrdersClient";
 
 export const dynamic = "force-dynamic";
@@ -11,11 +12,11 @@ export default async function OrdersPage() {
 
   return (
     <AppShell user={user} active="orders">
-      <div className="p-4 sm:p-6">
-        <div className="mb-3">
-          <h1 className="text-2xl font-bold">Đơn hàng</h1>
-          <p className="text-sm text-gray-500">Tạo đơn nhanh, theo dõi trạng thái và thanh toán. Tiền tệ VND.</p>
-        </div>
+      <div className="mx-auto max-w-7xl p-4 sm:p-6">
+        <PageHeader
+          title="Đơn hàng"
+          subtitle="Tạo đơn nhanh, theo dõi trạng thái và thanh toán. Tiền tệ VND."
+        />
         <OrdersClient />
       </div>
     </AppShell>
