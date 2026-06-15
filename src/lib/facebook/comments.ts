@@ -1,5 +1,6 @@
 import type { FacebookCommentStatus, Prisma } from "@prisma/client";
 import { env } from "@/lib/env";
+import { evaluateAutomationRules } from "@/lib/automation";
 import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/security/token-encryption";
 
@@ -174,6 +175,34 @@ export async function handleFacebookFeedChange(pageId: string | null, change: Ra
       },
     }),
   ]);
+
+  const automationPayload = {
+    commentId: comment.id,
+    customerId: customer.id,
+    conversationId: conversation.id,
+    postId: post.id,
+    pageId,
+    externalCommentId,
+    externalPostId,
+    hasPhone: shouldFlag,
+    phone,
+  };
+  await evaluateAutomationRules({
+    workspaceId,
+    triggerType: "COMMENT_CREATED",
+    sourceType: "COMMENT",
+    sourceId: comment.id,
+    payload: automationPayload,
+  }).catch((error) => console.error("COMMENT_CREATED automation failed", error));
+  if (shouldFlag) {
+    await evaluateAutomationRules({
+      workspaceId,
+      triggerType: "COMMENT_HAS_PHONE",
+      sourceType: "COMMENT",
+      sourceId: comment.id,
+      payload: automationPayload,
+    }).catch((error) => console.error("COMMENT_HAS_PHONE automation failed", error));
+  }
 }
 
 export async function replyToFacebookComment(params: {
