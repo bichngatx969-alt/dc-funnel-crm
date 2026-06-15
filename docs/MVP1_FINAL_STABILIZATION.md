@@ -10,7 +10,9 @@
 
 ## 1. Git status
 
-**Chưa sạch hoàn toàn** — còn đúng 2 file thuộc Codex (cố ý KHÔNG gộp vào commit "pr8" để tránh sai nhãn):
+> **Cập nhật 2026-06-15:** B-021 đã **RESOLVED** — 2 file dưới đã commit `5f1155e`; `git status` hiện **SẠCH hoàn toàn**. Phần dưới giữ làm ảnh chụp trạng thái tại thời điểm stabilization.
+
+**Tại thời điểm stabilization — chưa sạch hoàn toàn** — còn đúng 2 file thuộc Codex (cố ý KHÔNG gộp vào commit "pr8" để tránh sai nhãn):
 
 ```
  M  src/lib/facebook/comments.ts            # PR#7 hook automation (COMMENT_CREATED / COMMENT_HAS_PHONE)
@@ -98,7 +100,7 @@ Gọi khi **chưa đăng nhập** → kỳ vọng HTTP 401:
 
 | ID | Mô tả | Trạng thái |
 |---|---|---|
-| **B-021** | 2 file Codex chưa commit (`comments.ts` PR#7 hook, `migration_lock.toml`) → git chưa sạch | OPEN — chờ Codex commit |
+| **B-021** | 2 file leftover (`comments.ts` PR#7 hook, `migration_lock.toml`) | ✅ RESOLVED — commit `5f1155e`; git sạch |
 | **D-002** | reply/hide comment cần Meta `pages_manage_engagement` + page token thật → chưa smoke được trong môi trường này (không fake) | OPEN — chờ Meta perms |
 | Tenant isolation runtime | Cần đăng nhập + ≥2 workspace có data để kiểm đầu-cuối | Chờ env founder |
 

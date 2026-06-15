@@ -4485,7 +4485,7 @@ Agent nào gặp blocker phải ghi vào đây.
 [2026-06-14 · Claude · Final MVP1 Stabilization]
 - Tests: typecheck + prisma generate + npm run build PASS (exit 0). B-020 KHÔNG tái hiện → môi trường, không phải lỗi code.
 - Smoke PASS: 7/7 route → 307, 7/7 API → 401 (warm). 000 ban đầu = next dev cold-compile timeout, không phải lỗi route.
-- B-021 (HOUSEKEEPING, OPEN): còn 2 file Codex chưa commit — src/lib/facebook/comments.ts (PR#7 hook automation), prisma/migrations/migration_lock.toml. Đề nghị Codex commit (không gộp vào pr8). Git CHƯA hoàn toàn sạch tới khi 2 file này được commit.
+- B-021 (HOUSEKEEPING, RESOLVED 2026-06-15): 2 file leftover đã commit `5f1155e` "chore: commit remaining automation hook and prisma migration lock" (src/lib/facebook/comments.ts PR#7 hook automation + prisma/migrations/migration_lock.toml). `git status` hiện SẠCH hoàn toàn (working tree clean).
 - D-002 (OPEN): reply/hide comment cần Meta pages_manage_engagement + page token thật; chưa smoke được trong môi trường này. Không fake.
 - Tenant isolation: code-level PASS (mọi query filter workspaceId); runtime đa-workspace cần kiểm trong env founder (đăng nhập + ≥2 workspace có data).
 ```
