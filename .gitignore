@@ -10,6 +10,8 @@ next-env.d.ts
 
 # production
 /build
+/dist
+/coverage
 
 # misc
 .DS_Store
@@ -32,6 +34,8 @@ env.txt
 
 # prisma
 /prisma/*.db
+/prisma/*.sqlite
+/prisma/*.sqlite3
 /prisma/migrations/dev.db*
 
 # logs

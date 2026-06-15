@@ -1,10 +1,10 @@
-# D.C Funnel Bot
+# D.C FUNNEL CRM
 
-**Single-brand CRM funnel bot cho Facebook Ads:** tự động phân loại khách, làm nóng nhu cầu, chọn offer, giao sale và đo hiệu quả từ inbox đến doanh thu.
+**CRM bán hàng cho Facebook-driven brands:** quản lý workspace/brand, inbox, comment-to-inbox, contact 360, pipeline, order lite, automation rule và founder dashboard stats.
 
-D.C Funnel Bot MVP là **single-brand CRM funnel bot**. Mỗi brand nên deploy một app/instance riêng để dữ liệu khách hàng sạch, flow rõ ràng và vận hành đơn giản. Ví dụ HICHAOS Funnel Bot chỉ dành cho HICHAOS; D.C Studio Funnel Bot chỉ dành cho D.C Studio; Kaho Funnel Bot chỉ dành cho Kaho Hair Salon.
+D.C FUNNEL CRM là nền CRM nội bộ cho các brand thuộc D.C Group. App dùng Next.js, Prisma và PostgreSQL, hỗ trợ vận hành sales từ Facebook inbox/comment đến pipeline, đơn hàng và automation follow-up.
 
-MVP **không phải SaaS multi-tenant**. Không có tenant, workspace, client hay switch brand. Một brand vẫn có thể kết nối nhiều Fanpage, ví dụ Fanpage chính, Fanpage phụ và Page test; tất cả Page này vẫn thuộc cùng một brand và có thể được filter trong Dashboard/Inbox.
+Repo này không chứa secret thật. Khi chạy local hoặc deploy, tạo `.env` từ `.env.example` và điền biến môi trường riêng cho từng môi trường.
 
 > Bot **không** tự động trả lời 100% bằng AI ở bản MVP. Bot chạy theo flow + rule để phân loại và làm nóng khách, sau đó **giao cho sale** tiếp quản. AI chỉ **gợi ý câu trả lời** cho sale, không tự gửi.
 
@@ -45,13 +45,12 @@ npm install
 # 2. Tạo file .env từ mẫu rồi điền giá trị
 cp .env.example .env      # Windows PowerShell: Copy-Item .env.example .env
 
-# 3. Tạo bảng trong database
-npm run prisma:migrate    # lần đầu sẽ hỏi tên migration, gõ: init
-#   hoặc nhanh gọn cho MVP (không cần lịch sử migration):
-#   npx prisma db push
+# 3. Tạo Prisma Client
+npx prisma generate
 
-# 4. Seed dữ liệu mẫu (admin + BrandProfile HICHAOS + offers/flows FASHION)
-npm run prisma:seed
+# 4. Chỉ chạy migration/seed khi đã xác nhận DATABASE_URL đúng môi trường
+# npm run prisma:deploy
+# npm run prisma:seed
 
 # 5. Chạy dev
 npm run dev
@@ -275,6 +274,7 @@ Module email tự động hóa: lưu email khách (khi khách cung cấp + đồ
 | `EMAIL_FROM_NAME` | Tên người gửi, ví dụ `HICHAOS` |
 | `EMAIL_FROM_ADDRESS` | Email gửi, phải thuộc **domain đã verify** trên Resend |
 | `APP_BASE_URL` | URL gốc app, để tạo link unsubscribe |
+| `NEXT_PUBLIC_APP_URL` | URL public cho frontend/runtime nếu cần |
 | `UNSUBSCRIBE_SECRET` | Bí mật ký token unsubscribe |
 | `CRON_SECRET` | Bảo vệ endpoint cron automation |
 | `RESEND_WEBHOOK_SECRET` | (tùy chọn) verify webhook Resend (Svix) |
