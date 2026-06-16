@@ -51,6 +51,7 @@ export async function GET() {
 function getMissingFacebookOAuthConfig(): string[] {
   const missing: string[] = [];
   if (!env.facebookAppId) missing.push("FACEBOOK_APP_ID");
+  else if (!/^\d+$/.test(env.facebookAppId)) missing.push("FACEBOOK_APP_ID must be numeric");
   if (!env.facebookAppSecret) missing.push("FACEBOOK_APP_SECRET");
   if (!env.facebookLoginRedirectUri) missing.push("FACEBOOK_LOGIN_REDIRECT_URI");
   return missing;
