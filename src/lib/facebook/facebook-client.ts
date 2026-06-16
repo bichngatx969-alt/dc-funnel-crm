@@ -6,7 +6,6 @@ const REQUIRED_SCOPES = [
   "pages_manage_metadata",
   "pages_read_engagement",
   "pages_messaging",
-  "pages_manage_engagement",
 ];
 
 type GraphTokenResponse = {
