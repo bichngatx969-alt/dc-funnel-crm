@@ -4,7 +4,7 @@ const DEFAULT_AUTH_SECRET = "dev-insecure-secret-change-me";
 const DEFAULT_UNSUBSCRIBE_SECRET = "dev-unsub-secret";
 const DEFAULT_ENV_EXAMPLE_SECRET = "please-change-this-to-a-long-random-string";
 const DEFAULT_CRON_SECRET = "please-change-this-cron-secret";
-const DEFAULT_META_VERIFY_TOKEN = "dc-funnel-bot-verify-token";
+const DEFAULT_META_VERIFY_TOKEN = "please-change-this-meta-verify-token";
 
 // Đọc biến môi trường một chỗ, có giá trị mặc định an toàn.
 export const env = {

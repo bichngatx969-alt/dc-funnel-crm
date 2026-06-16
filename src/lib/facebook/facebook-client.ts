@@ -4,6 +4,7 @@ const REQUIRED_SCOPES = [
   "public_profile",
   "pages_show_list",
   "pages_manage_metadata",
+  "pages_read_engagement",
   "pages_messaging",
   "pages_manage_engagement",
 ];
