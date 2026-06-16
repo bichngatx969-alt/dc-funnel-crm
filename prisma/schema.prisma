@@ -233,11 +233,13 @@ model Workspace {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization     Organization      @relation(fields: [organizationId], references: [id])
+  organization     Organization             @relation(fields: [organizationId], references: [id])
   members          WorkspaceMember[]
   facebookPages    FacebookPage[]
   facebookPosts    FacebookPost[]
   facebookComments FacebookComment[]
+  metaBusinesses   MetaBusinessConnection[]
+  metaCatalogs     MetaCatalogConnection[]
   customers        Customer[]
   conversations    Conversation[]
   messages         Message[]
@@ -369,6 +371,50 @@ model IntegrationAuditLog {
   @@index([provider])
   @@index([targetPageId])
   @@index([createdAt])
+}
+
+model MetaBusinessConnection {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  userId             String?
+  businessId         String
+  businessName       String
+  verificationStatus String?
+  rawJson            Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  workspace Workspace               @relation(fields: [workspaceId], references: [id])
+  catalogs  MetaCatalogConnection[]
+
+  @@unique([workspaceId, businessId])
+  @@index([businessId])
+  @@index([userId])
+  @@index([deletedAt])
+}
+
+model MetaCatalogConnection {
+  id                   String    @id @default(cuid())
+  workspaceId          String
+  businessConnectionId String?
+  businessId           String
+  catalogId            String
+  catalogName          String
+  vertical             String?
+  productCount         Int?
+  rawJson              Json?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  workspace          Workspace               @relation(fields: [workspaceId], references: [id])
+  businessConnection MetaBusinessConnection? @relation(fields: [businessConnectionId], references: [id])
+
+  @@unique([workspaceId, catalogId])
+  @@index([businessId])
+  @@index([businessConnectionId])
+  @@index([deletedAt])
 }
 
 model FacebookPost {

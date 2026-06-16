@@ -6,6 +6,8 @@ const REQUIRED_SCOPES = [
   "pages_manage_metadata",
   "pages_read_engagement",
   "pages_messaging",
+  "business_management",
+  "catalog_management",
 ];
 
 type GraphTokenResponse = {
@@ -26,6 +28,20 @@ export type FacebookUserPage = {
   access_token?: string;
   picture?: { data?: { url?: string } };
   tasks?: string[];
+};
+
+export type FacebookBusiness = {
+  id: string;
+  name?: string;
+  verification_status?: string;
+  created_time?: string;
+};
+
+export type FacebookCatalog = {
+  id: string;
+  name?: string;
+  vertical?: string;
+  product_count?: number;
 };
 
 function graphBase(): string {
@@ -89,6 +105,40 @@ export async function getUserPages(userAccessToken: string): Promise<FacebookUse
   return data.data ?? [];
 }
 
+export async function getUserBusinesses(userAccessToken: string): Promise<FacebookBusiness[]> {
+  const data = await graphGet<{ data?: FacebookBusiness[] }>("/me/businesses", {
+    fields: "id,name,verification_status,created_time",
+    access_token: userAccessToken,
+  });
+  return data.data ?? [];
+}
+
+export async function getBusinessCatalogs(
+  businessId: string,
+  userAccessToken: string
+): Promise<FacebookCatalog[]> {
+  const [owned, client] = await Promise.all([
+    graphGet<{ data?: FacebookCatalog[] }>(`/${businessId}/owned_product_catalogs`, {
+      fields: "id,name,vertical,product_count",
+      access_token: userAccessToken,
+    }).catch((err) => {
+      throw new Error(readableGraphError(err, "owned_product_catalogs"));
+    }),
+    graphGet<{ data?: FacebookCatalog[] }>(`/${businessId}/client_product_catalogs`, {
+      fields: "id,name,vertical,product_count",
+      access_token: userAccessToken,
+    }).catch((err) => {
+      throw new Error(readableGraphError(err, "client_product_catalogs"));
+    }),
+  ]);
+
+  const byId = new Map<string, FacebookCatalog>();
+  for (const catalog of [...(owned.data ?? []), ...(client.data ?? [])]) {
+    byId.set(catalog.id, catalog);
+  }
+  return Array.from(byId.values());
+}
+
 export async function subscribePageToApp(pageId: string, pageAccessToken: string): Promise<{ success: boolean }> {
   return graphPost<{ success?: boolean }>(`/${pageId}/subscribed_apps`, {
     subscribed_fields: "messages,messaging_postbacks,messaging_optins,message_deliveries,feed",
@@ -138,4 +188,9 @@ async function parseGraphResponse<T>(res: Response): Promise<T> {
     throw new Error(message);
   }
   return data as T;
+}
+
+function readableGraphError(err: unknown, edge: string): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return `${edge}: ${message}`;
 }

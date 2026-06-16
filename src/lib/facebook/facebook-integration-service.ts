@@ -3,13 +3,17 @@ import { prisma } from "@/lib/prisma";
 import {
   exchangeCodeForAccessToken,
   getFacebookLoginUrl,
+  getBusinessCatalogs,
   getGrantedScopes,
   getLongLivedUserAccessToken,
   getPageHealth,
   getSubscribedApps,
+  getUserBusinesses,
   getUserPages,
   getUserProfile,
   subscribePageToApp,
+  type FacebookBusiness,
+  type FacebookCatalog,
   type FacebookUserPage,
 } from "@/lib/facebook/facebook-client";
 import { decryptToken, encryptToken } from "@/lib/security/token-encryption";
@@ -102,6 +106,161 @@ export async function listAvailablePages(workspaceId: string, connectionId?: str
       error: "Không lấy được danh sách Page. Vui lòng kiểm tra quyền pages_show_list và role của app.",
     };
   }
+}
+
+export async function listAvailableBusinesses(workspaceId: string) {
+  const connection = await getLatestFacebookConnection();
+  const connectedBusinesses = await prisma.metaBusinessConnection.findMany({
+    where: { workspaceId, deletedAt: null },
+    orderBy: { updatedAt: "desc" },
+    select: publicBusinessSelect,
+  });
+
+  if (!connection?.accessTokenEncrypted || connection.status !== "CONNECTED") {
+    return {
+      items: [],
+      connectedBusinesses,
+      connection: safeConnection(connection),
+      error: "Chưa có kết nối Facebook hợp lệ. Vui lòng bấm Kết nối Facebook trước.",
+    };
+  }
+
+  try {
+    const token = decryptToken(connection.accessTokenEncrypted);
+    const businesses = await getUserBusinesses(token);
+    return {
+      items: businesses.map((business) => ({
+        id: business.id,
+        name: business.name ?? business.id,
+        verificationStatus: business.verification_status ?? null,
+        createdTime: business.created_time ?? null,
+        connected: connectedBusinesses.some((item) => item.businessId === business.id),
+      })),
+      connectedBusinesses,
+      connection: safeConnection(connection),
+    };
+  } catch (err) {
+    return {
+      items: [],
+      connectedBusinesses,
+      connection: safeConnection(connection),
+      error: readableBusinessError(err),
+    };
+  }
+}
+
+export async function listAvailableCatalogs(workspaceId: string, businessId: string) {
+  const connection = await getLatestFacebookConnection();
+  const business = await prisma.metaBusinessConnection.findFirst({
+    where: { workspaceId, businessId, deletedAt: null },
+    select: publicBusinessSelect,
+  });
+  const connectedCatalogs = await prisma.metaCatalogConnection.findMany({
+    where: { workspaceId, businessId, deletedAt: null },
+    orderBy: { updatedAt: "desc" },
+    select: publicCatalogSelect,
+  });
+
+  if (!connection?.accessTokenEncrypted || connection.status !== "CONNECTED") {
+    return {
+      items: [],
+      connectedCatalogs,
+      business,
+      connection: safeConnection(connection),
+      error: "Chưa có kết nối Facebook hợp lệ. Vui lòng bấm Kết nối Facebook trước.",
+    };
+  }
+
+  try {
+    const token = decryptToken(connection.accessTokenEncrypted);
+    const catalogs = await getBusinessCatalogs(businessId, token);
+    return {
+      items: catalogs.map((catalog) => ({
+        id: catalog.id,
+        name: catalog.name ?? catalog.id,
+        vertical: catalog.vertical ?? null,
+        productCount: catalog.product_count ?? null,
+        businessId,
+        connected: connectedCatalogs.some((item) => item.catalogId === catalog.id),
+      })),
+      connectedCatalogs,
+      business,
+      connection: safeConnection(connection),
+    };
+  } catch (err) {
+    return {
+      items: [],
+      connectedCatalogs,
+      business,
+      connection: safeConnection(connection),
+      error: readableCatalogError(err),
+    };
+  }
+}
+
+export async function connectBusiness(
+  workspaceId: string,
+  userId: string,
+  input: { businessId: string; businessName?: string | null }
+) {
+  const connection = await getLatestFacebookConnection();
+  if (!connection?.accessTokenEncrypted || connection.status !== "CONNECTED") {
+    throw new Error("Chưa có kết nối Facebook hợp lệ. Vui lòng bấm Kết nối Facebook trước.");
+  }
+
+  const token = decryptToken(connection.accessTokenEncrypted);
+  const businesses = await getUserBusinesses(token);
+  const business = businesses.find((item) => item.id === input.businessId);
+  if (!business) {
+    throw new Error("Không tìm thấy Business trong tài khoản Facebook hiện tại hoặc thiếu quyền business_management.");
+  }
+
+  const saved = await prisma.metaBusinessConnection.upsert({
+    where: { workspaceId_businessId: { workspaceId, businessId: business.id } },
+    update: businessData(business, workspaceId, userId, input.businessName),
+    create: businessData(business, workspaceId, userId, input.businessName),
+    select: publicBusinessSelect,
+  });
+
+  await audit("connect_business", "SUCCESS", business.id, "Đã kết nối Meta Business.", {
+    businessId: business.id,
+  });
+  return saved;
+}
+
+export async function connectCatalog(
+  workspaceId: string,
+  input: { businessId: string; catalogId: string; catalogName?: string | null }
+) {
+  const connection = await getLatestFacebookConnection();
+  if (!connection?.accessTokenEncrypted || connection.status !== "CONNECTED") {
+    throw new Error("Chưa có kết nối Facebook hợp lệ. Vui lòng bấm Kết nối Facebook trước.");
+  }
+
+  const token = decryptToken(connection.accessTokenEncrypted);
+  const catalogs = await getBusinessCatalogs(input.businessId, token);
+  const catalog = catalogs.find((item) => item.id === input.catalogId);
+  if (!catalog) {
+    throw new Error("Không tìm thấy Catalog trong Business này hoặc thiếu quyền catalog_management.");
+  }
+
+  const business = await prisma.metaBusinessConnection.findUnique({
+    where: { workspaceId_businessId: { workspaceId, businessId: input.businessId } },
+    select: { id: true },
+  });
+
+  const saved = await prisma.metaCatalogConnection.upsert({
+    where: { workspaceId_catalogId: { workspaceId, catalogId: catalog.id } },
+    update: catalogData(catalog, workspaceId, input.businessId, business?.id ?? null, input.catalogName),
+    create: catalogData(catalog, workspaceId, input.businessId, business?.id ?? null, input.catalogName),
+    select: publicCatalogSelect,
+  });
+
+  await audit("connect_catalog", "SUCCESS", catalog.id, "Đã kết nối Meta Catalog.", {
+    businessId: input.businessId,
+    catalogId: catalog.id,
+  });
+  return saved;
 }
 
 export async function connectPage(pageId: string, workspaceId: string) {
@@ -254,6 +413,33 @@ export const publicPageSelect = {
   updatedAt: true,
 } as const;
 
+export const publicBusinessSelect = {
+  id: true,
+  workspaceId: true,
+  businessId: true,
+  businessName: true,
+  verificationStatus: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+export const publicCatalogSelect = {
+  id: true,
+  workspaceId: true,
+  businessConnectionId: true,
+  businessId: true,
+  catalogId: true,
+  catalogName: true,
+  vertical: true,
+  productCount: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+async function getLatestFacebookConnection() {
+  return prisma.facebookConnection.findFirst({ orderBy: { createdAt: "desc" } });
+}
+
 function pageData(
   page: FacebookUserPage,
   connectionId: string,
@@ -278,6 +464,64 @@ function pageData(
     lastHealthCheckAt: new Date(),
     lastError,
   };
+}
+
+function businessData(
+  business: FacebookBusiness,
+  workspaceId: string,
+  userId: string,
+  businessName?: string | null
+) {
+  return {
+    workspaceId,
+    userId,
+    businessId: business.id,
+    businessName: businessName || business.name || business.id,
+    verificationStatus: business.verification_status ?? null,
+    rawJson: business as any,
+    deletedAt: null,
+  };
+}
+
+function catalogData(
+  catalog: FacebookCatalog,
+  workspaceId: string,
+  businessId: string,
+  businessConnectionId: string | null,
+  catalogName?: string | null
+) {
+  return {
+    workspaceId,
+    businessConnectionId,
+    businessId,
+    catalogId: catalog.id,
+    catalogName: catalogName || catalog.name || catalog.id,
+    vertical: catalog.vertical ?? null,
+    productCount: catalog.product_count ?? null,
+    rawJson: catalog as any,
+    deletedAt: null,
+  };
+}
+
+function readableBusinessError(err: unknown): string {
+  const message = readableError(err);
+  if (isPermissionError(message)) {
+    return "Missing permission: business_management. Chưa cấp quyền Business/Catalog. Vui lòng cấp thêm quyền hoặc thêm app vào BM.";
+  }
+  return message || "User has no Business assets.";
+}
+
+function readableCatalogError(err: unknown): string {
+  const message = readableError(err);
+  if (isPermissionError(message)) {
+    return "Missing permission: catalog_management. Chưa cấp quyền Business/Catalog. Vui lòng cấp thêm quyền hoặc thêm app vào BM.";
+  }
+  return message || "No catalogs found.";
+}
+
+function isPermissionError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return lower.includes("permission") || lower.includes("access") || lower.includes("oauth");
 }
 
 function safeConnection(connection: any) {
