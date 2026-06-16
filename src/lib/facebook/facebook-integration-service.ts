@@ -400,7 +400,6 @@ export async function runPageHealthCheck(pageId: string, workspaceId: string) {
         lastHealthCheckAt: new Date(),
         lastError: webhookSubscribed ? null : "Webhook chưa subscribed vào app.",
         permissionsJson: {
-          tasks: health.tasks ?? [],
           subscribedFields,
           requiredSubscribedFields: PAGE_SUBSCRIBED_FIELDS,
         },
@@ -488,7 +487,6 @@ function pageData(
     botEnabled: false,
     webhookSubscribed,
     permissionsJson: {
-      tasks: page.tasks ?? [],
       requiredSubscribedFields: PAGE_SUBSCRIBED_FIELDS,
     },
     status,

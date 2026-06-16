@@ -34,7 +34,6 @@ export type FacebookUserPage = {
   username?: string;
   access_token?: string;
   picture?: { data?: { url?: string } };
-  tasks?: string[];
 };
 
 export type FacebookBusiness = {
@@ -106,7 +105,7 @@ export async function getGrantedScopes(userAccessToken: string): Promise<string[
 
 export async function getUserPages(userAccessToken: string): Promise<FacebookUserPage[]> {
   const data = await graphGet<{ data?: FacebookUserPage[] }>("/me/accounts", {
-    fields: "id,name,username,picture{url},access_token,tasks",
+    fields: "id,name,username,picture{url},access_token",
     access_token: userAccessToken,
   });
   return data.data ?? [];
@@ -163,7 +162,7 @@ export async function getSubscribedApps(pageId: string, pageAccessToken: string)
 
 export async function getPageHealth(pageId: string, pageAccessToken: string): Promise<FacebookUserPage> {
   return graphGet<FacebookUserPage>(`/${pageId}`, {
-    fields: "id,name,username,picture{url},tasks",
+    fields: "id,name,username,picture{url}",
     access_token: pageAccessToken,
   });
 }
