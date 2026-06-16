@@ -6,6 +6,8 @@
 - **Phạm vi:** Ổn định cuối MVP1 (không thêm feature; không Zalo; không POS/kho/kế toán; không refactor lớn).
 - **Nguồn chi tiết:** `docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md` mục 17 / 18 / 19.
 
+> **Cập nhật vận hành 2026-06-16 — Codex:** production đã chạy trên Dokploy/OneDash tại `https://crm.hongducdigital.com`; Facebook OAuth/webhook đã được fix và smoke pass ở mức route/env. Chi tiết ở plan mục 17, 18.18, 19.
+
 ---
 
 ## 1. Git status
@@ -101,7 +103,11 @@ Gọi khi **chưa đăng nhập** → kỳ vọng HTTP 401:
 | ID | Mô tả | Trạng thái |
 |---|---|---|
 | **B-021** | 2 file leftover (`comments.ts` PR#7 hook, `migration_lock.toml`) | ✅ RESOLVED — commit `5f1155e`; git sạch |
-| **D-002** | reply/hide comment cần Meta `pages_manage_engagement` + page token thật → chưa smoke được trong môi trường này (không fake) | OPEN — chờ Meta perms |
+| **B-022** | Production deploy trên Dokploy bị lỗi `Github Provider not found` / service 0/1 | ✅ RESOLVED — service `dc-funnel-cmr-dc-iea9mn` chạy 1/1 |
+| **B-023** | Domain `crm.hongducdigital.com` 502 do stale Traefik dynamic config trùng host | ✅ RESOLVED — `/login` HTTP 200 |
+| **B-024** | Meta webhook URL founder cấu hình `/api/webhooks/meta` chưa có route | ✅ RESOLVED — `/api/webhooks/meta` và `/api/webhook/facebook` đều verify challenge |
+| **B-025** | Facebook OAuth thiếu/sai App ID/Secret, từng redirect với App ID không hợp lệ | ✅ RESOLVED — production env đã set App ID/Secret thật; OAuth redirect sang `www.facebook.com` |
+| **D-002** | reply/hide comment cần Meta `pages_manage_engagement` + page token thật | PENDING_REAL_SMOKE — OAuth URL đã request đủ scope; chờ founder Connect Facebook + Codex smoke page/token thật |
 | Tenant isolation runtime | Cần đăng nhập + ≥2 workspace có data để kiểm đầu-cuối | Chờ env founder |
 
 ---
@@ -109,9 +115,8 @@ Gọi khi **chưa đăng nhập** → kỳ vọng HTTP 401:
 ## 8. Việc nên làm sau MVP1
 
 **Vận hành / hoàn tất ngay:**
-- Codex commit 2 file leftover (`comments.ts`, `migration_lock.toml`).
-- Founder review + merge các nhánh `claude/01..08` (UI) vào `main` theo merge rule (plan mục 7).
-- Cấp Meta `pages_manage_engagement` + reconnect Fanpage để đóng **D-002** (smoke reply/hide comment thật).
+- Founder review + merge các nhánh `claude/01..08` (UI) vào `main` theo merge rule (plan mục 7), nếu chưa merge.
+- Founder bấm **Connect Facebook** trên production bằng tài khoản có role Meta App/Page; Codex smoke callback/list pages/connect page/webhook/reply-hide để đóng **D-002**.
 - Kiểm tenant isolation đầu-cuối: đăng nhập, tạo ≥2 workspace có data, switch và đối chiếu không lẫn.
 
 **Nên có sớm (P1, ngoài MVP1):**
@@ -126,4 +131,4 @@ Gọi khi **chưa đăng nhập** → kỳ vọng HTTP 401:
 
 ---
 
-🏁 **Kết luận:** D.C FUNNEL CRM MVP1 đã ổn định — toàn bộ UI (PR #1B→#8B) + backend (PR #1→#8) build sạch, smoke route/API PASS, tenant isolation đúng ở mức code. Chỉ còn việc vận hành (Codex commit 2 file, founder merge nhánh, mở Meta perms cho D-002, kiểm isolation runtime).
+🏁 **Kết luận:** D.C FUNNEL CRM MVP1 đã ổn định và production đã chạy trên domain thật — toàn bộ UI (PR #1B→#8B) + backend (PR #1→#8) build sạch, smoke route/API PASS, tenant isolation đúng ở mức code. Chỉ còn việc vận hành: founder Connect Facebook để smoke quyền Meta thật cho D-002 và kiểm isolation runtime với nhiều workspace có dữ liệu.

@@ -2755,6 +2755,84 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Dừng tại PR #8 theo yêu cầu. Bước tiếp theo: Claude PR #8B Dashboard UI.
 ```
 
+#### 2026-06-16 — Codex (Deploy + Facebook Integration Fix)
+
+```text
+## 2026-06-16 — Codex
+
+### Đang làm
+- Production deploy support trên Dokploy/OneDash + fix Facebook Connect.
+
+### Đã làm hôm nay
+- Xác nhận Dokploy/Traefik/Postgres/Redis đang chạy trên VPS; app service ban đầu 0/1 vì image chưa build và lỗi "Github Provider not found".
+- Không sửa Dokploy internal DB, không reset database, không dùng prisma db push, không in secret.
+- Đóng gói source sạch từ git archive HEAD, loại .env/node_modules/.next/log local, upload vào /etc/dokploy/applications/dc-funnel-cmr-dc-iea9mn/code.
+- Build Docker image production dc-funnel-cmr-dc-iea9mn:latest bằng Docker BuildKit secret để Prisma/Next build đọc env mà không ghi secret vào layer/log.
+- Force update Docker Swarm service dc-funnel-cmr-dc-iea9mn; service chạy 1/1.
+- Fix Bad Gateway domain crm.hongducdigital.com do Traefik có stale dynamic config trùng domain trỏ tới service cũ dc-a-mcwmkj; đã backup/disable stale config khỏi dynamic watch dir.
+- Chạy npx prisma migrate status/deploy trong container app: schema up to date, no pending migrations.
+- Smoke login nội bộ: ADMIN_EMAIL/ADMIN_PASSWORD env present; POST /api/auth/login 200; GET /api/workspaces 200; /dashboard authenticated 200.
+- Fix Facebook integration code:
+  - /api/integrations/facebook/login validate env và trả JSON 400 rõ ràng nếu thiếu/sai FACEBOOK_APP_ID/SECRET thay vì HTTP 500/trắng.
+  - Thêm guard FACEBOOK_APP_ID phải là numeric trước khi redirect sang Facebook.
+  - Thêm route alias /api/webhooks/meta dùng chung handler với /api/webhook/facebook.
+  - Thêm scope pages_read_engagement vào OAuth scope list; giữ pages_show_list, pages_manage_metadata, pages_messaging, pages_manage_engagement.
+  - Điều chỉnh production fail-fast để token "dc-funnel-bot-verify-token" do founder chọn không bị coi nhầm là default cấm.
+- Cập nhật production env service:
+  - APP_BASE_URL/NEXT_PUBLIC_APP_URL = https://crm.hongducdigital.com.
+  - FACEBOOK_LOGIN_REDIRECT_URI = https://crm.hongducdigital.com/api/integrations/facebook/callback.
+  - META_VERIFY_TOKEN = token founder cung cấp.
+  - FACEBOOK_APP_ID/FACEBOOK_APP_SECRET/META_APP_SECRET = founder cung cấp (không ghi giá trị vào report/log).
+- Smoke Facebook production:
+  - /api/webhooks/meta verify trả test123.
+  - /api/webhook/facebook verify vẫn trả test123.
+  - Sau login admin, /api/integrations/facebook/login trả 307 tới www.facebook.com.
+  - OAuth URL có redirect_uri đúng domain và có pages_read_engagement/pages_messaging/pages_manage_engagement.
+
+### Files đã sửa
+- src/app/api/integrations/facebook/login/route.ts
+- src/app/api/webhooks/meta/route.ts
+- src/lib/env.ts
+- src/lib/facebook/facebook-client.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md theo yêu cầu cập nhật báo cáo.
+- Không sửa UI lớn, không sửa src/components/**.
+
+### Typecheck/build/test
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- VPS Docker production build: PASS.
+- Docker service dc-funnel-cmr-dc-iea9mn: 1/1.
+- /login public: HTTP 200.
+- /dashboard unauth: 307 -> /login; authenticated smoke: 200.
+- npx prisma migrate deploy: PASS/no-op; no pending migrations.
+- /api/webhooks/meta verify: PASS, trả challenge.
+- Facebook OAuth login smoke: PASS, redirect sang www.facebook.com sau login admin.
+
+### Commit / Push
+- 451c670 fix facebook integration env validation and webhook verification
+- 23b1ca7 validate facebook app id before oauth redirect
+- Đã push lên origin/main.
+
+### Blocker / rủi ro còn lại
+- D-002 vẫn chưa đóng hoàn toàn cho end-to-end real Page: OAuth URL đã yêu cầu pages_manage_engagement/pages_read_engagement/pages_messaging, nhưng Meta App/Page thật vẫn phải cấp quyền và tài khoản test/admin phải có role phù hợp.
+- Sau khi Connect Facebook thật, cần kiểm tra callback, danh sách page, connect page, subscribe webhook, gửi message/comment thử.
+- Dokploy GitHub Provider vẫn từng lỗi; app hiện chạy bằng image/service đã build trực tiếp. Nếu muốn deploy UI tự động từ Dokploy, cần cấu hình Git provider + SSH deploy key đúng.
+
+### Cần founder quyết / làm tiếp
+- Bấm Connect Facebook lại bằng tài khoản có role admin/developer/tester trong Meta App.
+- Nếu Meta yêu cầu App Review cho pages_manage_engagement/pages_read_engagement/pages_messaging, founder cần cấp/quy trình review trên Meta.
+
+### Cần agent kia hỗ trợ
+- Không cần Claude cho backend fix này.
+
+### Kế hoạch tiếp theo
+- Khi founder bấm Connect Facebook xong: Codex kiểm tra callback/pages/connect page/webhook logs thật và xác nhận D-002.
+```
+
 ---
 
 ## 18. PR Completion Report
@@ -4450,6 +4528,99 @@ Manual: cần founder mở /dashboard /contacts /pipeline /orders /comments /aut
 
 ---
 
+### 18.18. Production Deploy + Facebook Integration Fix
+
+**Owner:** Codex  
+**Status:** `DONE`  
+**Branch:** `main`  
+**Commit/PR link:** `451c670`, `23b1ca7` pushed to `origin/main`  
+
+#### Summary
+
+```text
+Restored production availability on Dokploy/OneDash and fixed Facebook Connect routing/config handling.
+Built and ran dc-funnel-cmr-dc-iea9mn:latest on VPS without PM2/Nginx and without touching Dokploy internal DB.
+Resolved crm.hongducdigital.com 502 by disabling stale Traefik dynamic config for an old service sharing the same host.
+Added /api/webhooks/meta alias for Meta webhook URL while preserving /api/webhook/facebook.
+Hardened /api/integrations/facebook/login so missing/s malformed Facebook OAuth env returns clear JSON 400 and never redirects with an invalid App ID.
+Configured production APP_BASE_URL, NEXT_PUBLIC_APP_URL, FACEBOOK_LOGIN_REDIRECT_URI, META_VERIFY_TOKEN, FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, META_APP_SECRET.
+No database reset, no data deletion, no prisma db push, no secret values printed.
+```
+
+#### Files changed
+
+```text
+src/app/api/integrations/facebook/login/route.ts
+src/app/api/webhooks/meta/route.ts
+src/lib/env.ts
+src/lib/facebook/facebook-client.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Runtime / Deploy
+
+```text
+VPS: 103.72.98.117
+Domain: https://crm.hongducdigital.com
+Service: dc-funnel-cmr-dc-iea9mn
+Docker service status: 1/1
+Image: dc-funnel-cmr-dc-iea9mn:latest
+Build method: git archive source upload + Docker BuildKit secret env + Docker Swarm service update.
+Dokploy/Traefik: stale route dc-a-mcwmkj disabled/backed up outside active dynamic config.
+```
+
+#### Tests
+
+```text
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+VPS Docker production build: PASS
+npx prisma migrate deploy: PASS/no pending migrations
+npx prisma migrate status: Database schema is up to date
+GET https://crm.hongducdigital.com/login: HTTP 200
+/dashboard unauthenticated: 307 -> /login
+Internal authenticated smoke: login 200, /api/workspaces 200, /dashboard 200
+GET /api/webhooks/meta verify: PASS, returns challenge
+GET /api/webhook/facebook verify: PASS, returns challenge
+Authenticated GET /api/integrations/facebook/login: 307 -> www.facebook.com with expected redirect_uri and scopes
+```
+
+#### Facebook API Contract
+
+```text
+OAuth login:
+- GET /api/integrations/facebook/login
+- Requires admin session.
+- If configured: redirects to https://www.facebook.com/{FACEBOOK_API_VERSION}/dialog/oauth
+- If env missing/invalid: returns { ok:false, error, missing:[...] } with 400.
+- Required env: FACEBOOK_APP_ID numeric, FACEBOOK_APP_SECRET, FACEBOOK_LOGIN_REDIRECT_URI.
+- Scopes: public_profile, pages_show_list, pages_manage_metadata, pages_read_engagement, pages_messaging, pages_manage_engagement.
+
+Webhook verify:
+- GET /api/webhooks/meta?hub.mode=subscribe&hub.verify_token=...&hub.challenge=...
+- GET /api/webhook/facebook?... remains supported.
+- Returns hub.challenge when token matches META_VERIFY_TOKEN.
+```
+
+#### Risks
+
+```text
+Meta permissions still require real App/Page validation.
+D-002 remains pending end-to-end until founder completes Connect Facebook with a Meta App admin/developer/tester account and verifies pages_manage_engagement/pages_read_engagement/pages_messaging are granted.
+If Dokploy UI deploy is required later, Git provider + SSH deploy key should be fixed; current production is running from the manually built Docker image service path.
+```
+
+#### Handoff
+
+```text
+Founder: open CRM, click Connect Facebook, complete Meta consent with correct account.
+Codex next smoke after consent: callback route, list pages, connect page, webhook subscription, send message/comment test, reply/hide permission check.
+Claude: no UI handoff required for this backend/deploy fix.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -4459,7 +4630,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | ID | Decision Needed | Owner hỏi | Status | Founder Answer |
 |---|---|---|---|---|
 | D-001 | DB credential đã rotate chưa? | Codex | DONE | Đã rotate Neon DB credential và cập nhật DATABASE_URL mới vào .env local. |
-| D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | OPEN | |
+| D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | PENDING_REAL_SMOKE | OAuth scope đã request `pages_manage_engagement`, `pages_read_engagement`, `pages_messaging`; production env đã set App ID/Secret và OAuth redirect PASS. Cần founder Connect Facebook bằng tài khoản có role Meta App/Page để xác nhận quyền thật. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -4584,6 +4755,13 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-021 (HOUSEKEEPING, RESOLVED 2026-06-15): 2 file leftover đã commit `5f1155e` "chore: commit remaining automation hook and prisma migration lock" (src/lib/facebook/comments.ts PR#7 hook automation + prisma/migrations/migration_lock.toml). `git status` hiện SẠCH hoàn toàn (working tree clean).
 - D-002 (OPEN): reply/hide comment cần Meta pages_manage_engagement + page token thật; chưa smoke được trong môi trường này. Không fake.
 - Tenant isolation: code-level PASS (mọi query filter workspaceId); runtime đa-workspace cần kiểm trong env founder (đăng nhập + ≥2 workspace có data).
+
+[2026-06-16 · Codex · Production Deploy + Facebook Integration Fix]
+- B-022 (DEPLOY, RESOLVED): Dokploy app trước đó 0/1 vì Github Provider not found và chưa có image. Codex build image production dc-funnel-cmr-dc-iea9mn:latest từ git archive sạch, update Docker Swarm service; service hiện 1/1.
+- B-023 (DOMAIN, RESOLVED): crm.hongducdigital.com 502 do stale Traefik dynamic config trùng host trỏ service cũ dc-a-mcwmkj. Đã backup/disable stale config khỏi dynamic watch dir; /login HTTP 200.
+- B-024 (FACEBOOK WEBHOOK, RESOLVED): Meta URL founder cấu hình là /api/webhooks/meta nhưng code chỉ có /api/webhook/facebook. Đã thêm alias /api/webhooks/meta; verify trả challenge test123, route cũ vẫn hoạt động.
+- B-025 (FACEBOOK OAUTH ENV, RESOLVED): Production thiếu/sai FACEBOOK_APP_ID/SECRET; endpoint từng redirect với App ID không hợp lệ. Đã thêm validation rõ ràng, set App ID/Secret thật founder cung cấp vào service, OAuth smoke sau admin login trả 307 tới www.facebook.com với redirect_uri đúng.
+- D-002 UPDATE (PENDING_REAL_SMOKE): OAuth URL đã request pages_manage_engagement/pages_read_engagement/pages_messaging, nhưng quyền thật vẫn phải xác nhận qua Meta consent + connect Fanpage + page token thật.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -4609,9 +4787,8 @@ và xác nhận field role trả về để render nhãn quyền. Nếu thiếu,
 
 ```text
 Vận hành / hoàn tất ngay:
-- Codex commit 2 file leftover: src/lib/facebook/comments.ts (hook automation PR#7), prisma/migrations/migration_lock.toml.
 - Founder review + merge các nhánh claude/01..08 (UI) vào main theo merge rule (mục 7).
-- Cấp Meta pages_manage_engagement + reconnect Fanpage để đóng D-002 (smoke reply/hide comment thật).
+- Founder bấm Connect Facebook trên production, chọn đúng Meta App/Page account, cấp permissions; Codex smoke callback/list pages/connect page/webhook/reply-hide để đóng D-002.
 - Kiểm tenant isolation đầu cuối: đăng nhập, tạo >=2 workspace có data, switch và đối chiếu dashboard/contact/order/pipeline không lẫn.
 
 Nên có sớm (P1, ngoài MVP1):
