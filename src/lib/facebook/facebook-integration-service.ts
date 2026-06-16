@@ -62,7 +62,11 @@ export async function handleFacebookCallback(
   return connection;
 }
 
-export async function listAvailablePages(workspaceId: string, connectionId?: string) {
+export async function listAvailablePages(
+  workspaceId: string,
+  connectionId?: string,
+  includeAvailable = true
+) {
   const connection = connectionId
     ? await prisma.facebookConnection.findUnique({ where: { id: connectionId } })
     : await prisma.facebookConnection.findFirst({ orderBy: { createdAt: "desc" } });
@@ -72,6 +76,10 @@ export async function listAvailablePages(workspaceId: string, connectionId?: str
     orderBy: { updatedAt: "desc" },
     select: publicPageSelect,
   });
+
+  if (!includeAvailable) {
+    return { availablePages: [], connectedPages, connection: safeConnection(connection) };
+  }
 
   if (!connection?.accessTokenEncrypted || connection.status !== "CONNECTED") {
     return { availablePages: [], connectedPages, connection: safeConnection(connection) };
@@ -108,13 +116,21 @@ export async function listAvailablePages(workspaceId: string, connectionId?: str
   }
 }
 
-export async function listAvailableBusinesses(workspaceId: string) {
+export async function listAvailableBusinesses(workspaceId: string, includeAvailable = true) {
   const connection = await getLatestFacebookConnection();
   const connectedBusinesses = await prisma.metaBusinessConnection.findMany({
     where: { workspaceId, deletedAt: null },
     orderBy: { updatedAt: "desc" },
     select: publicBusinessSelect,
   });
+
+  if (!includeAvailable) {
+    return {
+      items: [],
+      connectedBusinesses,
+      connection: safeConnection(connection),
+    };
+  }
 
   if (!connection?.accessTokenEncrypted || connection.status !== "CONNECTED") {
     return {

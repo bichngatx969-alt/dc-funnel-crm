@@ -18,7 +18,9 @@ export function FacebookPagesClient() {
   const [busyPageId, setBusyPageId] = useState<string | null>(null);
 
   async function load() {
-    const data = await apiGet<{ availablePages: AvailablePage[]; error?: string }>("/api/integrations/facebook/pages");
+    const data = await apiGet<{ availablePages: AvailablePage[]; error?: string }>(
+      "/api/integrations/facebook/pages?available=true"
+    );
     setPages(data.availablePages);
     setError(data.error ?? null);
   }

@@ -72,7 +72,7 @@ export function FacebookIntegrationsClient() {
     setPages(data.connectedPages);
   }
 
-  async function loadBusinesses() {
+  async function loadBusinesses(includeAvailable = false) {
     setLoadingBusinesses(true);
     setBusinessError(null);
     try {
@@ -80,7 +80,7 @@ export function FacebookIntegrationsClient() {
         items: BusinessItem[];
         connectedBusinesses: ConnectedBusiness[];
         error?: string;
-      }>("/api/integrations/facebook/businesses");
+      }>(`/api/integrations/facebook/businesses${includeAvailable ? "?available=true" : ""}`);
       setBusinesses(data.items);
       setConnectedBusinesses(data.connectedBusinesses);
       setBusinessError(data.error ?? null);
@@ -115,7 +115,7 @@ export function FacebookIntegrationsClient() {
 
   useEffect(() => {
     load().catch((e: any) => setNotice(e.message));
-    loadBusinesses();
+    loadBusinesses(false);
   }, []);
 
   async function toggle(page: Page) {
@@ -247,7 +247,7 @@ export function FacebookIntegrationsClient() {
             </p>
           </div>
           <button
-            onClick={loadBusinesses}
+            onClick={() => loadBusinesses(true)}
             disabled={loadingBusinesses}
             className="rounded border bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
           >
