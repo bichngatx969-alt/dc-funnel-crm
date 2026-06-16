@@ -11,16 +11,16 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL ?? "",
 
   // Meta Messenger
-  facebookAppId: process.env.FACEBOOK_APP_ID ?? "",
-  facebookAppSecret: process.env.FACEBOOK_APP_SECRET ?? process.env.META_APP_SECRET ?? "",
+  facebookAppId: readEnv("FACEBOOK_APP_ID", "META_APP_ID"),
+  facebookAppSecret: readEnv("FACEBOOK_APP_SECRET", "META_APP_SECRET"),
   facebookApiVersion: process.env.FACEBOOK_API_VERSION || process.env.META_GRAPH_VERSION || "v20.0",
   facebookLoginRedirectUri:
-    process.env.FACEBOOK_LOGIN_REDIRECT_URI ||
-    `${process.env.APP_BASE_URL || "http://localhost:3000"}/api/integrations/facebook/callback`,
+    readEnv("FACEBOOK_LOGIN_REDIRECT_URI") ||
+    `${readEnv("APP_BASE_URL", "NEXT_PUBLIC_APP_URL") || "http://localhost:3000"}/api/integrations/facebook/callback`,
   tokenEncryptionSecret: process.env.TOKEN_ENCRYPTION_SECRET ?? "",
   metaVerifyToken: process.env.META_VERIFY_TOKEN ?? "",
   metaPageAccessToken: process.env.META_PAGE_ACCESS_TOKEN ?? "",
-  metaAppSecret: process.env.META_APP_SECRET ?? "",
+  metaAppSecret: readEnv("META_APP_SECRET", "FACEBOOK_APP_SECRET"),
   facebookPageId: process.env.FACEBOOK_PAGE_ID ?? "",
   metaGraphVersion: process.env.META_GRAPH_VERSION || "v21.0",
 
@@ -40,7 +40,7 @@ export const env = {
   authSecret: process.env.AUTH_SECRET || DEFAULT_AUTH_SECRET,
 
   // App
-  appBaseUrl: process.env.APP_BASE_URL || "http://localhost:3000",
+  appBaseUrl: readEnv("APP_BASE_URL", "NEXT_PUBLIC_APP_URL") || "http://localhost:3000",
 
   // Email (Resend) — tùy chọn
   resendApiKey: process.env.RESEND_API_KEY ?? "",
@@ -94,4 +94,23 @@ function assertProductionSecret(name: string, value: string, defaultValues: stri
   if (!normalized || defaultValues.includes(normalized)) {
     throw new Error(`Production requires a non-default ${name}.`);
   }
+}
+
+function readEnv(...names: string[]): string {
+  for (const name of names) {
+    const raw = process.env[name];
+    if (!raw) continue;
+
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+
+    const quote = trimmed[0];
+    if ((quote === '"' || quote === "'") && trimmed.endsWith(quote)) {
+      return trimmed.slice(1, -1);
+    }
+
+    return trimmed;
+  }
+
+  return "";
 }
