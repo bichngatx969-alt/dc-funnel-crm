@@ -114,10 +114,6 @@ export async function POST(req: Request): Promise<Response> {
             await markWebhookLog(log.id, "IGNORED", "Fanpage chưa được kết nối trong CRM.");
             continue;
           }
-          if (!page.botEnabled) {
-            await markWebhookLog(log.id, "IGNORED", "Bot đang tắt cho Fanpage này.");
-            continue;
-          }
           if (page.status !== "CONNECTED" && page.status !== "WEBHOOK_NOT_SUBSCRIBED") {
             await markWebhookLog(log.id, "IGNORED", `Fanpage status hiện tại: ${page.status}.`);
             continue;

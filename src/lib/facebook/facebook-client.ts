@@ -9,6 +9,13 @@ const REQUIRED_SCOPES = [
   "business_management",
   "catalog_management",
 ];
+export const PAGE_SUBSCRIBED_FIELDS = [
+  "messages",
+  "messaging_postbacks",
+  "message_reads",
+  "message_deliveries",
+  "feed",
+];
 
 type GraphTokenResponse = {
   access_token: string;
@@ -141,13 +148,14 @@ export async function getBusinessCatalogs(
 
 export async function subscribePageToApp(pageId: string, pageAccessToken: string): Promise<{ success: boolean }> {
   return graphPost<{ success?: boolean }>(`/${pageId}/subscribed_apps`, {
-    subscribed_fields: "messages,messaging_postbacks,messaging_optins,message_deliveries,feed",
+    subscribed_fields: PAGE_SUBSCRIBED_FIELDS.join(","),
     access_token: pageAccessToken,
   }).then((res) => ({ success: Boolean(res.success) }));
 }
 
 export async function getSubscribedApps(pageId: string, pageAccessToken: string): Promise<any[]> {
   const data = await graphGet<{ data?: any[] }>(`/${pageId}/subscribed_apps`, {
+    fields: "id,name,subscribed_fields",
     access_token: pageAccessToken,
   });
   return data.data ?? [];

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   exchangeCodeForAccessToken,
   getFacebookLoginUrl,
+  PAGE_SUBSCRIBED_FIELDS,
   getBusinessCatalogs,
   getGrantedScopes,
   getLongLivedUserAccessToken,
@@ -376,10 +377,16 @@ export async function runPageHealthCheck(pageId: string, workspaceId: string) {
 
   try {
     const token = decryptToken(page.pageAccessTokenEncrypted);
-    const [health, subscribedApps] = await Promise.all([
+    const [health, subscribedAppsBefore] = await Promise.all([
       getPageHealth(pageId, token),
       getSubscribedApps(pageId, token).catch(() => []),
     ]);
+    let subscribedApps = subscribedAppsBefore;
+    if (subscribedApps.length === 0) {
+      await subscribePageToApp(pageId, token);
+      subscribedApps = await getSubscribedApps(pageId, token).catch(() => []);
+    }
+    const subscribedFields = extractSubscribedFields(subscribedApps);
     const webhookSubscribed = subscribedApps.length > 0;
     const status = webhookSubscribed ? "CONNECTED" : "WEBHOOK_NOT_SUBSCRIBED";
     const updated = await prisma.facebookPage.update({
@@ -392,7 +399,11 @@ export async function runPageHealthCheck(pageId: string, workspaceId: string) {
         status,
         lastHealthCheckAt: new Date(),
         lastError: webhookSubscribed ? null : "Webhook chưa subscribed vào app.",
-        permissionsJson: { tasks: health.tasks ?? [] },
+        permissionsJson: {
+          tasks: health.tasks ?? [],
+          subscribedFields,
+          requiredSubscribedFields: PAGE_SUBSCRIBED_FIELDS,
+        },
       },
       select: publicPageSelect,
     });
@@ -426,6 +437,7 @@ export const publicPageSelect = {
   status: true,
   lastHealthCheckAt: true,
   lastError: true,
+  permissionsJson: true,
   updatedAt: true,
 } as const;
 
@@ -475,7 +487,10 @@ function pageData(
     connectionId,
     botEnabled: false,
     webhookSubscribed,
-    permissionsJson: { tasks: page.tasks ?? [] },
+    permissionsJson: {
+      tasks: page.tasks ?? [],
+      requiredSubscribedFields: PAGE_SUBSCRIBED_FIELDS,
+    },
     status,
     lastHealthCheckAt: new Date(),
     lastError,
@@ -538,6 +553,22 @@ function readableCatalogError(err: unknown): string {
 function isPermissionError(message: string): boolean {
   const lower = message.toLowerCase();
   return lower.includes("permission") || lower.includes("access") || lower.includes("oauth");
+}
+
+function extractSubscribedFields(subscribedApps: any[]): string[] {
+  const fields = new Set<string>();
+  for (const app of subscribedApps) {
+    const raw = app?.subscribed_fields;
+    if (Array.isArray(raw)) {
+      for (const field of raw) fields.add(String(field));
+    } else if (typeof raw === "string") {
+      for (const field of raw.split(",")) {
+        const trimmed = field.trim();
+        if (trimmed) fields.add(trimmed);
+      }
+    }
+  }
+  return Array.from(fields).sort();
 }
 
 function safeConnection(connection: any) {

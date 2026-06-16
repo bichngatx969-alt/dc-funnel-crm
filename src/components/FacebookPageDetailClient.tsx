@@ -51,6 +51,12 @@ export function FacebookPageDetailClient({ pageId }: { pageId: string }) {
   }
 
   if (!page) return <div className="p-6 text-sm text-gray-500">{notice ?? "Đang tải Fanpage..."}</div>;
+  const subscribedFields = Array.isArray(page.permissionsJson?.subscribedFields)
+    ? page.permissionsJson.subscribedFields
+    : [];
+  const requiredFields = Array.isArray(page.permissionsJson?.requiredSubscribedFields)
+    ? page.permissionsJson.requiredSubscribedFields
+    : [];
 
   return (
     <div className="p-6">
@@ -76,6 +82,9 @@ export function FacebookPageDetailClient({ pageId }: { pageId: string }) {
         <Info label="Webhook subscribed"><Badge ok={page.webhookSubscribed} text={page.webhookSubscribed ? "Subscribed" : "Chưa subscribed"} /></Info>
         <Info label="Last health check">{page.lastHealthCheckAt ? new Date(page.lastHealthCheckAt).toLocaleString("vi-VN") : "Chưa chạy"}</Info>
         <Info label="Last error">{page.lastError ?? "Không có"}</Info>
+        <Info label="Subscribed fields">
+          {subscribedFields.length > 0 ? subscribedFields.join(", ") : "Chưa có dữ liệu"}
+        </Info>
       </div>
 
       <div className="mb-4 rounded-xl border bg-white p-4">
@@ -84,6 +93,10 @@ export function FacebookPageDetailClient({ pageId }: { pageId: string }) {
           <Check ok={Boolean(page.id)} text="Facebook Login OK" />
           <Check ok={page.status !== "TOKEN_EXPIRED" && page.status !== "DISCONNECTED"} text="Page token OK" />
           <Check ok={page.webhookSubscribed} text="Webhook subscribed" />
+          <Check
+            ok={requiredFields.length > 0 && requiredFields.every((field: string) => subscribedFields.includes(field))}
+            text="Subscribed đủ messages/feed"
+          />
           <Check ok={page.botEnabled} text="Bot enabled" />
           <Check ok={logs.length > 0} text="Gửi tin nhắn test vào Fanpage" />
           <Check ok={logs.length > 0} text="Kiểm tra log webhook" />

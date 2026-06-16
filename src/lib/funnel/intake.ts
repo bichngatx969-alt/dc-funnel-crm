@@ -74,7 +74,6 @@ export async function handleMessagingEvent(event: RawMessaging): Promise<void> {
     event.referral ?? event.message?.referral ?? event.postback?.referral ?? null;
 
   const page = pageId ? await findOrCreateFacebookPage(pageId) : null;
-  if (page && !page.botEnabled) return;
   const workspaceId = page?.workspaceId ?? null;
 
   const customer = await findOrCreateCustomer(
@@ -106,7 +105,7 @@ export async function handleMessagingEvent(event: RawMessaging): Promise<void> {
   });
   await prisma.customer.update({
     where: { id: customer.id },
-    data: { lastInteractionAt: new Date() },
+    data: { lastInteractionAt: new Date(), lastActivityAt: new Date() },
   });
 
   const inboundCount = await prisma.message.count({
@@ -118,6 +117,13 @@ export async function handleMessagingEvent(event: RawMessaging): Promise<void> {
   if (conversation.status === "HUMAN_TAKEOVER") {
     await prisma.funnelEvent.create({
       data: { customerId: customer.id, pageId: pageId ?? null, eventName: "inbound_during_takeover", scoreDelta: 0 },
+    });
+    return;
+  }
+
+  if (page && !page.botEnabled) {
+    await prisma.funnelEvent.create({
+      data: { customerId: customer.id, pageId: pageId ?? null, eventName: "inbound_bot_disabled", scoreDelta: 0 },
     });
     return;
   }
