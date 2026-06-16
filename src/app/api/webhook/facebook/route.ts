@@ -76,8 +76,8 @@ export async function POST(req: Request): Promise<Response> {
             await markWebhookLog(log.id, "IGNORED", "Fanpage chưa được kết nối trong CRM.");
             continue;
           }
-          if (page.status !== "CONNECTED" && page.status !== "WEBHOOK_NOT_SUBSCRIBED") {
-            await markWebhookLog(log.id, "IGNORED", `Fanpage status hiện tại: ${page.status}.`);
+          if (page.status === "DISCONNECTED") {
+            await markWebhookLog(log.id, "IGNORED", "Fanpage đã ngắt kết nối trong CRM.");
             continue;
           }
 
@@ -114,8 +114,8 @@ export async function POST(req: Request): Promise<Response> {
             await markWebhookLog(log.id, "IGNORED", "Fanpage chưa được kết nối trong CRM.");
             continue;
           }
-          if (page.status !== "CONNECTED" && page.status !== "WEBHOOK_NOT_SUBSCRIBED") {
-            await markWebhookLog(log.id, "IGNORED", `Fanpage status hiện tại: ${page.status}.`);
+          if (page.status === "DISCONNECTED") {
+            await markWebhookLog(log.id, "IGNORED", "Fanpage đã ngắt kết nối trong CRM.");
             continue;
           }
 
