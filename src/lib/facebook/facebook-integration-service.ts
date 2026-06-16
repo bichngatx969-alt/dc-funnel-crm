@@ -14,18 +14,23 @@ import {
 } from "@/lib/facebook/facebook-client";
 import { decryptToken, encryptToken } from "@/lib/security/token-encryption";
 
-export function startFacebookLogin(): { state: string; url: string } {
+export function startFacebookLogin(redirectUri?: string): { state: string; url: string } {
   const state = crypto.randomBytes(24).toString("base64url");
-  return { state, url: getFacebookLoginUrl(state) };
+  return { state, url: getFacebookLoginUrl(state, redirectUri) };
 }
 
-export async function handleFacebookCallback(code: string, state: string, expectedState: string | undefined) {
+export async function handleFacebookCallback(
+  code: string,
+  state: string,
+  expectedState: string | undefined,
+  redirectUri?: string
+) {
   if (!expectedState || state !== expectedState) {
     await audit("facebook_callback", "FAILED", undefined, "Facebook OAuth state không hợp lệ.");
     throw new Error("Facebook OAuth state không hợp lệ. Vui lòng thử kết nối lại.");
   }
 
-  const shortToken = await exchangeCodeForAccessToken(code);
+  const shortToken = await exchangeCodeForAccessToken(code, redirectUri);
   const longToken = await getLongLivedUserAccessToken(shortToken.access_token).catch(() => shortToken);
   const [profile, scopes] = await Promise.all([
     getUserProfile(longToken.access_token),

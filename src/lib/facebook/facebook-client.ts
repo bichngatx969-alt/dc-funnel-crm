@@ -33,11 +33,11 @@ function graphBase(): string {
   return `https://graph.facebook.com/${env.facebookApiVersion}`;
 }
 
-export function getFacebookLoginUrl(state: string): string {
-  assertFacebookOAuthEnv();
+export function getFacebookLoginUrl(state: string, redirectUri = env.facebookLoginRedirectUri): string {
+  assertFacebookOAuthEnv(redirectUri);
   const params = new URLSearchParams({
     client_id: env.facebookAppId,
-    redirect_uri: env.facebookLoginRedirectUri,
+    redirect_uri: redirectUri,
     state,
     response_type: "code",
     scope: REQUIRED_SCOPES.join(","),
@@ -45,12 +45,15 @@ export function getFacebookLoginUrl(state: string): string {
   return `https://www.facebook.com/${env.facebookApiVersion}/dialog/oauth?${params.toString()}`;
 }
 
-export async function exchangeCodeForAccessToken(code: string): Promise<GraphTokenResponse> {
-  assertFacebookOAuthEnv();
+export async function exchangeCodeForAccessToken(
+  code: string,
+  redirectUri = env.facebookLoginRedirectUri
+): Promise<GraphTokenResponse> {
+  assertFacebookOAuthEnv(redirectUri);
   return graphGet<GraphTokenResponse>("/oauth/access_token", {
     client_id: env.facebookAppId,
     client_secret: env.facebookAppSecret,
-    redirect_uri: env.facebookLoginRedirectUri,
+    redirect_uri: redirectUri,
     code,
   });
 }
@@ -108,8 +111,8 @@ export async function getPageHealth(pageId: string, pageAccessToken: string): Pr
   });
 }
 
-function assertFacebookOAuthEnv(): void {
-  if (!env.facebookAppId || !env.facebookAppSecret || !env.facebookLoginRedirectUri) {
+function assertFacebookOAuthEnv(redirectUri = env.facebookLoginRedirectUri): void {
+  if (!env.facebookAppId || !env.facebookAppSecret || !redirectUri) {
     throw new Error("Thiếu FACEBOOK_APP_ID, FACEBOOK_APP_SECRET hoặc FACEBOOK_LOGIN_REDIRECT_URI.");
   }
 }
