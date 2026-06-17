@@ -7,6 +7,9 @@ import { env } from "@/lib/env";
 
 const COOKIE_NAME = "dc_session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 ngày
+const SESSION_CACHE_TTL_MS = 60 * 1000;
+
+const sessionUserCache = new Map<string, { expiresAt: number; user: SessionUser }>();
 
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, 10);
@@ -55,6 +58,8 @@ export async function setSessionCookie(userId: string): Promise<void> {
 
 export async function clearSessionCookie(): Promise<void> {
   const store = await cookies();
+  const token = store.get(COOKIE_NAME)?.value;
+  if (token) sessionUserCache.delete(token);
   store.delete(COOKIE_NAME);
 }
 
@@ -71,9 +76,17 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   if (!token) return null;
   const verified = verifySessionToken(token);
   if (!verified) return null;
+
+  const now = Date.now();
+  const cached = sessionUserCache.get(token);
+  if (cached && cached.expiresAt > now) return cached.user;
+
   const user = await prisma.user.findUnique({
     where: { id: verified.uid },
     select: { id: true, email: true, name: true, role: true },
   });
+  if (user) {
+    sessionUserCache.set(token, { user, expiresAt: now + SESSION_CACHE_TTL_MS });
+  }
   return user;
 }

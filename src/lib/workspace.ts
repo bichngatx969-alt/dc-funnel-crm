@@ -9,9 +9,11 @@ const DEFAULT_WORKSPACE_NAME = "D.C Funnel CRM";
 const DEFAULT_TIMEZONE = "Asia/Ho_Chi_Minh";
 const DEFAULT_CURRENCY = "VND";
 const DEFAULT_LOCALE = "vi-VN";
+const CURRENT_WORKSPACE_CACHE_TTL_MS = 60 * 1000;
 
 const INDUSTRIES = ["FASHION", "STUDIO", "SALON", "WEDDING", "SERVICE", "OTHER"] as const;
 type WorkspaceMembership = Prisma.WorkspaceMemberGetPayload<{ include: { workspace: true } }>;
+const currentWorkspaceCache = new Map<string, { expiresAt: number; workspaceId: string }>();
 
 export type WorkspaceSummary = {
   id: string;
@@ -72,8 +74,37 @@ export async function listUserWorkspaces(user: SessionUser): Promise<{
 }
 
 export async function getCurrentWorkspaceId(user: SessionUser): Promise<string> {
-  const { currentWorkspaceId } = await listUserWorkspaces(user);
-  return currentWorkspaceId;
+  const cookieWorkspaceId = await getWorkspaceCookie();
+  const cacheKey = `${user.id}:${cookieWorkspaceId ?? "default"}`;
+  const now = Date.now();
+  const cached = currentWorkspaceCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.workspaceId;
+
+  if (cookieWorkspaceId) {
+    const membership = await prisma.workspaceMember.findFirst({
+      where: {
+        userId: user.id,
+        workspaceId: cookieWorkspaceId,
+        workspace: { deletedAt: null },
+      },
+      select: { workspaceId: true },
+    });
+    if (membership) {
+      currentWorkspaceCache.set(cacheKey, {
+        workspaceId: membership.workspaceId,
+        expiresAt: now + CURRENT_WORKSPACE_CACHE_TTL_MS,
+      });
+      return membership.workspaceId;
+    }
+  }
+
+  const membership = await ensureDefaultWorkspaceForUser(user);
+  await setWorkspaceCookie(membership.workspaceId);
+  currentWorkspaceCache.set(cacheKey, {
+    workspaceId: membership.workspaceId,
+    expiresAt: now + CURRENT_WORKSPACE_CACHE_TTL_MS,
+  });
+  return membership.workspaceId;
 }
 
 export async function requireCurrentWorkspace(user: SessionUser) {
