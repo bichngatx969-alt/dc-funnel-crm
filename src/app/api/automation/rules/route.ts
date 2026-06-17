@@ -26,6 +26,7 @@ export async function GET(req: Request) {
   const triggerType = parseAutomationTriggerType(searchParams.get("triggerType"));
   const actionType = parseAutomationActionType(searchParams.get("actionType"));
   const isActive = parseBoolean(searchParams.get("isActive"));
+  const withTotal = searchParams.get("withTotal") === "true";
 
   const where: Prisma.AutomationRuleWhereInput = { workspaceId, deletedAt: null };
   if (q) {
@@ -38,16 +39,16 @@ export async function GET(req: Request) {
   if (actionType) where.actionType = actionType;
   if (isActive !== undefined) where.isActive = isActive;
 
-  const [items, total] = await prisma.$transaction([
-    prisma.automationRule.findMany({
-      where,
-      include: automationRuleInclude,
-      orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
-      skip,
-      take: pageSize,
-    }),
-    prisma.automationRule.count({ where }),
-  ]);
+  const items = await prisma.automationRule.findMany({
+    where,
+    include: automationRuleInclude,
+    orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
+    skip,
+    take: pageSize,
+  });
+  const total = withTotal
+    ? await prisma.automationRule.count({ where })
+    : skip + items.length + (items.length === pageSize ? 1 : 0);
 
   return jsonOk({
     items,

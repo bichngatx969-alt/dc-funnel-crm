@@ -41,14 +41,6 @@ export const contactListSelect = {
   deletedAt: true,
   owner: { select: { id: true, name: true, email: true } },
   facebookPage: { select: { pageId: true, pageName: true, pagePictureUrl: true } },
-  _count: {
-    select: {
-      conversations: true,
-      tasks: true,
-      opportunities: true,
-      notes: true,
-    },
-  },
 } satisfies Prisma.CustomerSelect;
 
 export function contactDetailInclude(workspaceId: string): Prisma.CustomerInclude {

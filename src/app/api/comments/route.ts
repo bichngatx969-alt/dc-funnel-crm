@@ -28,6 +28,7 @@ export async function GET(req: Request) {
   const pageId = String(searchParams.get("pageId") ?? "").trim();
   const customerId = String(searchParams.get("customerId") ?? "").trim();
   const postId = String(searchParams.get("postId") ?? "").trim();
+  const withTotal = searchParams.get("withTotal") === "true";
 
   const where: Prisma.FacebookCommentWhereInput = {
     workspaceId,
@@ -54,16 +55,16 @@ export async function GET(req: Request) {
       : {}),
   };
 
-  const [items, total] = await prisma.$transaction([
-    prisma.facebookComment.findMany({
-      where,
-      orderBy: [{ needsFollowUp: "desc" }, { createdAt: "desc" }],
-      skip,
-      take: pageSize,
-      include: commentInclude,
-    }),
-    prisma.facebookComment.count({ where }),
-  ]);
+  const items = await prisma.facebookComment.findMany({
+    where,
+    orderBy: [{ needsFollowUp: "desc" }, { createdAt: "desc" }],
+    skip,
+    take: pageSize,
+    include: commentInclude,
+  });
+  const total = withTotal
+    ? await prisma.facebookComment.count({ where })
+    : skip + items.length + (items.length === pageSize ? 1 : 0);
 
   return jsonOk({
     items,

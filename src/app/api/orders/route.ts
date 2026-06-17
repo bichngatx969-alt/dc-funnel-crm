@@ -34,6 +34,7 @@ export async function GET(req: Request) {
   const ownerId = searchParams.get("ownerId")?.trim();
   const status = normalizeOrderStatus(searchParams.get("status"));
   const paymentStatus = normalizePaymentStatus(searchParams.get("paymentStatus"));
+  const withTotal = searchParams.get("withTotal") === "true";
 
   const where: Prisma.OrderWhereInput = {
     workspaceId,
@@ -53,16 +54,16 @@ export async function GET(req: Request) {
   if (status) where.status = status;
   if (paymentStatus) where.paymentStatus = paymentStatus;
 
-  const [items, total] = await prisma.$transaction([
-    prisma.order.findMany({
-      where,
-      include: orderInclude,
-      orderBy: [{ createdAt: "desc" }],
-      skip,
-      take: pageSize,
-    }),
-    prisma.order.count({ where }),
-  ]);
+  const items = await prisma.order.findMany({
+    where,
+    include: orderInclude,
+    orderBy: [{ createdAt: "desc" }],
+    skip,
+    take: pageSize,
+  });
+  const total = withTotal
+    ? await prisma.order.count({ where })
+    : skip + items.length + (items.length === pageSize ? 1 : 0);
 
   return jsonOk({
     items,

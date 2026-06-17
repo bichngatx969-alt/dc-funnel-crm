@@ -32,6 +32,7 @@ export async function GET(req: Request) {
   const stage = normalizeStage(searchParams.get("stage"));
   const ownerId = searchParams.get("ownerId")?.trim();
   const { page, pageSize, skip } = parsePagination(searchParams);
+  const withTotal = searchParams.get("withTotal") === "true";
 
   const where: Prisma.CustomerWhereInput = {
     workspaceId,
@@ -50,16 +51,17 @@ export async function GET(req: Request) {
   if (stage) where.currentStage = stage;
   if (ownerId) where.ownerId = ownerId === "unassigned" ? null : ownerId;
 
-  const [items, total] = await prisma.$transaction([
-    prisma.customer.findMany({
-      where,
-      select: contactListSelect,
-      orderBy: [{ lastActivityAt: { sort: "desc", nulls: "last" } }, { updatedAt: "desc" }],
-      skip,
-      take: pageSize,
-    }),
-    prisma.customer.count({ where }),
-  ]);
+  const contacts = await prisma.customer.findMany({
+    where,
+    select: contactListSelect,
+    orderBy: [{ lastActivityAt: { sort: "desc", nulls: "last" } }, { updatedAt: "desc" }],
+    skip,
+    take: pageSize,
+  });
+  const total = withTotal
+    ? await prisma.customer.count({ where })
+    : skip + contacts.length + (contacts.length === pageSize ? 1 : 0);
+  const items = contacts.map(withEmptyContactCounts);
 
   return jsonOk({
     items,
@@ -148,8 +150,20 @@ export async function POST(req: Request) {
         tags: contact.tags,
       },
     }).catch((error) => console.error("CONTACT_CREATED automation failed", error));
-    return jsonOk({ contact }, 201);
+    return jsonOk({ contact: withEmptyContactCounts(contact) }, 201);
   } catch {
     return jsonError("Không tạo được contact; kiểm tra dữ liệu trùng hoặc không hợp lệ", 400);
   }
+}
+
+function withEmptyContactCounts<T extends object>(contact: T) {
+  return {
+    ...contact,
+    _count: {
+      conversations: 0,
+      tasks: 0,
+      opportunities: 0,
+      notes: 0,
+    },
+  };
 }
