@@ -150,7 +150,6 @@ export async function ensureDefaultWorkspaceForUser(user: SessionUser): Promise<
     include: { workspace: true },
   });
   if (existingMembership) {
-    await backfillLegacyWorkspace(existingMembership.workspaceId);
     return existingMembership;
   }
 

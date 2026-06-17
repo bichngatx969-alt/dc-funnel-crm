@@ -13,6 +13,7 @@ export async function GET(req: Request) {
   const status = searchParams.get("status");
   const q = searchParams.get("q")?.trim();
   const pageId = searchParams.get("pageId");
+  const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 40, 1), 100);
 
   const where: any = { workspaceId };
   if (status && status !== "all") where.status = status;
@@ -30,7 +31,7 @@ export async function GET(req: Request) {
   const conversations = await prisma.conversation.findMany({
     where,
     orderBy: { lastMessageAt: "desc" },
-    take: 100,
+    take: limit,
     include: {
       customer: {
         select: {

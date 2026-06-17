@@ -6,7 +6,7 @@ import { ScoreBadge, StageBadge, StatusBadge, Tag } from "@/components/ui";
 import { CustomerEmailPanel } from "@/components/CustomerEmailPanel";
 
 const STAGES = ["COLD", "WARM", "HOT", "CUSTOMER", "LOST"];
-const POLL_MS = 5000;
+const POLL_MS = 15000;
 
 type ConvItem = {
   id: string;
@@ -116,7 +116,6 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
       loadConversations();
       if (selectedId) {
         loadMessages(selectedId);
-        loadDetail(selectedId);
       }
     }, POLL_MS);
     return () => clearInterval(t);
