@@ -485,6 +485,8 @@ model FacebookComment {
   @@index([needsFollowUp])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([workspaceId, deletedAt, needsFollowUp, createdAt], map: "FacebookComment_ws_follow_created_idx")
+  @@index([workspaceId, status, deletedAt, createdAt], map: "FacebookComment_ws_status_created_idx")
 }
 
 model Customer {
@@ -542,6 +544,8 @@ model Customer {
   @@index([deletedAt])
   @@index([pageId])
   @@index([workspaceId])
+  @@index([workspaceId, deletedAt, lastActivityAt, updatedAt], map: "Customer_ws_activity_idx")
+  @@index([workspaceId, currentStage, deletedAt], map: "Customer_ws_stage_deleted_idx")
 }
 
 model Note {
@@ -587,6 +591,8 @@ model Conversation {
   @@index([lastMessageAt])
   @@index([pageId])
   @@index([workspaceId])
+  @@index([workspaceId, pageId, lastMessageAt], map: "Conversation_ws_page_last_idx")
+  @@index([workspaceId, status, lastMessageAt], map: "Conversation_ws_status_last_idx")
 }
 
 model Message {
@@ -609,6 +615,7 @@ model Message {
   @@index([createdAt])
   @@index([pageId])
   @@index([workspaceId])
+  @@index([workspaceId, conversationId, createdAt], map: "Message_ws_conv_created_idx")
 }
 
 model FunnelEvent {
@@ -708,6 +715,7 @@ model Task {
   @@index([status])
   @@index([dueAt])
   @@index([workspaceId])
+  @@index([workspaceId, status, dueAt], map: "Task_ws_status_due_idx")
 }
 
 model Pipeline {
@@ -779,6 +787,8 @@ model Opportunity {
   @@index([status])
   @@index([deletedAt])
   @@index([expectedCloseAt])
+  @@index([workspaceId, deletedAt, status, updatedAt], map: "Opportunity_ws_status_updated_idx")
+  @@index([workspaceId, stageId, deletedAt], map: "Opportunity_ws_stage_deleted_idx")
 }
 
 model ProductLite {
@@ -843,6 +853,9 @@ model Order {
   @@index([paymentStatus])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([workspaceId, deletedAt, createdAt], map: "Order_ws_created_idx")
+  @@index([workspaceId, status, createdAt], map: "Order_ws_status_created_idx")
+  @@index([workspaceId, paymentStatus, createdAt], map: "Order_ws_payment_created_idx")
 }
 
 model OrderItem {
@@ -892,6 +905,7 @@ model AutomationRule {
   @@index([isActive])
   @@index([createdById])
   @@index([deletedAt])
+  @@index([workspaceId, deletedAt, isActive, updatedAt], map: "AutomationRule_ws_active_updated_idx")
 }
 
 model AutomationRun {
@@ -917,6 +931,7 @@ model AutomationRun {
   @@index([sourceId])
   @@index([status])
   @@index([createdAt])
+  @@index([workspaceId, status, createdAt], map: "AutomationRun_ws_status_created_idx")
 }
 
 // ----------------------------------------------------------------
