@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
+import { syncRecentFacebookInbox } from "@/lib/facebook/inbox-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,15 @@ export async function GET(req: Request) {
   const q = searchParams.get("q")?.trim();
   const pageId = searchParams.get("pageId");
   const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 40, 1), 100);
+
+  if (!q) {
+    await syncRecentFacebookInbox({ workspaceId, pageId }).catch((error) => {
+      console.warn(
+        "[FB SYNC] Bỏ qua sync inbox trước khi tải hội thoại:",
+        error instanceof Error ? error.message : String(error)
+      );
+    });
+  }
 
   const where: any = { workspaceId };
   if (status && status !== "all") where.status = status;
