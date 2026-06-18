@@ -6,7 +6,8 @@ import { ScoreBadge, StageBadge, StatusBadge, Tag } from "@/components/ui";
 import { CustomerEmailPanel } from "@/components/CustomerEmailPanel";
 
 const STAGES = ["COLD", "WARM", "HOT", "CUSTOMER", "LOST"];
-const POLL_MS = 15000;
+const LIST_POLL_MS = 5000;
+const ACTIVE_THREAD_POLL_MS = 2500;
 
 type ConvItem = {
   id: string;
@@ -68,6 +69,8 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMsgCountRef = useRef(0);
+  const listPollingRef = useRef(false);
+  const messagePollingRef = useRef(false);
 
   const loadConversations = useCallback(async () => {
     const params = new URLSearchParams();
@@ -112,14 +115,51 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => {
-      loadConversations();
-      if (selectedId) {
-        loadMessages(selectedId);
+    const poll = async () => {
+      if (document.hidden || listPollingRef.current) return;
+      listPollingRef.current = true;
+      try {
+        await loadConversations();
+      } finally {
+        listPollingRef.current = false;
       }
-    }, POLL_MS);
-    return () => clearInterval(t);
-  }, [loadConversations, loadMessages, loadDetail, selectedId]);
+    };
+    const t = setInterval(poll, LIST_POLL_MS);
+    const refreshOnFocus = () => {
+      if (!document.hidden) void poll();
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [loadConversations]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const poll = async () => {
+      if (document.hidden || messagePollingRef.current) return;
+      messagePollingRef.current = true;
+      try {
+        await loadMessages(selectedId);
+      } finally {
+        messagePollingRef.current = false;
+      }
+    };
+    const t = setInterval(poll, ACTIVE_THREAD_POLL_MS);
+    const refreshOnFocus = () => {
+      if (!document.hidden) void poll();
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [loadMessages, selectedId]);
 
   // Auto-scroll khi có tin mới.
   useEffect(() => {
