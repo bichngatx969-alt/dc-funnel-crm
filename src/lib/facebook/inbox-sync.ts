@@ -5,6 +5,8 @@ import { decryptToken } from "@/lib/security/token-encryption";
 
 const SYNC_TTL_MS = 4500;
 const GRAPH_SYNC_TIMEOUT_MS = 2500;
+const DEFAULT_CONVERSATION_LIMIT = 3;
+const DEFAULT_MESSAGE_LIMIT = 5;
 const syncCache = new Map<string, number>();
 
 type GraphConversation = {
@@ -35,6 +37,8 @@ export async function syncRecentFacebookInbox(params: {
   workspaceId: string;
   pageId?: string | null;
   limitPages?: number;
+  limitConversations?: number;
+  limitMessages?: number;
 }): Promise<void> {
   const pages = await prisma.facebookPage.findMany({
     where: {
@@ -47,10 +51,20 @@ export async function syncRecentFacebookInbox(params: {
     take: params.limitPages ?? 5,
   });
 
-  await Promise.all(pages.map((page) => syncPageInbox(page).catch(reportSyncError)));
+  await Promise.all(
+    pages.map((page) =>
+      syncPageInbox(page, {
+        limitConversations: params.limitConversations ?? DEFAULT_CONVERSATION_LIMIT,
+        limitMessages: params.limitMessages ?? DEFAULT_MESSAGE_LIMIT,
+      }).catch(reportSyncError)
+    )
+  );
 }
 
-async function syncPageInbox(page: FacebookPage): Promise<void> {
+async function syncPageInbox(
+  page: FacebookPage,
+  limits: { limitConversations: number; limitMessages: number }
+): Promise<void> {
   if (!page.workspaceId || !page.pageAccessTokenEncrypted) return;
 
   const cacheKey = `${page.workspaceId}:${page.pageId}`;
@@ -64,11 +78,13 @@ async function syncPageInbox(page: FacebookPage): Promise<void> {
 
   const fields = [
     "participants",
-    "messages.limit(10){id,message,created_time,from,to,attachments}",
+    `messages.limit(${limits.limitMessages}){id,message,created_time,from,to,attachments}`,
   ].join(",");
   const url = `${graphBase()}/${encodeURIComponent(
     page.pageId
-  )}/conversations?limit=10&fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
+  )}/conversations?limit=${limits.limitConversations}&fields=${encodeURIComponent(
+    fields
+  )}&access_token=${encodeURIComponent(token)}`;
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), GRAPH_SYNC_TIMEOUT_MS);
