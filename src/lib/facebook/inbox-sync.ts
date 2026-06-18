@@ -134,14 +134,14 @@ async function importGraphConversation(page: FacebookPage, graphConversation: Gr
     const fromId = message.from?.id ?? null;
     const direction = fromId === page.pageId ? "OUTBOUND" : "INBOUND";
     const text = message.message ?? (message.attachments ? "[đính kèm]" : null);
-    const existing = await prisma.message.findUnique({
+    const savedMessage = await prisma.message.upsert({
       where: { metaMessageId: message.id },
-      select: { id: true },
-    });
-    if (existing) continue;
-
-    await prisma.message.create({
-      data: {
+      update: {
+        workspaceId: page.workspaceId,
+        pageId: page.pageId,
+        conversationId: conversation.id,
+      },
+      create: {
         workspaceId: page.workspaceId,
         pageId: page.pageId,
         conversationId: conversation.id,
@@ -152,10 +152,12 @@ async function importGraphConversation(page: FacebookPage, graphConversation: Gr
         metaMessageId: message.id,
         createdAt,
       },
+      select: { createdAt: true },
     });
+    const savedAt = parseGraphDate(savedMessage.createdAt.toISOString());
     latestMessageAt =
-      !latestMessageAt || createdAt.getTime() > latestMessageAt.getTime()
-        ? createdAt
+      !latestMessageAt || savedAt.getTime() > latestMessageAt.getTime()
+        ? savedAt
         : latestMessageAt;
   }
 
