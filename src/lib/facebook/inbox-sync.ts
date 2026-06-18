@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/security/token-encryption";
 
 const SYNC_TTL_MS = 4500;
-const GRAPH_SYNC_TIMEOUT_MS = 2500;
+const GRAPH_SYNC_TIMEOUT_MS = 10000;
 const DEFAULT_CONVERSATION_LIMIT = 3;
 const DEFAULT_MESSAGE_LIMIT = 5;
 const syncCache = new Map<string, number>();
