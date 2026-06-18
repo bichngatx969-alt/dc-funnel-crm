@@ -2833,6 +2833,87 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Khi founder bấm Connect Facebook xong: Codex kiểm tra callback/pages/connect page/webhook logs thật và xác nhận D-002.
 ```
 
+#### 2026-06-17 — Claude/Cowork Production Check
+
+```text
+## 2026-06-17 — Claude/Cowork — Production Check & Webhook Fix
+
+### Đang làm
+- Kiểm tra production thật + fix nguyên nhân không nhận inbox/comment. (KHÔNG sửa code app; chỉ hạ tầng + Meta config.)
+
+### SSH
+- ĐÃ SSH được vào VPS (103.72.98.117:24700, root) bằng password founder cấp, qua SSH_ASKPASS (không cài SSH key cố định — guardrail chặn persistence). Password chỉ dùng tạm, đã xoá file tạm.
+
+### VPS resource (sau nâng 2CPU/4GB)
+- CPU 2 nhân, RAM 3.8Gi (available ~2.1Gi), disk 40G dùng 21G (51%), load 0.01, uptime ~1h22.
+- App container `dc-funnel-cmr-dc-iea9mn.1.*`: CPU ~0.00%, RAM ~231MiB. Traefik ~176MiB. → KHÔNG còn nghẽn tài nguyên, hết chậm.
+
+### Container app
+- Swarm service dc-funnel-cmr-dc-iea9mn 1/1, Up. dokploy/postgres/redis/traefik đều Up.
+
+### Env check (boolean, không in giá trị)
+- SET: DATABASE_URL, TOKEN_ENCRYPTION_SECRET (len 59), FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, META_APP_SECRET, AUTH_SECRET (app boot prod fail-fast ⇒ có).
+- APP_BASE_URL = NEXT_PUBLIC_APP_URL = https://crm.hongducdigital.com ; FACEBOOK_LOGIN_REDIRECT_URI = https://crm.hongducdigital.com/api/integrations/facebook/callback ; FACEBOOK_API_VERSION=v20.0 ; META_VERIFY_TOKEN khớp default `dc-funnel-bot-verify-token`. NODE_ENV=production.
+- Lưu ý: biến mã hoá token tên đúng là TOKEN_ENCRYPTION_SECRET (không phải ENCRYPTION_KEY).
+
+### Endpoint check
+- /login 200 ; /inbox /dashboard /contacts /api/integrations/facebook/login → 307 (redirect auth, đúng kỳ vọng).
+- /api/webhooks/meta?hub.challenge=test123 → HTTP 200, body `test123`, TLS hợp lệ (Let's Encrypt, hạn 13/09/2026). Log app: `[WEBHOOK] Verify thành công.`
+
+### DB counts
+- workspaces 4, facebookPages 5, customers 8, conversations 5, messages 15, comments 3, webhookLogs 5.
+- nullWorkspace = 0 ở pages/customers/conversations/messages ⇒ KHÔNG có chuyện dữ liệu bị ẩn do workspace filter.
+
+### Page state
+- HiChaos (1116426378214052, ws HICHAOS): botEnabled=true, webhookSubscribed=true, hasToken=true, token valid (debug_token), scope đủ nhận (pages_messaging, pages_read_engagement, pages_manage_metadata). **status=ERROR** do Health Check 12:47 lỗi `(#100) Tried accessing nonexisting field (tasks)` — lỗi phụ, KHÔNG chặn nhận webhook (handler chỉ bỏ qua page DISCONNECTED).
+- D.C Studio (320828161108624, ws NAM NGUYEN STORE): status=CONNECTED, botEnabled, webhookSubscribed, token valid.
+- 3 page còn lại là smoke (DISCONNECTED, no token).
+
+### Webhook logs / messages / comments gần nhất
+- webhookLogs = 5 nhưng **TẤT CẢ từ 14/06 (smoke test giả)**; ZERO event thật cho 2 page thật.
+- messages (15) + comments (3) + conversations: toàn bộ là seed/smoke (09/06 & 14/06). Chưa có dữ liệu khách thật.
+
+### Performance (sau nâng VPS)
+- login TTFB 0.31s ; inbox 0.37s ; dashboard 0.13s ; contacts 0.12s. → Nhanh, đạt.
+
+### NGUYÊN NHÂN GỐC (đã xác định + đã fix trong phiên này)
+1. **Traefik (reverse proxy HTTPS/443) chết** sau reboot nâng VPS vì **nginx host mặc định chiếm cổng 80** (`bind 0.0.0.0:80 address already in use`, exit 128). ⇒ mất 443 ⇒ Meta verify callback bị 503 ⇒ KHÔNG gửi webhook ⇒ mất inbox + comment; site cũng khó vào. → ĐÃ FIX: `systemctl stop+disable nginx` (nginx chỉ là trang "Welcome to nginx!", không proxy gì, VPS chỉ chạy Dokploy) + `docker start dokploy-traefik` (restart=always). 443 sống lại, cert OK.
+2. **Webhook cấp App TRỐNG** (`GET /{app-id}/subscriptions` = `data:[]`) — chỉ có Page-level subscribed_apps, thiếu App-level callback. → ĐÃ FIX: `POST /{app-id}/subscriptions` (object=page, callback https://crm.hongducdigital.com/api/webhooks/meta, fields messages/feed/...) → `active:true`.
+3. Test end-to-end: POST webhook ký hợp lệ (HMAC META_APP_SECRET) qua public HTTPS → 200 EVENT_RECEIVED, DB ghi FacebookWebhookLog=PROCESSED (đã xoá log test, DB sạch).
+
+### Production Status snapshot
+| Hạng mục | Trạng thái |
+|---|---|
+| Domain/HTTPS crm.hongducdigital.com | ✅ OK (Traefik up, cert valid) |
+| Login | ✅ 200 |
+| Facebook OAuth/connect | ✅ tới màn cấp quyền; 2 page đã connect, token valid |
+| Webhook verify (GET) | ✅ PASS (Meta đã verify → active) |
+| Webhook ingest (POST signed) | ✅ PASS end-to-end (PROCESSED) |
+| Inbox real event | ⏳ CHỜ smoke thật (chưa có event thật sau fix) |
+| Comment real event | ⏳ CHỜ smoke thật |
+| Performance sau nâng VPS | ✅ OK (TTFB 0.12–0.37s) |
+
+### Kết luận
+- **Blocker production gốc (HTTPS + webhook) đã RESOLVED trong phiên này.** Đường ống nhận inbox/comment đã thông và chứng minh chạy end-to-end. Chỉ còn cần **1 event thật** để chốt.
+
+### Lỗi phụ phát hiện (không chặn inbox/comment)
+- HiChaos status=ERROR do Health Check request field `tasks` lỗi #100 (cosmetic; handler vẫn nhận). Đề xuất: reconnect/health-check lại, hoặc Codex rà `runPageHealthCheck`/Graph field `tasks`.
+- **Migration drift**: model `MetaBusinessConnection` có trong schema nhưng **bảng chưa tồn tại trong DB production** ⇒ `/api/integrations/facebook/businesses` 500 (`table public.MetaBusinessConnection does not exist`). Thuộc module BM/Catalog đang hoãn. Cần `npx prisma migrate deploy` (additive) khi founder duyệt.
+- Vài log Neon `PostgreSQL connection Closed` (autosuspend serverless) — theo dõi, chưa nghiêm trọng.
+
+### Có sửa code không?
+- KHÔNG sửa code app (nguyên nhân là hạ tầng + Meta config, không phải bug code nhận webhook). Chỉ thêm script chẩn đoán read-only ở scripts/prod-*.js (không chứa secret) + docs.
+
+### Cần founder làm tiếp
+1. Gửi **1 tin nhắn Messenger** + **1 comment** vào page HiChaos bằng tài khoản FB khác → báo lại, Claude/Codex soi webhookLogs/messages/comments tăng để chốt D-002 = RESOLVED.
+2. Nếu chỉ admin/tester nhận được mà khách lạ không: chuyển Meta App sang **Live mode** + xin **Advanced Access** cho pages_messaging & pages_read_engagement (App Review).
+3. Quyết định chạy migrate deploy cho MetaBusinessConnection (sửa 500 route businesses) — hay tiếp tục hoãn module BM.
+4. D-002 (ẩn/trả lời comment) cần thêm scope `pages_manage_engagement`.
+
+### Cần agent kia hỗ trợ
+- Codex: nếu founder duyệt, xử lý (a) health-check field `tasks`, (b) migrate deploy MetaBusinessConnection. Không chặn việc nhận inbox/comment.
+```
+
 ---
 
 ## 18. PR Completion Report
@@ -4630,7 +4711,8 @@ Agent nào gặp blocker phải ghi vào đây.
 | ID | Decision Needed | Owner hỏi | Status | Founder Answer |
 |---|---|---|---|---|
 | D-001 | DB credential đã rotate chưa? | Codex | DONE | Đã rotate Neon DB credential và cập nhật DATABASE_URL mới vào .env local. |
-| D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | PENDING_REAL_SMOKE | OAuth scope đã request `pages_manage_engagement`, `pages_read_engagement`, `pages_messaging`; production env đã set App ID/Secret và OAuth redirect PASS. Cần founder Connect Facebook bằng tài khoản có role Meta App/Page để xác nhận quyền thật. |
+| D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | PENDING_REAL_SMOKE | OAuth scope đã request `pages_manage_engagement`, `pages_read_engagement`, `pages_messaging`; production env đã set App ID/Secret và OAuth redirect PASS. 2026-06-17: token 2 page thật có `pages_messaging`+`pages_read_engagement`+`pages_manage_metadata` (đủ NHẬN inbox/comment); **chưa** có `pages_manage_engagement` ⇒ ẩn/trả lời comment vẫn chờ. Cần founder cấp quyền + (nếu khách lạ) Live mode/App Review. |
+| D-009 | Production Webhook Real Smoke (nhận inbox/comment thật) | Claude/Cowork | PARTIAL — hạ tầng RESOLVED, chờ event thật | 2026-06-17: nguyên nhân gốc = Traefik chết (nginx host chiếm cổng 80 sau reboot) ⇒ mất HTTPS/443 ⇒ Meta verify 503 ⇒ 0 webhook; cộng webhook App-level trống. ĐÃ FIX: disable nginx + start Traefik (restart=always) + `POST /{app-id}/subscriptions` → active:true; test POST ký hợp lệ → PROCESSED. Còn chờ founder gửi 1 tin + 1 comment thật để chốt RESOLVED. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -4762,6 +4844,15 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-024 (FACEBOOK WEBHOOK, RESOLVED): Meta URL founder cấu hình là /api/webhooks/meta nhưng code chỉ có /api/webhook/facebook. Đã thêm alias /api/webhooks/meta; verify trả challenge test123, route cũ vẫn hoạt động.
 - B-025 (FACEBOOK OAUTH ENV, RESOLVED): Production thiếu/sai FACEBOOK_APP_ID/SECRET; endpoint từng redirect với App ID không hợp lệ. Đã thêm validation rõ ràng, set App ID/Secret thật founder cung cấp vào service, OAuth smoke sau admin login trả 307 tới www.facebook.com với redirect_uri đúng.
 - D-002 UPDATE (PENDING_REAL_SMOKE): OAuth URL đã request pages_manage_engagement/pages_read_engagement/pages_messaging, nhưng quyền thật vẫn phải xác nhận qua Meta consent + connect Fanpage + page token thật.
+
+[2026-06-17 · Claude/Cowork · Production Webhook Real Smoke]
+- B-026 (PROD INFRA, RESOLVED): Sau reboot nâng VPS, **dokploy-traefik exit 128** (`bind 0.0.0.0:80 address already in use`) vì **nginx host mặc định** chiếm cổng 80 ⇒ mất HTTPS/443 ⇒ Meta verify callback 503 ⇒ KHÔNG nhận webhook (inbox+comment), site khó vào. Bằng chứng: nginx chỉ là trang "Welcome to nginx!" (sites-enabled/default, không proxy_pass, /var/www/html), VPS chỉ chạy Dokploy. FIX (founder duyệt): `systemctl stop+disable nginx` + `docker start dokploy-traefik` (restart=always). Verify: 443 OK, cert Let's Encrypt hạn 13/09, /login 200.
+- B-027 (META WEBHOOK APP-LEVEL, RESOLVED): `GET /{app-id}/subscriptions` = `data:[]` — thiếu webhook cấp App (chỉ có Page-level subscribed_apps). FIX: `POST /{app-id}/subscriptions` object=page, callback https://crm.hongducdigital.com/api/webhooks/meta, verify_token khớp, fields messages,messaging_postbacks,messaging_optins,message_deliveries,message_reads,feed → `active:true`.
+- B-028 (E2E VERIFY, PASS): POST webhook ký hợp lệ (HMAC META_APP_SECRET) qua public HTTPS → 200 EVENT_RECEIVED, DB FacebookWebhookLog=PROCESSED (đã xoá log test). Toàn tuyến Traefik→app→signature→handler→DB OK.
+- D-009 (PARTIAL → chờ event thật): webhookLogs hiện = 5 nhưng TẤT CẢ từ 14/06 (smoke). Cần founder gửi 1 tin + 1 comment thật vào page HiChaos → soi webhookLogs/messages/comments tăng để chốt RESOLVED. Nếu chỉ admin/tester nhận: cần Meta Live mode + Advanced Access (pages_messaging, pages_read_engagement).
+- B-029 (HEALTH CHECK BUG, phụ — không chặn nhận): HiChaos status=ERROR, lastError `(#100) Tried accessing nonexisting field (tasks)` (Health Check 12:47). Handler vẫn nhận webhook cho page ERROR (chỉ bỏ qua DISCONNECTED). Đề xuất Codex rà field `tasks` trong runPageHealthCheck/Graph call.
+- B-030 (MIGRATION DRIFT, phụ): model `MetaBusinessConnection` có trong schema nhưng bảng CHƯA tồn tại ở DB production ⇒ `/api/integrations/facebook/businesses` 500. Thuộc module BM/Catalog đang hoãn. Cần `npx prisma migrate deploy` (additive) khi founder duyệt.
+- Không sửa code app (nguyên nhân là hạ tầng + Meta config). Chỉ thêm scripts/prod-*.js (chẩn đoán read-only, không secret) + cập nhật plan.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
