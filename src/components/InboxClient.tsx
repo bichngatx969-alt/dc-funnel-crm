@@ -6,8 +6,8 @@ import { ScoreBadge, StageBadge, StatusBadge, Tag } from "@/components/ui";
 import { CustomerEmailPanel } from "@/components/CustomerEmailPanel";
 
 const STAGES = ["COLD", "WARM", "HOT", "CUSTOMER", "LOST"];
-const LIST_POLL_MS = 5000;
-const ACTIVE_THREAD_POLL_MS = 2500;
+const LIST_POLL_MS = 15000;
+const ACTIVE_THREAD_POLL_MS = 10000;
 
 type ConvItem = {
   id: string;
@@ -71,6 +71,7 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
   const lastMsgCountRef = useRef(0);
   const listPollingRef = useRef(false);
   const messagePollingRef = useRef(false);
+  const realtimeRefreshRef = useRef(false);
 
   const loadConversations = useCallback(async () => {
     const params = new URLSearchParams();
@@ -160,6 +161,39 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
       document.removeEventListener("visibilitychange", refreshOnFocus);
     };
   }, [loadMessages, selectedId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams();
+    params.set("pageId", pageFilter);
+    if (selectedId) params.set("conversationId", selectedId);
+
+    const source = new EventSource(`/api/conversations/stream?${params.toString()}`);
+
+    const refreshInbox = async () => {
+      if (document.hidden || realtimeRefreshRef.current) return;
+      realtimeRefreshRef.current = true;
+      try {
+        await loadConversations();
+        if (selectedId) await loadMessages(selectedId);
+      } finally {
+        realtimeRefreshRef.current = false;
+      }
+    };
+
+    source.addEventListener("inbox-update", () => {
+      void refreshInbox();
+    });
+
+    source.onerror = () => {
+      // EventSource tự reconnect; polling phía trên vẫn là fallback khi stream gián đoạn.
+    };
+
+    return () => {
+      source.close();
+    };
+  }, [loadConversations, loadMessages, pageFilter, selectedId]);
 
   // Auto-scroll khi có tin mới.
   useEffect(() => {
