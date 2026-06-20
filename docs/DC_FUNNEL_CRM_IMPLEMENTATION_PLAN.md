@@ -1472,6 +1472,55 @@ Safety:
 
 ---
 
+### 16.9. Product/Service AI Auditor API Contract
+
+**Status:** `READY_CODED`
+**Owner:** Codex
+**Last updated:** 2026-06-20
+
+```http
+POST /api/ai/products/:id/audit
+GET /api/ai/products/:id/audit
+GET /api/products/:id/ai-audit
+POST /api/products/:id/ai-audit
+```
+
+Notes:
+
+```text
+Auth:
+- Tất cả endpoint require logged-in user.
+- ProductLite phải thuộc currentWorkspaceId; không đọc/ghi audit workspace khác.
+
+Schema additive:
+- ProductLite thêm field nullable: costVnd, marginVnd, targetSegment, painPointsJson, benefitsJson,
+  faqsJson, objectionsJson, offerIdeasJson, salesScript, aiAuditScore, aiAuditJson, aiAuditedAt.
+- Migration tạo: prisma/migrations/20260620_product_ai_auditor/migration.sql.
+- Migration CHƯA apply production trong task này.
+
+POST /api/ai/products/:id/audit:
+- Đọc ProductLite trong workspace hiện tại.
+- Nếu OPENAI_API_KEY có cấu hình: gọi OpenAI để chấm completeness + gợi ý phần thiếu.
+- Nếu chưa có OPENAI_API_KEY: không crash, không 500; dùng rule-based fallback và trả status AI_NOT_CONFIGURED.
+- Chỉ ghi các field audit cache: aiAuditScore, aiAuditJson, aiAuditedAt.
+- KHÔNG ghi đè field dữ liệu gốc do sale nhập.
+- Response: { aiConfigured, status, product, audit, error? }.
+
+GET /api/ai/products/:id/audit:
+- Trả product + audit cache hiện tại.
+- Nếu chưa audit: audit = null.
+
+Alias:
+- /api/products/:id/ai-audit re-export cùng handler để UI cũ/mới có thể gọi an toàn.
+
+Safety:
+- AI chỉ gợi ý; không tự tạo đơn, không tự gửi tin, không tự đổi stage.
+- Money vẫn integer VND.
+- Không log secret hoặc thông tin nhạy cảm.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -3102,6 +3151,14 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ## 18. PR Completion Report
 
 Mỗi PR hoàn thành phải cập nhật vào đây.
+
+### 2026-06-20 (chiều) — Claude — Wire AI Insight + Product Auditor (real)
+
+- **AI Insight (Phase 3 real)** `wire ai insight panel to analyze/insight api` (d8f052b): AiInsightBlock gọi `GET/POST /api/ai/conversations/:id/insight|analyze`; render đủ chỉ dấu + confidence; tạo task từ next action; copy câu trả lời; fallback rule-based hiển thị rõ. Trước đó `add ai insight panel to inbox`.
+- **Product Auditor (Phase 4 real)** `add product ai auditor ui`: route `/products` + `ProductsClient` (list/tìm/tạo nhanh) + `ProductAuditPanel` gọi `GET/POST /api/products/:id/ai-audit` (completeness score, thiếu info, segment, pain point, benefit, FAQ, objection, offer, content angle, sales script, next action). Nav "Sản phẩm" bật thật.
+- **Phase 5 Offer Engine**: AI Insight đã hiển thị "Offer nên dùng"; block offer giữ empty state (chưa có API offer-suggestion riêng).
+- **Phase 6 Growth Report**: route `/dashboard/ai-growth` empty state (chờ `/api/ai/growth-report`).
+- Phụ thuộc prod: cần `prisma migrate deploy` 2 migration AI (xem B-032). typecheck + build PASS.
 
 ### 2026-06-20 — Claude — AI Growth Copilot UI (Phase 3/6/7)
 
@@ -4977,7 +5034,7 @@ Codex phase tiếp theo: AI Conversation Insight foundation, không tự gửi t
 **Owner:** Codex
 **Status:** `DONE_CODED`
 **Branch:** `main`
-**Commit/PR link:** pending Phase 3 commit
+**Commit/PR link:** `e3dd943`
 
 #### Summary
 
@@ -5051,7 +5108,95 @@ npm run build: PASS
 - Runtime analyze/insight needs the new migration applied before production use.
 - OPENAI_API_KEY missing is handled by rule-based fallback; no secret required.
 - Claude needs to wire AiInsightBlock button/read state to the new endpoints.
-- Remaining B-031 items: Offer Engine, Product Auditor, Growth Report.
+- Remaining B-031 items at Phase 3 completion time: Offer Engine, Product Auditor, Growth Report.
+```
+
+---
+
+### 18.21. AI Growth Copilot Backend Prep — Product/Service AI Auditor Backend
+
+**Owner:** Codex
+**Status:** `DONE_CODED`
+**Branch:** `main`
+**Commit/PR link:** pending Phase 4 commit
+
+#### Summary
+
+```text
+Implemented Phase 4 backend foundation for Product/Service Auditor.
+Extended ProductLite with nullable product intelligence/audit fields.
+Added reusable helper auditProductService().
+Added API:
+- POST /api/ai/products/:id/audit
+- GET /api/ai/products/:id/audit
+- POST /api/products/:id/ai-audit (alias)
+- GET /api/products/:id/ai-audit (alias)
+AI remains suggestion/audit-only: no auto-send, no order creation, no pipeline stage changes.
+When OPENAI_API_KEY is missing, API returns a clear AI_NOT_CONFIGURED status and stores a rule-based fallback audit instead of 500.
+```
+
+#### Schema / Migration
+
+```text
+Migration file:
+- prisma/migrations/20260620_product_ai_auditor/migration.sql
+
+Migration review:
+- Additive-only nullable ProductLite columns.
+- No DROP.
+- No DELETE FROM.
+- No TRUNCATE.
+- No SET NOT NULL on existing tables.
+- No ON DELETE CASCADE.
+
+Migration has NOT been applied to production in this task.
+```
+
+#### API Contract
+
+```text
+POST /api/ai/products/:id/audit
+- Requires login.
+- Filters product by currentWorkspaceId.
+- Stores only aiAuditScore, aiAuditJson, aiAuditedAt.
+- Response { aiConfigured, status, product, audit, error? }.
+
+GET /api/ai/products/:id/audit
+- Requires login.
+- Filters product by currentWorkspaceId.
+- Returns product + audit cache or null.
+
+Alias /api/products/:id/ai-audit exports the same handlers for compatibility.
+```
+
+#### Files changed
+
+```text
+prisma/schema.prisma
+prisma/migrations/20260620_product_ai_auditor/migration.sql
+src/lib/order.ts
+src/lib/ai/product-audit.ts
+src/app/api/ai/products/[id]/audit/route.ts
+src/app/api/products/[id]/ai-audit/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests
+
+```text
+npx prisma format: PASS
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+```
+
+#### Risks / Follow-up
+
+```text
+- Runtime product audit needs the new migration applied before production use.
+- OPENAI_API_KEY missing is handled by rule-based fallback; no secret required.
+- Claude can wire Product Auditor UI after migration is applied and Product module UI exists.
+- Remaining B-031 items: Offer Engine and Growth Report.
 ```
 
 ---
@@ -5219,6 +5364,24 @@ Agent nào gặp blocker phải ghi vào đây.
   POST /api/ai/conversations/:id/analyze và GET /api/ai/conversations/:id/insight.
 - Migration additive 20260620_ai_conversation_insight đã tạo nhưng CHƯA apply production; runtime production cần founder duyệt migrate deploy trước khi UI gọi thật.
 - B-031 còn OPEN một phần: Offer Engine, Product Auditor, Growth Report vẫn pending phase sau.
+
+[2026-06-20 · Codex · Product/Service AI Auditor Backend]
+- B-031 UPDATE: Product Auditor API đã CODED/READY trong backend:
+  POST/GET /api/ai/products/:id/audit và alias POST/GET /api/products/:id/ai-audit.
+- ProductLite đã có field audit/source nullable additive; migration 20260620_product_ai_auditor đã tạo nhưng CHƯA apply production.
+- API filter currentWorkspaceId, không đọc/ghi product workspace khác; AI chỉ ghi audit cache, không ghi đè dữ liệu gốc.
+- OPENAI_API_KEY thiếu vẫn trả AI_NOT_CONFIGURED + rule-based fallback, không 500.
+- Tests local: npx prisma format PASS, npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
+- B-031 còn OPEN một phần: Offer Engine và Growth Report vẫn pending phase sau.
+
+[2026-06-20 · Claude · Wire AI Insight + Product Auditor UI]
+- B-031 RESOLVED (phần lớn) — đã WIRE UI THẬT vào API Codex:
+  - AI Insight block (Customer 360) → analyze/insight (commit d8f052b): hiển thị buyingIntent/funnelStage/sentiment/DISC/nhu cầu/phản đối/sản phẩm/thiếu data/offer/next action/câu trả lời + confidence; nút Phân tích & Phân tích lại; tạo task từ "việc nên làm"; copy câu trả lời.
+  - Product Auditor → route /products + list + tạo nhanh + "AI kiểm tra" → audit (commit "add product ai auditor ui"); nav "Sản phẩm" đã bật thật (bỏ soon).
+  - Conversation Copilot (/api/ai/suggest) + route /dashboard/ai-growth đã có trước đó.
+- B-031 còn OPEN: Offer Engine (chưa có /api/ai/.../offer-suggestion — AI Insight đã phủ "Offer nên dùng"); Growth Report số liệu (chưa có /api/ai/growth-report → trang vẫn empty state).
+- B-032 (PRODUCTION — cần founder/Codex, KHÔNG phải reset): UI mới gọi API cần 2 migration additive đã tạo nhưng CHƯA apply prod: `20260620_ai_conversation_insight`, `20260620_product_ai_auditor`. Chạy `npx prisma migrate deploy` trên production thì AI Insight + Product Auditor chạy thật; trước đó UI degrade gọn (hiện lỗi, không crash). Claude KHÔNG tự chạy migrate prod khi founder vắng.
+- typecheck + build PASS. Chưa push (chờ founder duyệt deploy + migrate; deploy không tự chạy migrate).
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -5517,7 +5680,7 @@ Mục tiêu: nâng CRM từ "công cụ quản lý" thành **AI Growth Copilot**
 - DONE AI Insight block (khung phân tích sâu) — UI sẵn, phần phân tích ở trạng thái "chờ backend".
 - DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối, empty state trung thực.
 - PENDING Offer Engine UI — block "Ưu đãi / Gợi ý bán hàng" đang empty state, chờ API.
-- PENDING Product Auditor UI — chờ route Sản phẩm + API.
+- PENDING Product Auditor UI — API backend đã CODED, còn chờ migration production + UI route/module Sản phẩm wire vào.
 
 **Data requirements:** lịch sử message/comment theo conversation, brand profile, danh mục offer/sản phẩm (giá, mô tả, tồn), lịch sử đơn theo khách, stage/lead score, tags — tất cả filter theo `workspaceId`.
 
