@@ -7,7 +7,10 @@ export type NavGroup = { label: string; items: NavItem[] };
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Tổng quan",
-    items: [{ label: "Bảng điều khiển", href: "/dashboard", icon: "dashboard" }],
+    items: [
+      { label: "Bảng điều khiển", href: "/dashboard", icon: "dashboard" },
+      { label: "AI Growth", href: "/dashboard/ai-growth", icon: "sparkles" },
+    ],
   },
   {
     label: "Sale",

@@ -138,6 +138,12 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" />
     </>
   ),
+  sparkles: (
+    <>
+      <path d="M12 4 13.4 8.6 18 10l-4.6 1.4L12 16l-1.4-4.6L6 10l4.6-1.4L12 4Z" />
+      <path d="M18.5 14.5 19 16l1.5.5L19 17l-.5 1.5L18 17l-1.5-.5L18 16l.5-1.5Z" />
+    </>
+  ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   search: (
     <>
