@@ -3,6 +3,8 @@ import { env } from "@/lib/env";
 import { evaluateAutomationRules } from "@/lib/automation";
 import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/security/token-encryption";
+import { extractContactSignals } from "@/lib/contact/extract-contact-signals";
+import { updateCustomerContactSignals } from "@/lib/contact/update-contact-signals";
 
 type RawFeedChange = {
   field?: string;
@@ -44,14 +46,11 @@ export function parsePagination(searchParams: URLSearchParams) {
 }
 
 export function hasVietnamesePhone(text: string | null | undefined): boolean {
-  if (!text) return false;
-  return /(?:\+?84|0)(?:[\s.\-]?\d){8,10}\b/.test(text);
+  return extractContactSignals(text).phones.length > 0;
 }
 
 export function extractVietnamesePhone(text: string | null | undefined): string | null {
-  if (!text) return null;
-  const match = text.match(/(?:\+?84|0)(?:[\s.\-]?\d){8,10}\b/);
-  return match ? match[0].replace(/[^\d+]/g, "") : null;
+  return extractContactSignals(text).phones[0] ?? null;
 }
 
 export async function handleFacebookFeedChange(pageId: string | null, change: RawFeedChange): Promise<void> {
@@ -175,6 +174,14 @@ export async function handleFacebookFeedChange(pageId: string | null, change: Ra
       },
     }),
   ]);
+
+  // Tự nhận diện & điền SĐT/email từ nội dung comment (chỉ điền field trống).
+  await updateCustomerContactSignals({
+    customerId: customer.id,
+    workspaceId,
+    text: message,
+    source: "facebook_comment",
+  });
 
   const automationPayload = {
     commentId: comment.id,

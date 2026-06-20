@@ -2,6 +2,7 @@ import type { Conversation, Customer } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { fetchUserProfile } from "@/lib/facebook/send";
 import { runFunnelEngine, type InboundEvent } from "@/lib/funnel/engine";
+import { updateCustomerContactSignals } from "@/lib/contact/update-contact-signals";
 
 // Một messaging event thô từ Meta (không type chặt để linh hoạt).
 type RawMessaging = any;
@@ -106,6 +107,14 @@ export async function handleMessagingEvent(event: RawMessaging): Promise<void> {
   await prisma.customer.update({
     where: { id: customer.id },
     data: { lastInteractionAt: new Date(), lastActivityAt: new Date() },
+  });
+
+  // Tự nhận diện & điền SĐT/email từ nội dung khách nhắn (chỉ điền field trống).
+  await updateCustomerContactSignals({
+    customerId: customer.id,
+    workspaceId: customer.workspaceId,
+    text: inboundText,
+    source: "messenger",
   });
 
   const inboundCount = await prisma.message.count({
