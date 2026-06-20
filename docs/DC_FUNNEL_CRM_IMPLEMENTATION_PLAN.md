@@ -1019,13 +1019,14 @@ Runtime note:
 
 **Status:** `READY`
 **Owner:** Codex
-**Last updated:** 2026-06-14
+**Last updated:** 2026-06-20
 
 ```http
 GET /api/contacts
 POST /api/contacts
 GET /api/contacts/:id
 PATCH /api/contacts/:id
+GET /api/contacts/:id/customer-360
 POST /api/contacts/:id/notes
 GET /api/contacts/:id/timeline
 ```
@@ -1062,6 +1063,13 @@ POST /api/contacts body:
 GET /api/contacts/:id:
 - Trả Contact 360: thông tin khách, owner, facebookPage, conversations + messages gần nhất, tasks, opportunities, notes.
 
+GET /api/contacts/:id/customer-360:
+- Endpoint đọc-only cho Inbox/Customer 360 Panel.
+- Response `{ contact, summary, orders, opportunities, tasks, notes, offers, tags, recentProducts, activities }`.
+- `summary` gồm totalOrders, totalSpentVnd, openOpportunities, openTasks, lastActivityAt.
+- Recent lists giới hạn nhỏ: orders/tasks/notes/opportunities/offers take 5, activities take 10 để tránh tải panel quá nặng.
+- Mọi query filter `workspaceId` và `customerId`; không trả dữ liệu workspace khác.
+
 PATCH /api/contacts/:id:
 - Update các field Contact 360; hỗ trợ soft-delete qua { deleted: true }.
 - Owner và pageId được validate trong currentWorkspaceId.
@@ -1078,6 +1086,7 @@ Runtime note:
 - Migration 20260614_workspace_core_02_contact_api đã deploy thành công.
 - Runtime smoke test PASS: GET/POST/PATCH Contacts, POST Note, GET Timeline.
 - DB hiện up to date, không pending/failed migration sau PR #4.
+- 2026-06-20: thêm GET /api/contacts/:id/customer-360 cho Customer 360 data contract; không schema/migration mới. Local npm run typecheck, npx prisma generate, npm run build PASS.
 ```
 
 ---
@@ -1442,6 +1451,55 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-20 — Codex
+
+```text
+## 2026-06-20 — Codex
+
+### Đang làm
+- AI Growth Copilot backend prep theo yêu cầu founder, bắt đầu bằng Phase 0/1/2 an toàn.
+
+### Đã xác minh
+- Branch hiện tại: main.
+- Commit đầu ngày hiện tại: e812def auto update contact phone and email from messages.
+- Phase 1 P0 auto cập nhật SĐT/email từ chat đã có trong code:
+  - src/lib/contact/extract-contact-signals.ts
+  - src/lib/contact/update-contact-signals.ts
+  - scripts/backfill-contact-signals.ts
+  - scripts/test-contact-signals.ts
+  - hook Messenger inbound: src/lib/funnel/intake.ts
+  - hook Facebook comment inbound: src/lib/facebook/comments.ts
+- Quy tắc an toàn giữ đúng: không ghi đè phone/email đã có, không in nội dung tin nhắn khách, không reset DB, không migration production.
+
+### Đã làm thêm
+- Thêm Phase 2 Customer 360 data contract:
+  - GET /api/contacts/:id/customer-360
+  - Trả contact, summary, orders, opportunities, tasks, notes, offers, tags, recentProducts, activities.
+  - Mọi query filter workspaceId + customerId; recent lists có limit nhỏ để panel tải nhanh.
+- Cập nhật mục 16.3 Contact API Contract.
+
+### Files đã sửa
+- src/app/api/contacts/[id]/customer-360/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Typecheck/build/test
+- npx tsx scripts/test-contact-signals.ts: PASS (25/25)
+- npm run typecheck: PASS
+- npx prisma generate: PASS
+- npm run build: PASS
+
+### Rủi ro
+- Không có schema/migration mới.
+- Endpoint Customer 360 đọc nhiều bảng nhưng đã giới hạn take 5/10; nếu data cực lớn có thể tối ưu thêm bằng cache/index sau.
+- Backfill contact signals script đang là dry-run mặc định; chưa chạy --apply trên production trong task này.
+
+### Founder cần quyết
+- D-007 vẫn OPEN: có dùng phone/email làm khóa merge/dedup contact chính thức trong cùng workspace không.
+
+### Claude handoff
+- Có thể nối Inbox/Contact UI sang GET /api/contacts/:id/customer-360 để panel phải có dữ liệu orders/opportunities/tasks/notes/offers/recentProducts/activities đầy đủ hơn.
+```
 
 #### 2026-06-14 — Codex
 
@@ -2914,11 +2972,60 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Codex: nếu founder duyệt, xử lý (a) health-check field `tasks`, (b) migrate deploy MetaBusinessConnection. Không chặn việc nhận inbox/comment.
 ```
 
+#### 2026-06-20 — Claude (AI Growth Copilot UI – Phase 3/6/7)
+
+```text
+## 2026-06-20 — Claude — AI Growth Copilot UI (UI owner)
+
+### Đang làm
+- Nâng Inbox + Customer 360 theo hướng AI Growth Copilot. CHỈ UI; không sửa schema/auth/api/env/facebook.
+
+### Đồng bộ trạng thái (Phase 0)
+- Branch main. Phase 1 (Inbox Messenger UI) + Phase 2 (Customer 360 panel đủ block) ĐÃ xong ở commit 9a557f4. Auto phone/email ở e812def.
+
+### Đã làm hôm nay
+- Phase 3: AiInsightBlock trong Customer 360 — khung phân tích sâu (10 chỉ dấu) ở trạng thái "chờ backend" (không fake) + nút "Gợi ý câu trả lời" dùng API hiện có /api/ai/suggest (copy được; AI chỉ gợi ý). Truyền conversationId + aiEnabled qua ContactProfilePanel.
+- Phase 6: route /dashboard/ai-growth + component AiGrowthReport (8 khối: tổng quan/insight/điểm nghẽn/follow-up/offer/sản phẩm/training/việc ngày mai) — empty state trung thực; thêm icon sparkles + nav "AI Growth".
+- Phase 7: thêm mục 26 (AI Growth Copilot Roadmap), 27 (Customer Psychology Layer), 28 (AI Safety Rules) vào plan.
+
+### Files đã sửa
+- src/components/inbox/profile/AiInsightBlock.tsx (mới)
+- src/components/inbox/ContactProfilePanel.tsx, src/components/InboxClient.tsx
+- src/components/dashboard/AiGrowthReport.tsx (mới), src/app/dashboard/ai-growth/page.tsx (mới)
+- src/components/layout/icons.tsx (+sparkles), src/components/layout/nav.ts (+AI Growth)
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17/18/19/26/27/28)
+
+### Có sửa file owner Codex không?
+- Không. Không đụng prisma/schema, auth, api core, env, facebook.
+
+### Typecheck/build
+- npm run typecheck: PASS. npm run build: PASS (/dashboard/ai-growth mới; /inbox 15.4 kB).
+
+### Phase 4/5 — chờ API Codex (không fake, đã dựng empty state/contract)
+- Phase 4 Product Auditor: chưa có route Sản phẩm → để PENDING, cần API `POST/GET /api/ai/products/:id/audit` (mục 26).
+- Phase 5 Offer Engine: block "Ưu đãi / Gợi ý bán hàng" đang empty state, cần `POST /api/ai/conversations/:id/offer-suggestion`.
+
+### Cần Codex bổ sung API (mục 26)
+- analyze/insight, offer-suggestion, product audit, growth-report.
+
+### Cần founder quyết
+- Có làm module Sản phẩm (Phase 4) trước hay chờ inbox/AI ổn định.
+```
+
 ---
 
 ## 18. PR Completion Report
 
 Mỗi PR hoàn thành phải cập nhật vào đây.
+
+### 2026-06-20 — Claude — AI Growth Copilot UI (Phase 3/6/7)
+
+- **Phase 3 — AI Insight panel** (`add ai insight panel to inbox`): AiInsightBlock trong Customer 360; phân tích sâu "chờ backend" (không fake) + gợi ý câu trả lời qua `/api/ai/suggest`. Files: `src/components/inbox/profile/AiInsightBlock.tsx` (mới), `ContactProfilePanel.tsx`, `InboxClient.tsx`.
+- **Phase 6 — AI Growth Report** (`add ai growth report ui`): route `/dashboard/ai-growth` + `AiGrowthReport` (8 khối, empty state), icon `sparkles`, nav "AI Growth". Files: `src/app/dashboard/ai-growth/page.tsx` (mới), `src/components/dashboard/AiGrowthReport.tsx` (mới), `src/components/layout/icons.tsx`, `nav.ts`.
+- **Phase 7 — Docs**: mục 26 (AI Growth Copilot Roadmap), 27 (Customer Psychology Layer), 28 (AI Safety Rules).
+- **Phase 1/2** đã hoàn thành trước đó (Inbox Messenger UI + Customer 360 panel — commit 9a557f4).
+- **Phase 4 (Product Auditor) / Phase 5 (Offer Engine)**: UI ở empty state, PENDING API Codex (B-031).
+- typecheck PASS · build PASS. Tiếng Việt 100%, mobile-first, không fake dữ liệu.
 
 ### 18.1. PR #1 — Secure & Stabilize
 
@@ -4702,6 +4809,84 @@ Claude: no UI handoff required for this backend/deploy fix.
 
 ---
 
+### 18.19. AI Growth Copilot Backend Prep — Contact Signals + Customer 360
+
+**Owner:** Codex
+**Status:** `DONE`
+**Branch:** `main`
+**Commit/PR link:** `e812def` + latest Customer 360 commit
+
+#### Summary
+
+```text
+Phase 1 P0 contact signal extraction đã có: tự nhận diện SĐT Việt Nam/email từ Messenger/comment inbound,
+normalize SĐT về 0xxxxxxxxx, email lowercase, chỉ điền Customer.phone/email khi field đang trống, không ghi đè dữ liệu thật.
+Có script backfill an toàn mặc định dry-run để quét message inbound cũ.
+Phase 2 thêm endpoint đọc-only Customer 360 data contract cho Inbox/Contact panel.
+Không schema change, không migration, không reset DB, không deploy.
+```
+
+#### API Contract
+
+```http
+GET /api/contacts/:id/customer-360
+```
+
+```text
+Response data:
+- contact: thông tin chung, owner, facebookPage, stage/score/tags/contact fields.
+- summary: totalOrders, totalSpentVnd, openOpportunities, openTasks, lastActivityAt.
+- orders: 5 đơn gần nhất kèm items, owner, opportunity.
+- opportunities: 5 cơ hội gần nhất kèm pipeline/stage/owner.
+- tasks: 5 task gần nhất.
+- notes: 5 note gần nhất.
+- offers: 5 offer liên quan theo stage/tag/page.
+- recentProducts: 5 sản phẩm gần nhất từ order items.
+- activities: 10 activity tổng hợp từ note/conversation/task/opportunity.
+Tất cả query require logged-in user và filter currentWorkspaceId.
+```
+
+#### Files changed
+
+```text
+src/app/api/contacts/[id]/customer-360/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+Đã xác minh có sẵn từ commit e812def:
+src/lib/contact/extract-contact-signals.ts
+src/lib/contact/update-contact-signals.ts
+scripts/backfill-contact-signals.ts
+scripts/test-contact-signals.ts
+src/lib/funnel/intake.ts
+src/lib/facebook/comments.ts
+```
+
+#### Tests
+
+```text
+npx tsx scripts/test-contact-signals.ts: PASS (25/25)
+npm run typecheck: PASS
+npx prisma generate: PASS
+npm run build: PASS
+```
+
+#### Risks / Follow-up
+
+```text
+- Chưa chạy backfill --apply trên production; script mặc định dry-run để founder/Codex review summary trước.
+- D-007 vẫn OPEN: cần chốt merge/dedup bằng phone/email trước khi thêm unique constraint hoặc auto-merge contact.
+- AI Insight/Offer Engine/Product Auditor chưa làm trong bước này; nền Contact 360 và contact signals đã sẵn sàng cho phase sau.
+```
+
+#### Handoff
+
+```text
+Claude có thể dùng /api/contacts/:id/customer-360 cho panel phải trong Inbox/Contact UI.
+Codex phase tiếp theo: AI Conversation Insight foundation, không tự gửi tin nhắn và có fallback khi OPENAI_API_KEY chưa cấu hình.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -4716,7 +4901,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
-| D-006 | Realtime giữ polling 5s hay nâng WebSocket? | Founder/PM | OPEN | Đề xuất: giữ polling MVP1 |
+| D-006 | Realtime giữ polling 5s hay nâng WebSocket? | Founder/PM | DONE | 2026-06-18: Founder yêu cầu inbox realtime; Codex đã triển khai SSE `/api/conversations/stream` + Graph sync fallback, giữ polling dài hơn làm backup. Không dùng WebSocket để giảm rủi ro hạ tầng. |
 | D-007 | SĐT có là khóa dedup/merge contact trong cùng workspace không? | Claude (PM) | OPEN | Đề xuất: dùng SĐT + email làm tín hiệu dedup; Codex chốt ràng buộc khi làm Contact API |
 | D-008 | Khởi tạo git + tạo branch theo plan mục 7 trước PR #2? | Claude | DONE | Đã git init và tạo branch codex/02-workspace-core. |
 
@@ -4853,6 +5038,12 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-029 (HEALTH CHECK BUG, phụ — không chặn nhận): HiChaos status=ERROR, lastError `(#100) Tried accessing nonexisting field (tasks)` (Health Check 12:47). Handler vẫn nhận webhook cho page ERROR (chỉ bỏ qua DISCONNECTED). Đề xuất Codex rà field `tasks` trong runPageHealthCheck/Graph call.
 - B-030 (MIGRATION DRIFT, phụ): model `MetaBusinessConnection` có trong schema nhưng bảng CHƯA tồn tại ở DB production ⇒ `/api/integrations/facebook/businesses` 500. Thuộc module BM/Catalog đang hoãn. Cần `npx prisma migrate deploy` (additive) khi founder duyệt.
 - Không sửa code app (nguyên nhân là hạ tầng + Meta config). Chỉ thêm scripts/prod-*.js (chẩn đoán read-only, không secret) + cập nhật plan.
+
+[2026-06-20 · Claude · AI Growth Copilot UI]
+- B-031 (UI PENDING API): AI Insight (phân tích sâu), Offer Engine, Product Auditor, Growth Report — UI đã dựng ở trạng thái empty/coming-soon (KHÔNG fake). Cần Codex cấp API (xem mục 26): analyze/insight, offer-suggestion, product audit, growth-report. Khi READY, Claude wire ngay.
+- B-031 NOTE: Conversation Copilot (gợi ý câu trả lời) đã chạy thật nhờ /api/ai/suggest (đã có) — dùng ở composer + AI Insight block.
+- D-010 (FOUNDER): có ưu tiên dựng module Sản phẩm (Phase 4: list + audit) trước không? Hiện nav "Sản phẩm" vẫn soon, chưa có route. Phase 4 chờ quyết định + API.
+- Không đụng schema/auth/api core/env/facebook. typecheck + build PASS.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -5131,3 +5322,63 @@ Anh Đức cần kiểm tra trước khi giao triển khai:
 ## 25. Summary One-liner
 
 > D.C Funnel Bot hiện là một Facebook Funnel Bot single-brand khá chắc. Để thành D.C FUNNEL CRM, triển khai Hướng A multi-tenant theo thứ tự: Security → Workspace → Pipeline → Contact 360 → Order Lite → Comment-to-Inbox → Automation → Dashboard, với Codex làm backend/core và Claude làm product UI/UX theo API contract.
+
+---
+
+## 26. AI Growth Copilot Roadmap
+
+Mục tiêu: nâng CRM từ "công cụ quản lý" thành **AI Growth Copilot** — đọc dữ liệu, hiểu khách, gợi ý hành động bán hàng theo thời gian thực. AI **chỉ gợi ý**, sale là người quyết định (xem mục 28).
+
+**5 lớp năng lực:**
+
+1. **Product/Service Auditor** — AI đọc sản phẩm/dịch vụ, chấm độ đầy đủ thông tin, chỉ ra phần còn thiếu (giá, USP, pain point, FAQ, objection handling, offer, sales script, content angle), đề xuất phân khúc khách phù hợp.
+2. **Customer Psychology Layer** — AI phân tích tín hiệu hội thoại/hành vi: mức độ mua, giai đoạn phễu, nhu cầu, phản đối, phong cách giao tiếp, phân khúc (xem mục 27).
+3. **Conversation Copilot** — trong Inbox, AI tóm tắt hội thoại, gợi ý câu trả lời, next-best-action; sale duyệt rồi mới gửi.
+4. **Offer Engine** — AI đề xuất offer/combo/sản phẩm theo ngữ cảnh hội thoại + tồn kho + lịch sử mua.
+5. **Optimization Loop** — AI tổng hợp mỗi ngày: điểm nghẽn pipeline, khách cần follow-up, offer nên test, sản phẩm nên đẩy, ghi chú huấn luyện sale, việc nên làm ngày mai (route `/dashboard/ai-growth`).
+
+**Trạng thái UI (Claude) — 2026-06-20:**
+- DONE Conversation Copilot (gợi ý câu trả lời) — nút AI ở composer + AI Insight block trong Customer 360 (dùng `POST /api/ai/suggest`).
+- DONE AI Insight block (khung phân tích sâu) — UI sẵn, phần phân tích ở trạng thái "chờ backend".
+- DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối, empty state trung thực.
+- PENDING Offer Engine UI — block "Ưu đãi / Gợi ý bán hàng" đang empty state, chờ API.
+- PENDING Product Auditor UI — chờ route Sản phẩm + API.
+
+**Data requirements:** lịch sử message/comment theo conversation, brand profile, danh mục offer/sản phẩm (giá, mô tả, tồn), lịch sử đơn theo khách, stage/lead score, tags — tất cả filter theo `workspaceId`.
+
+**API contract cần Codex bổ sung (Claude KHÔNG tự tạo):**
+- `POST /api/ai/conversations/:id/analyze` → tạo insight (các trường ở mục 27).
+- `GET /api/ai/conversations/:id/insight` → đọc insight gần nhất (cache).
+- `POST /api/ai/conversations/:id/offer-suggestion` → offer phù hợp + lý do + câu gợi ý.
+- `POST /api/ai/products/:id/audit` + `GET /api/ai/products/:id/audit` → audit sản phẩm.
+- `GET /api/ai/growth-report?range=today` → dữ liệu 8 khối Growth Optimizer.
+
+## 27. Customer Psychology Layer
+
+AI suy luận theo **tín hiệu hội thoại & hành vi**, không suy đoán về con người (xem mục 28). Các mô thức:
+
+| Mô thức | Mô tả | Giá trị gợi ý |
+|---|---|---|
+| Buying Intent | Mức độ sẵn sàng mua | Lạnh / Ấm / Nóng / Sẵn sàng chốt |
+| Funnel Stage | Giai đoạn phễu | Awareness / Consideration / Decision / Retention |
+| JTBD | Việc khách cần giải quyết | chuỗi nhu cầu chính |
+| Objection Analysis | Phản đối chính | giá / niềm tin / thời điểm / nhu cầu |
+| Sentiment | Tâm trạng hội thoại | tích cực / trung tính / lo ngại / khó chịu |
+| Communication Style (DISC) | Phong cách giao tiếp | D / I / S / C (tín hiệu, không tuyệt đối) |
+| Customer Segment | Phân khúc | theo ngành / giá trị / hành vi |
+| RFM | Recency / Frequency / Monetary | điểm R-F-M từ lịch sử đơn |
+| Next Best Action | Việc nên làm tiếp | gửi offer / hỏi nhu cầu / chốt / hẹn lại |
+| Offer Fit | Offer phù hợp nhất | offer id + lý do |
+| Product Interest | Sản phẩm đang quan tâm | danh sách sản phẩm |
+
+Mỗi insight kèm `confidence` (độ tin cậy) để sale biết trọng số.
+
+## 28. AI Safety Rules
+
+- **AI chỉ gợi ý** — không tự gửi tin cho khách; sale luôn duyệt trước khi gửi.
+- **Không phán xét con người** — viết theo hành vi: "tín hiệu hội thoại cho thấy...", KHÔNG viết "khách nghèo / thiếu quyết đoán / khó tính".
+- **Tôn trọng dữ liệu workspace** — AI chỉ đọc/ghi trong `workspaceId` hiện tại; không rò rỉ chéo tenant.
+- **Không log dữ liệu nhạy cảm** — không log nội dung tin nhắn đầy đủ, không log SĐT/email/token đầy đủ (mask khi cần).
+- **Không ghi đè dữ liệu thật** — AI điền field trống, không đè dữ liệu sale đã nhập.
+- **Minh bạch trạng thái** — thiếu `OPENAI_API_KEY` hoặc API chưa có → hiển thị rõ "AI chưa bật / đang chờ backend", không fake kết quả.
+- **Con người quyết định cuối** — mọi hành động bán hàng (gửi tin, tạo đơn, đổi stage) do sale xác nhận.
