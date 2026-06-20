@@ -1521,6 +1521,53 @@ Safety:
 
 ---
 
+### 16.10. Offer Engine API Contract
+
+**Status:** `READY_CODED`
+**Owner:** Codex
+**Last updated:** 2026-06-20
+
+```http
+POST /api/ai/conversations/:id/offer-suggestion
+```
+
+Notes:
+
+```text
+Auth:
+- Endpoint require logged-in user.
+- Conversation phải thuộc currentWorkspaceId; không đọc dữ liệu workspace khác.
+
+Schema:
+- Không tạo schema/migration mới trong Phase 5.
+- Endpoint chỉ đọc Conversation/Customer/Message/Offer/ProductLite/Order trong workspace.
+- Không ghi dữ liệu thật, không gửi tin, không tạo đơn, không đổi stage.
+
+POST /api/ai/conversations/:id/offer-suggestion:
+- Đọc hội thoại gần đây, tags/stage của customer, offer active, product active và đơn gần đây.
+- Nếu OPENAI_API_KEY có cấu hình: gọi OpenAI để chọn offer/sản phẩm phù hợp.
+- Nếu chưa có OPENAI_API_KEY: không crash, không 500; dùng rule-based fallback và trả status AI_NOT_CONFIGURED.
+- Response: { aiConfigured, status, suggestion, error? }.
+
+Suggestion fields:
+- offerId
+- offerTitle
+- productId
+- productName
+- reason
+- suggestedReply
+- nextActions
+- alternatives
+- confidence
+
+Safety:
+- Chỉ chọn từ offer/product có trong workspace hiện tại.
+- Không bịa giá/chính sách ngoài dữ liệu đã lưu.
+- AI chỉ gợi ý; sale quyết định trước khi gửi tin hoặc tạo đơn.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -5201,6 +5248,70 @@ npm run build: PASS
 
 ---
 
+### 18.22. AI Growth Copilot Backend Prep — Offer Engine Backend
+
+**Owner:** Codex
+**Status:** `DONE_CODED`
+**Branch:** `main`
+**Commit/PR link:** pending Phase 5 commit
+
+#### Summary
+
+```text
+Implemented Phase 5 backend foundation for Offer Engine.
+Added reusable helper suggestOfferForConversation().
+Added API:
+- POST /api/ai/conversations/:id/offer-suggestion
+AI remains suggestion-only: no auto-send, no order creation, no pipeline/contact mutation.
+When OPENAI_API_KEY is missing, API returns a clear AI_NOT_CONFIGURED status with rule-based fallback instead of 500.
+```
+
+#### Schema / Migration
+
+```text
+No schema change.
+No migration file.
+Endpoint reads existing Conversation/Customer/Message/Offer/ProductLite/Order data only.
+```
+
+#### API Contract
+
+```text
+POST /api/ai/conversations/:id/offer-suggestion
+- Requires login.
+- Filters conversation and all source data by currentWorkspaceId.
+- Returns { aiConfigured, status, suggestion, error? }.
+- suggestion includes offerId, offerTitle, productId, productName, reason, suggestedReply,
+  nextActions, alternatives, confidence.
+```
+
+#### Files changed
+
+```text
+src/lib/ai/offer-suggestion.ts
+src/app/api/ai/conversations/[id]/offer-suggestion/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests
+
+```text
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+```
+
+#### Risks / Follow-up
+
+```text
+- Uses existing offer/product data quality; weak data means lower confidence fallback.
+- OPENAI_API_KEY missing is handled by rule-based fallback; no secret required.
+- Claude can wire Offer Engine UI block to this endpoint.
+- Remaining B-031 item: Growth Report API.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -5382,6 +5493,15 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-031 còn OPEN: Offer Engine (chưa có /api/ai/.../offer-suggestion — AI Insight đã phủ "Offer nên dùng"); Growth Report số liệu (chưa có /api/ai/growth-report → trang vẫn empty state).
 - B-032 (PRODUCTION — cần founder/Codex, KHÔNG phải reset): UI mới gọi API cần 2 migration additive đã tạo nhưng CHƯA apply prod: `20260620_ai_conversation_insight`, `20260620_product_ai_auditor`. Chạy `npx prisma migrate deploy` trên production thì AI Insight + Product Auditor chạy thật; trước đó UI degrade gọn (hiện lỗi, không crash). Claude KHÔNG tự chạy migrate prod khi founder vắng.
 - typecheck + build PASS. Chưa push (chờ founder duyệt deploy + migrate; deploy không tự chạy migrate).
+
+[2026-06-20 · Codex · Offer Engine Backend]
+- B-031 UPDATE: Offer Engine API đã CODED/READY trong backend:
+  POST /api/ai/conversations/:id/offer-suggestion.
+- Không tạo migration mới; API chỉ đọc conversation/customer/messages/offers/products/orders trong currentWorkspaceId.
+- AI chỉ gợi ý offer/sản phẩm + suggestedReply; KHÔNG tự gửi tin, KHÔNG tạo đơn, KHÔNG đổi stage.
+- OPENAI_API_KEY thiếu vẫn trả AI_NOT_CONFIGURED + rule-based fallback, không 500.
+- Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
+- B-031 còn OPEN một phần: Growth Report API vẫn pending phase sau.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -5679,7 +5799,7 @@ Mục tiêu: nâng CRM từ "công cụ quản lý" thành **AI Growth Copilot**
 - DONE Conversation Copilot (gợi ý câu trả lời) — nút AI ở composer + AI Insight block trong Customer 360 (dùng `POST /api/ai/suggest`).
 - DONE AI Insight block (khung phân tích sâu) — UI sẵn, phần phân tích ở trạng thái "chờ backend".
 - DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối, empty state trung thực.
-- PENDING Offer Engine UI — block "Ưu đãi / Gợi ý bán hàng" đang empty state, chờ API.
+- PENDING Offer Engine UI — API backend đã CODED, còn chờ UI wire vào block "Ưu đãi / Gợi ý bán hàng".
 - PENDING Product Auditor UI — API backend đã CODED, còn chờ migration production + UI route/module Sản phẩm wire vào.
 
 **Data requirements:** lịch sử message/comment theo conversation, brand profile, danh mục offer/sản phẩm (giá, mô tả, tồn), lịch sử đơn theo khách, stage/lead score, tags — tất cả filter theo `workspaceId`.
