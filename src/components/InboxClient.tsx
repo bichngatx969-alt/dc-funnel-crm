@@ -346,9 +346,11 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
             <aside className="absolute right-0 top-0 z-30 h-full w-[330px] max-w-[88%] overflow-hidden border-l border-gray-100 bg-white shadow-2xl xl:static xl:z-auto xl:w-[340px] xl:max-w-none xl:shadow-none">
               <ContactProfilePanel
                 customerId={customer.id}
+                conversationId={selectedId!}
                 baseCustomer={customer}
                 pageName={pageName}
                 emailEnabled={emailEnabled}
+                aiEnabled={aiEnabled}
                 onClose={() => setShowProfile(false)}
                 onMutated={() => {
                   void loadConversations();

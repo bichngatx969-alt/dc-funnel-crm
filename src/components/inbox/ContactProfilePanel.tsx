@@ -5,6 +5,7 @@ import { apiGet, apiSend } from "@/lib/client";
 import { ContactHeaderCard } from "./profile/ContactHeaderCard";
 import { ContactInfoBlock } from "./profile/ContactInfoBlock";
 import { SalesStageBlock } from "./profile/SalesStageBlock";
+import { AiInsightBlock } from "./profile/AiInsightBlock";
 import { PurchaseHistoryBlock } from "./profile/PurchaseHistoryBlock";
 import { OfferSuggestionBlock } from "./profile/OfferSuggestionBlock";
 import { TagsBlock } from "./profile/TagsBlock";
@@ -22,16 +23,20 @@ const COUNTED_OUT = new Set(["CANCELLED", "REFUNDED"]);
 
 export function ContactProfilePanel({
   customerId,
+  conversationId,
   baseCustomer,
   pageName,
   emailEnabled,
+  aiEnabled,
   onClose,
   onMutated,
 }: {
   customerId: string;
+  conversationId: string;
   baseCustomer: any;
   pageName: string | null;
   emailEnabled: boolean;
+  aiEnabled: boolean;
   onClose: () => void;
   onMutated: () => void;
 }) {
@@ -142,6 +147,7 @@ export function ContactProfilePanel({
         />
 
         <SalesStageBlock contact={contact} onChangeStage={changeStage} />
+        <AiInsightBlock conversationId={conversationId} aiEnabled={aiEnabled} />
         <PurchaseHistoryBlock orders={orders} onCreateOrder={() => setShowOrder(true)} />
         <FollowUpTaskBlock tasks={contact?.tasks ?? []} onCreateTask={createTask} />
         <OfferSuggestionBlock />
