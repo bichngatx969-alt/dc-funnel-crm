@@ -1568,6 +1568,42 @@ Safety:
 
 ---
 
+### 16.11. AI Growth Report API Contract
+
+**Status:** `READY_CODED`
+**Owner:** Codex
+**Last updated:** 2026-06-20
+
+```http
+GET /api/ai/growth-report?range=today|7d|30d|90d|custom&from=YYYY-MM-DD&to=YYYY-MM-DD
+```
+
+Notes:
+
+```text
+Auth:
+- Endpoint require logged-in user.
+- Tất cả data filter currentWorkspaceId.
+
+Schema:
+- Không tạo schema/migration mới trong Phase 6.
+- Endpoint chỉ đọc Founder Stats + ProductLite + Offer trong workspace.
+
+Response:
+- { generatedAt, mode, aiConfigured, range, blocks, stats }.
+- mode hiện là rule_based để không phụ thuộc secret AI.
+- blocks gồm 8 khối:
+  overview, insights, bottlenecks, followUps, offerTests, products, salesTraining, tomorrowActions.
+
+Safety:
+- Không ghi DB.
+- Không gửi tin/khởi tạo automation/tạo đơn.
+- Time range dùng helper Founder Stats đã chuẩn Asia/Ho_Chi_Minh.
+- Money fields là integer VND từ source stats.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -5312,6 +5348,70 @@ npm run build: PASS
 
 ---
 
+### 18.23. AI Growth Copilot Backend Prep — AI Growth Report API
+
+**Owner:** Codex
+**Status:** `DONE_CODED`
+**Branch:** `main`
+**Commit/PR link:** pending Phase 6 commit
+
+#### Summary
+
+```text
+Implemented Phase 6 backend foundation for AI Growth Report / Optimization Loop.
+Added reusable helper buildAiGrowthReport().
+Added API:
+- GET /api/ai/growth-report
+The report returns 8 blocks: overview, insights, bottlenecks, followUps, offerTests,
+products, salesTraining, tomorrowActions.
+Current mode is rule_based, so it does not require AI secret and does not call external AI.
+```
+
+#### Schema / Migration
+
+```text
+No schema change.
+No migration file.
+Endpoint reads Founder Stats + ProductLite + Offer data only.
+```
+
+#### API Contract
+
+```text
+GET /api/ai/growth-report?range=today|7d|30d|90d|custom&from=YYYY-MM-DD&to=YYYY-MM-DD
+- Requires login.
+- Filters all source data by currentWorkspaceId.
+- Returns { generatedAt, mode, aiConfigured, range, blocks, stats }.
+- Uses Asia/Ho_Chi_Minh range logic from Founder Stats.
+```
+
+#### Files changed
+
+```text
+src/lib/ai/growth-report.ts
+src/app/api/ai/growth-report/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests
+
+```text
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+```
+
+#### Risks / Follow-up
+
+```text
+- Rule-based report quality depends on CRM data completeness.
+- No external AI call yet; Anthropic/Claude or OpenAI provider integration should be a separate phase because it needs secret/env.
+- B-031 code-level API backlog is now RESOLVED for analyze/insight, product audit, offer suggestion, growth report.
+- Production runtime still needs B-032 migrations applied for AI Insight/Product Auditor tables/columns.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -5502,6 +5602,14 @@ Agent nào gặp blocker phải ghi vào đây.
 - OPENAI_API_KEY thiếu vẫn trả AI_NOT_CONFIGURED + rule-based fallback, không 500.
 - Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
 - B-031 còn OPEN một phần: Growth Report API vẫn pending phase sau.
+
+[2026-06-20 · Codex · AI Growth Report API]
+- B-031 CODE-LEVEL RESOLVED: Growth Report API đã CODED/READY:
+  GET /api/ai/growth-report.
+- Không tạo migration mới; API đọc Founder Stats + ProductLite + Offer trong currentWorkspaceId và trả 8 block Growth Optimizer.
+- mode hiện là rule_based để không cần secret AI; không ghi DB, không gửi tin, không tạo đơn/automation.
+- Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
+- B-031 còn phụ thuộc runtime production: cần apply 2 migration AI đã tạo trước đó để AI Insight/Product Auditor chạy thật (xem B-032). Growth Report và Offer Engine không cần migration mới.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -5798,7 +5906,7 @@ Mục tiêu: nâng CRM từ "công cụ quản lý" thành **AI Growth Copilot**
 **Trạng thái UI (Claude) — 2026-06-20:**
 - DONE Conversation Copilot (gợi ý câu trả lời) — nút AI ở composer + AI Insight block trong Customer 360 (dùng `POST /api/ai/suggest`).
 - DONE AI Insight block (khung phân tích sâu) — UI sẵn, phần phân tích ở trạng thái "chờ backend".
-- DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối, empty state trung thực.
+- DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối; API `/api/ai/growth-report` đã CODED để wire dữ liệu thật.
 - PENDING Offer Engine UI — API backend đã CODED, còn chờ UI wire vào block "Ưu đãi / Gợi ý bán hàng".
 - PENDING Product Auditor UI — API backend đã CODED, còn chờ migration production + UI route/module Sản phẩm wire vào.
 
