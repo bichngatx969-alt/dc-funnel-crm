@@ -147,7 +147,7 @@ export function ContactProfilePanel({
         />
 
         <SalesStageBlock contact={contact} onChangeStage={changeStage} />
-        <AiInsightBlock conversationId={conversationId} aiEnabled={aiEnabled} />
+        <AiInsightBlock conversationId={conversationId} aiEnabled={aiEnabled} onCreateTask={createTask} />
         <PurchaseHistoryBlock orders={orders} onCreateOrder={() => setShowOrder(true)} />
         <FollowUpTaskBlock tasks={contact?.tasks ?? []} onCreateTask={createTask} />
         <OfferSuggestionBlock />
