@@ -253,6 +253,8 @@ model Workspace {
   orders           Order[]
   automationRules  AutomationRule[]
   automationRuns   AutomationRun[]
+  aiInsights       AIConversationInsight[]
+  aiAnalysisRuns   AIAnalysisRun[]
   emailTemplates   EmailTemplate[]
   emailSequences   EmailSequence[]
 
@@ -531,6 +533,7 @@ model Customer {
   emailLogs         EmailLog[]
   emailEnrollments  EmailAutomationEnrollment[]
   unsubscribeTokens UnsubscribeToken[]
+  aiInsights        AIConversationInsight[]
   workspace         Workspace?                  @relation(fields: [workspaceId], references: [id])
   owner             User?                       @relation("OwnedCustomers", fields: [ownerId], references: [id], onDelete: SetNull)
   facebookPage      FacebookPage?               @relation(fields: [pageId], references: [pageId])
@@ -580,12 +583,13 @@ model Conversation {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  workspace        Workspace?        @relation(fields: [workspaceId], references: [id])
-  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  facebookPage     FacebookPage?     @relation(fields: [pageId], references: [pageId])
-  assignedTo       User?             @relation("AssignedConversations", fields: [assignedToId], references: [id])
+  workspace        Workspace?              @relation(fields: [workspaceId], references: [id])
+  customer         Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  facebookPage     FacebookPage?           @relation(fields: [pageId], references: [pageId])
+  assignedTo       User?                   @relation("AssignedConversations", fields: [assignedToId], references: [id])
   messages         Message[]
   facebookComments FacebookComment[]
+  aiInsights       AIConversationInsight[]
 
   @@index([status])
   @@index([lastMessageAt])
@@ -932,6 +936,59 @@ model AutomationRun {
   @@index([status])
   @@index([createdAt])
   @@index([workspaceId, status, createdAt], map: "AutomationRun_ws_status_created_idx")
+}
+
+model AIConversationInsight {
+  id                     String   @id @default(cuid())
+  workspaceId            String
+  customerId             String
+  conversationId         String
+  buyingIntent           String?
+  funnelStage            String?
+  communicationStyle     String?
+  sentiment              String?
+  customerSegment        String?
+  mainNeed               String?
+  objectionsJson         Json?
+  productsInterestedJson Json?
+  missingDataJson        Json?
+  nextBestAction         String?
+  recommendedOffer       String?
+  suggestedReply         String?
+  confidence             Float?
+  rawJson                Json?
+  modelName              String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([conversationId])
+  @@index([workspaceId, conversationId, updatedAt], map: "AIConversationInsight_ws_conv_updated_idx")
+}
+
+model AIAnalysisRun {
+  id          String   @id @default(cuid())
+  workspaceId String
+  sourceType  String
+  sourceId    String
+  status      String
+  inputHash   String?
+  outputJson  Json?
+  error       String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([sourceType, sourceId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([workspaceId, sourceType, sourceId, createdAt], map: "AIAnalysisRun_ws_source_created_idx")
 }
 
 // ----------------------------------------------------------------

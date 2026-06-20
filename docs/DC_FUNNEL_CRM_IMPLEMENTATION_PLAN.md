@@ -1411,6 +1411,67 @@ Runtime note:
 
 ---
 
+### 16.8. AI Conversation Insight API Contract
+
+**Status:** `READY_CODED`
+**Owner:** Codex
+**Last updated:** 2026-06-20
+
+```http
+POST /api/ai/conversations/:id/analyze
+GET /api/ai/conversations/:id/insight
+```
+
+Notes:
+
+```text
+Auth:
+- Tất cả endpoint require logged-in user.
+- Conversation phải thuộc currentWorkspaceId; không đọc/ghi insight workspace khác.
+
+Schema additive:
+- AIConversationInsight: lưu insight mới theo workspaceId/customerId/conversationId.
+- AIAnalysisRun: log lần phân tích theo workspaceId/sourceType/sourceId/status/inputHash.
+- Migration tạo: prisma/migrations/20260620_ai_conversation_insight/migration.sql.
+- Migration CHƯA apply production trong task này.
+
+POST /api/ai/conversations/:id/analyze:
+- Đọc hội thoại + customer + messages gần đây + opportunities/orders/offers trong workspace.
+- Nếu OPENAI_API_KEY có cấu hình: gọi OpenAI và lưu insight.
+- Nếu chưa có OPENAI_API_KEY: không crash, không 500; dùng rule-based fallback và trả status AI_NOT_CONFIGURED.
+- AI chỉ phân tích/gợi ý, KHÔNG tự gửi tin nhắn cho khách.
+- Response: { aiConfigured, status, insight, run, error? }.
+
+GET /api/ai/conversations/:id/insight:
+- Trả insight mới nhất cho hội thoại.
+- Nếu chưa có insight: { insight: null }.
+
+Insight fields:
+- buyingIntent
+- funnelStage
+- communicationStyle
+- sentiment
+- customerSegment
+- mainNeed
+- objectionsJson
+- productsInterestedJson
+- missingDataJson
+- nextBestAction
+- recommendedOffer
+- suggestedReply
+- confidence
+- rawJson
+- modelName
+
+Safety:
+- Không log nội dung chat.
+- Không tự gửi message.
+- Rule-based fallback chỉ dựa trên tín hiệu hội thoại, không phán xét con người.
+- Money/order data chỉ đọc trong workspace hiện tại.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -1499,6 +1560,30 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Claude handoff
 - Có thể nối Inbox/Contact UI sang GET /api/contacts/:id/customer-360 để panel phải có dữ liệu orders/opportunities/tasks/notes/offers/recentProducts/activities đầy đủ hơn.
+
+### Phase 3 — AI Conversation Insight Foundation
+- Thêm schema additive AIConversationInsight + AIAnalysisRun.
+- Tạo migration review-only: prisma/migrations/20260620_ai_conversation_insight/migration.sql.
+- Thêm helper src/lib/ai/conversation-analysis.ts:
+  - Có OpenAI key: phân tích hội thoại và lưu insight.
+  - Chưa có OpenAI key: rule-based fallback, không 500, status AI_NOT_CONFIGURED.
+  - Không tự gửi tin nhắn, không log nội dung chat.
+- Thêm API:
+  - POST /api/ai/conversations/:id/analyze
+  - GET /api/ai/conversations/:id/insight
+- Cập nhật mục 16.8 AI Conversation Insight API Contract.
+
+### Phase 3 files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260620_ai_conversation_insight/migration.sql
+- src/lib/ai/conversation-analysis.ts
+- src/app/api/ai/conversations/[id]/analyze/route.ts
+- src/app/api/ai/conversations/[id]/insight/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Phase 3 risk
+- Migration additive-only nhưng CHƯA apply production trong task này.
+- UI AiInsightBlock vẫn cần Claude wire từ placeholder sang 2 endpoint mới.
 ```
 
 #### 2026-06-14 — Codex
@@ -4887,6 +4972,90 @@ Codex phase tiếp theo: AI Conversation Insight foundation, không tự gửi t
 
 ---
 
+### 18.20. AI Growth Copilot Backend Prep — AI Conversation Insight Foundation
+
+**Owner:** Codex
+**Status:** `DONE_CODED`
+**Branch:** `main`
+**Commit/PR link:** pending Phase 3 commit
+
+#### Summary
+
+```text
+Implemented Phase 3 backend foundation for Customer Psychology Layer / Conversation Copilot insight.
+Added additive Prisma models AIConversationInsight and AIAnalysisRun plus a review-only migration.
+Added reusable helper analyzeConversationForSales().
+Added API:
+- POST /api/ai/conversations/:id/analyze
+- GET /api/ai/conversations/:id/insight
+AI remains suggestion/analysis-only: no auto-send, no auto-close, no customer-facing action.
+When OPENAI_API_KEY is missing, API returns a clear AI_NOT_CONFIGURED status and stores a rule-based fallback insight instead of 500.
+```
+
+#### Schema / Migration
+
+```text
+Migration file:
+- prisma/migrations/20260620_ai_conversation_insight/migration.sql
+
+Migration review:
+- Additive-only new tables.
+- No DROP.
+- No DELETE FROM.
+- No TRUNCATE.
+- No SET NOT NULL on existing tables.
+- No ON DELETE CASCADE.
+- Uses ON DELETE RESTRICT for new FK constraints.
+
+Migration has NOT been applied to production in this task.
+```
+
+#### API Contract
+
+```text
+POST /api/ai/conversations/:id/analyze
+- Requires login.
+- Filters conversation by currentWorkspaceId.
+- Stores AIConversationInsight and AIAnalysisRun.
+- Response { aiConfigured, status, insight, run, error? }.
+
+GET /api/ai/conversations/:id/insight
+- Requires login.
+- Filters conversation by currentWorkspaceId.
+- Returns latest insight or null.
+```
+
+#### Files changed
+
+```text
+prisma/schema.prisma
+prisma/migrations/20260620_ai_conversation_insight/migration.sql
+src/lib/ai/conversation-analysis.ts
+src/app/api/ai/conversations/[id]/analyze/route.ts
+src/app/api/ai/conversations/[id]/insight/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests
+
+```text
+npx prisma format: PASS
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+```
+
+#### Risks / Follow-up
+
+```text
+- Runtime analyze/insight needs the new migration applied before production use.
+- OPENAI_API_KEY missing is handled by rule-based fallback; no secret required.
+- Claude needs to wire AiInsightBlock button/read state to the new endpoints.
+- Remaining B-031 items: Offer Engine, Product Auditor, Growth Report.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -5044,6 +5213,12 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-031 NOTE: Conversation Copilot (gợi ý câu trả lời) đã chạy thật nhờ /api/ai/suggest (đã có) — dùng ở composer + AI Insight block.
 - D-010 (FOUNDER): có ưu tiên dựng module Sản phẩm (Phase 4: list + audit) trước không? Hiện nav "Sản phẩm" vẫn soon, chưa có route. Phase 4 chờ quyết định + API.
 - Không đụng schema/auth/api core/env/facebook. typecheck + build PASS.
+
+[2026-06-20 · Codex · AI Conversation Insight Foundation]
+- B-031 UPDATE: analyze/insight API đã CODED/READY trong backend:
+  POST /api/ai/conversations/:id/analyze và GET /api/ai/conversations/:id/insight.
+- Migration additive 20260620_ai_conversation_insight đã tạo nhưng CHƯA apply production; runtime production cần founder duyệt migrate deploy trước khi UI gọi thật.
+- B-031 còn OPEN một phần: Offer Engine, Product Auditor, Growth Report vẫn pending phase sau.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
