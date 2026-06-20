@@ -36,7 +36,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Sản phẩm",
     items: [
-      { label: "Sản phẩm", href: "#", icon: "products", soon: true },
+      { label: "Sản phẩm", href: "/products", icon: "products" },
       { label: "Bộ sưu tập / Dịch vụ", href: "#", icon: "services", soon: true },
     ],
   },
