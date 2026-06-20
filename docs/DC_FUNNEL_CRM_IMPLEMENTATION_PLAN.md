@@ -5948,3 +5948,16 @@ Mỗi insight kèm `confidence` (độ tin cậy) để sale biết trọng số
 - **Không ghi đè dữ liệu thật** — AI điền field trống, không đè dữ liệu sale đã nhập.
 - **Minh bạch trạng thái** — thiếu `OPENAI_API_KEY` hoặc API chưa có → hiển thị rõ "AI chưa bật / đang chờ backend", không fake kết quả.
 - **Con người quyết định cuối** — mọi hành động bán hàng (gửi tin, tạo đơn, đổi stage) do sale xác nhận.
+
+---
+
+## 29. Deploy Log
+
+### 2026-06-20 — AI Insight + Product Auditor LÊN LIVE (B-032 RESOLVED)
+
+- Founder duyệt đích danh việc 1 (push + deploy + migrate).
+- Push `e812def..7c5010c` → Dokploy build OK (container mới).
+- `prisma migrate deploy` (trong container production) áp dụng ADDITIVE: `20260620_ai_conversation_insight` + `20260620_product_ai_auditor` — thành công, KHÔNG reset/không xoá dữ liệu.
+- Verify production: bảng `AIConversationInsight`/`AIAnalysisRun` query OK; cột audit `ProductLite` OK (2 sản phẩm); smoke `/login` 200, `/inbox` `/products` `/dashboard/ai-growth` = 307 (redirect auth, route sống).
+- ⇒ **AI Insight (Customer 360) + Product AI Auditor (/products) đã hoạt động thật trên production.**
+- Còn chờ (founder hoãn — việc 2/3): wire Offer Engine UI (API `a647a4a` đã có) + Growth Report data (API đang Codex làm); migration `MetaBusinessConnection`; cảnh báo secret (ADMIN_PASSWORD/Neon URL trong build log).
