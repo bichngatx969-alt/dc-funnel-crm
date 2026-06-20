@@ -796,16 +796,28 @@ model Opportunity {
 }
 
 model ProductLite {
-  id          String    @id @default(cuid())
-  workspaceId String
-  name        String
-  sku         String?
-  priceVnd    Int       @default(0)
-  description String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  id             String    @id @default(cuid())
+  workspaceId    String
+  name           String
+  sku            String?
+  priceVnd       Int       @default(0)
+  costVnd        Int?
+  marginVnd      Int?
+  description    String?
+  targetSegment  String?
+  painPointsJson Json?
+  benefitsJson   Json?
+  faqsJson       Json?
+  objectionsJson Json?
+  offerIdeasJson Json?
+  salesScript    String?
+  aiAuditScore   Int?
+  aiAuditJson    Json?
+  aiAuditedAt    DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
   workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   orderItems OrderItem[]
