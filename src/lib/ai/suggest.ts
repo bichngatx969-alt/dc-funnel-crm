@@ -1,5 +1,4 @@
-import OpenAI from "openai";
-import { env, isAiEnabled } from "@/lib/env";
+import { getAIProviderStatus, generateTextAIResponse } from "@/lib/ai/provider";
 
 export type AiSuggestInput = {
   customer: {
@@ -31,11 +30,9 @@ Không bịa chính sách. Nếu thiếu thông tin thì hỏi thêm. Không qu�
 Trả lời bằng tiếng Việt, giọng thân thiện, lịch sự, xưng "em" với khách.`;
 
 export async function aiSuggestReply(input: AiSuggestInput): Promise<AiSuggestResult> {
-  if (!isAiEnabled()) {
+  if (!getAIProviderStatus().configured) {
     return { ok: false, error: "ai_disabled" };
   }
-
-  const client = new OpenAI({ apiKey: env.openaiApiKey });
 
   const offerLines = input.offers.length
     ? input.offers
@@ -74,20 +71,17 @@ Tin nhắn mới nhất của khách: "${input.latestMessage}"
 Hãy gợi ý 1 câu trả lời cho sale gửi cho khách.`;
 
   try {
-    const completion = await client.chat.completions.create({
-      model: env.openaiModel,
+    const suggestion = await generateTextAIResponse({
+      task: "suggest-reply",
+      system: SYSTEM_PROMPT,
+      prompt: userPrompt,
       temperature: 0.7,
-      max_tokens: 220,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
+      maxTokens: 220,
     });
-    const suggestion = completion.choices[0]?.message?.content?.trim();
     if (!suggestion) return { ok: false, error: "empty_response" };
     return { ok: true, suggestion };
   } catch (err) {
-    console.error("[AI] Lỗi gọi OpenAI:", err);
-    return { ok: false, error: String(err) };
+    console.error("[AI] Lỗi gọi AI provider");
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }

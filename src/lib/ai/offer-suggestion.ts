@@ -1,6 +1,5 @@
-import OpenAI from "openai";
-import { env, isAiEnabled } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { getAIProviderStatus, generateStructuredAIResponse } from "@/lib/ai/provider";
 
 export type OfferSuggestionPayload = {
   offerId: string | null;
@@ -104,7 +103,7 @@ export async function suggestOfferForConversation(params: {
   let suggestion: OfferSuggestionPayload;
   let status: SuggestionResult["status"] = "SUCCESS";
   let error: string | undefined;
-  const aiConfigured = isAiEnabled();
+  const aiConfigured = getAIProviderStatus().configured;
 
   if (aiConfigured) {
     try {
@@ -152,20 +151,13 @@ async function suggestWithOpenAI(input: {
   products: ProductCandidate[];
   orders: Array<{ code: string; status: string; totalVnd: number; items: Array<{ name: string; quantity: number; lineTotalVnd: number }> }>;
 }) {
-  const client = new OpenAI({ apiKey: env.openaiApiKey });
-  const completion = await client.chat.completions.create({
-    model: env.openaiModel,
+  return generateStructuredAIResponse({
+    task: "offer-suggestion",
+    system: SYSTEM_PROMPT,
+    prompt: buildPrompt(input),
     temperature: 0.2,
-    max_tokens: 800,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: buildPrompt(input) },
-    ],
+    maxTokens: 800,
   });
-  const content = completion.choices[0]?.message?.content;
-  if (!content) throw new Error("AI_EMPTY_RESPONSE");
-  return JSON.parse(content) as Record<string, unknown>;
 }
 
 function buildPrompt(input: Parameters<typeof suggestWithOpenAI>[0]): string {

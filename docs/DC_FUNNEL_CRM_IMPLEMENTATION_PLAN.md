@@ -6283,3 +6283,43 @@ Mỗi insight kèm `confidence` (độ tin cậy) để sale biết trọng số
 - Verify production: bảng `AIConversationInsight`/`AIAnalysisRun` query OK; cột audit `ProductLite` OK (2 sản phẩm); smoke `/login` 200, `/inbox` `/products` `/dashboard/ai-growth` = 307 (redirect auth, route sống).
 - ⇒ **AI Insight (Customer 360) + Product AI Auditor (/products) đã hoạt động thật trên production.**
 - Cập nhật 2026-06-21: Offer Engine UI đã wire local vào API thật và build pass; cần push/deploy riêng nếu muốn lên production. Growth Report API đã CODED; migration `MetaBusinessConnection` hiện không còn pending theo `npx prisma migrate status` trên target DB hiện tại. Còn theo dõi cảnh báo secret trong build log, không in secret vào chat.
+
+---
+
+## 30. AI Provider (Claude / Anthropic)
+
+### 30.1. Contract (mục 16 bổ sung)
+- `src/lib/ai/provider.ts` — provider layer dùng chung:
+  - `getAIProviderStatus()` → `{ provider: "anthropic"|"openai"|"rule_based", configured, aiProvider, model, anthropicConfigured, openaiConfigured }`.
+  - `generateStructuredAIResponse({task, system, prompt, schemaHint?, model?, maxTokens?, temperature?})` → parse JSON object (ném `AI_NOT_CONFIGURED`/`AI_INVALID_JSON` để caller fallback rule-based).
+  - `generateTextAIResponse(...)` → text thuần (cho gợi ý câu trả lời).
+- Ưu tiên: `AI_PROVIDER` → có key thì dùng, thiếu thì fallback provider còn lại có key, cuối cùng rule_based. KHÔNG log prompt/secret/dữ liệu khách. Không sửa `src/lib/env.ts` (đọc `process.env` trực tiếp).
+- Endpoint kiểm tra an toàn: `GET /api/ai/provider-status` → chỉ boolean + tên model, không bao giờ in key.
+
+### 30.2. Env vars mới (production cần set)
+```
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=<key>            # bắt buộc để bật Claude
+ANTHROPIC_MODEL=claude-sonnet-4-6  # mặc định
+ANTHROPIC_MODEL_FAST=claude-haiku-4-5     # tùy chọn
+ANTHROPIC_MODEL_SMART=claude-opus-4-8     # tùy chọn
+AI_TEMPERATURE=0.2   AI_MAX_TOKENS=900   AI_TIMEOUT_MS=30000
+```
+(OPENAI_API_KEY vẫn dùng được nếu AI_PROVIDER=openai.)
+
+### 30.3. Module đã nối Claude (qua provider)
+- ✅ AI Conversation Insight (`conversation-analysis.ts`)
+- ✅ Product/Service AI Auditor (`product-audit.ts`)
+- ✅ Offer Suggestion (`offer-suggestion.ts`)
+- ✅ Gợi ý câu trả lời (`suggest.ts`)
+- ➖ Growth Report (`growth-report.ts`) — hiện 100% rule-based (tính từ stats, không gọi LLM); nối Claude là việc sau (không phải swap provider).
+- Thiếu key → trả `AI_NOT_CONFIGURED` + rule-based fallback, KHÔNG 500. AI chỉ gợi ý, sale duyệt trước khi gửi. Response shape API giữ nguyên (UI không vỡ).
+
+### 30.4. Mục 17 — Report (2026-06-20, Claude/Cowork)
+- Đã cài `@anthropic-ai/sdk@^0.105.0`; tạo provider + nối 4 module + endpoint status.
+- typecheck PASS · prisma generate PASS · build PASS. Không reset DB, không db push, không migrate (không đổi schema).
+- Smoke runtime cần `ANTHROPIC_API_KEY` thật (chưa set ở môi trường này) → khi set: /products (AI kiểm tra), /inbox (AI Insight + gợi ý), offer-suggestion sẽ chạy bằng Claude.
+
+### 30.5. Mục 19 — Blocker / Founder Decision
+- **D-011 (FOUNDER):** Set `ANTHROPIC_API_KEY` (+ `AI_PROVIDER=anthropic`) vào env production (Dokploy) để bật Claude. Trước khi set: AI chạy rule-based fallback (không lỗi). Sau khi set + redeploy: AI dùng Claude.
+- Claude provider: **READY về code** (chờ key của founder).

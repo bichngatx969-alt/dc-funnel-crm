@@ -1,7 +1,6 @@
-import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
-import { env, isAiEnabled } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { getAIProviderStatus, generateStructuredAIResponse } from "@/lib/ai/provider";
 
 export type ProductAuditPayload = {
   completenessScore: number;
@@ -41,7 +40,7 @@ export async function auditProductService(params: {
   let audit: ProductAuditPayload;
   let status: ProductAuditResult["status"] = "SUCCESS";
   let error: string | undefined;
-  const aiConfigured = isAiEnabled();
+  const aiConfigured = getAIProviderStatus().configured;
 
   if (aiConfigured) {
     try {
@@ -77,17 +76,12 @@ export async function auditProductService(params: {
 
 async function auditWithOpenAI(product: Awaited<ReturnType<typeof prisma.productLite.findFirst>>) {
   if (!product) throw new Error("PRODUCT_NOT_FOUND");
-  const client = new OpenAI({ apiKey: env.openaiApiKey });
-  const completion = await client.chat.completions.create({
-    model: env.openaiModel,
+  return generateStructuredAIResponse({
+    task: "product-audit",
+    system: SYSTEM_PROMPT,
     temperature: 0.2,
-    max_tokens: 900,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Hãy audit sản phẩm/dịch vụ sau và trả JSON đúng schema:
+    maxTokens: 900,
+    prompt: `Hãy audit sản phẩm/dịch vụ sau và trả JSON đúng schema:
 {
   "completenessScore": 0,
   "missingFields": ["..."],
@@ -116,12 +110,7 @@ Sản phẩm:
 - Offer ideas hiện có: ${JSON.stringify(product.offerIdeasJson ?? null)}
 
 Chỉ gợi ý phần thiếu. Không tự sửa field gốc.`,
-      },
-    ],
   });
-  const content = completion.choices[0]?.message?.content;
-  if (!content) throw new Error("AI_EMPTY_RESPONSE");
-  return JSON.parse(content) as Record<string, unknown>;
 }
 
 function buildRuleBasedAudit(product: NonNullable<Awaited<ReturnType<typeof prisma.productLite.findFirst>>>): ProductAuditPayload {

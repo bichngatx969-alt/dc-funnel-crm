@@ -1,9 +1,8 @@
 import crypto from "crypto";
-import OpenAI from "openai";
 import type { Prisma } from "@prisma/client";
-import { env, isAiEnabled } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { extractContactSignals } from "@/lib/contact/extract-contact-signals";
+import { getAIProviderStatus, generateStructuredAIResponse } from "@/lib/ai/provider";
 
 type InsightDraft = {
   buyingIntent: string | null;
@@ -103,7 +102,8 @@ export async function analyzeConversationForSales(params: {
   let status: AnalyzeResult["status"] = "SUCCESS";
   let error: string | undefined;
   let modelName = "rule-based-fallback";
-  const aiConfigured = isAiEnabled();
+  const providerStatus = getAIProviderStatus();
+  const aiConfigured = providerStatus.configured;
 
   if (aiConfigured) {
     try {
@@ -116,7 +116,7 @@ export async function analyzeConversationForSales(params: {
           offers,
         })
       );
-      modelName = env.openaiModel;
+      modelName = providerStatus.model ?? "ai";
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       status = "FAILED";
@@ -177,21 +177,13 @@ async function analyzeWithOpenAI(input: {
   orders: Array<any>;
   offers: Array<any>;
 }) {
-  const client = new OpenAI({ apiKey: env.openaiApiKey });
-  const prompt = buildPrompt(input);
-  const completion = await client.chat.completions.create({
-    model: env.openaiModel,
+  return generateStructuredAIResponse({
+    task: "conversation-insight",
+    system: SYSTEM_PROMPT,
+    prompt: buildPrompt(input),
     temperature: 0.2,
-    max_tokens: 900,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
+    maxTokens: 900,
   });
-  const content = completion.choices[0]?.message?.content;
-  if (!content) throw new Error("AI_EMPTY_RESPONSE");
-  return JSON.parse(content) as Record<string, unknown>;
 }
 
 function buildPrompt(input: Parameters<typeof analyzeWithOpenAI>[0]): string {
