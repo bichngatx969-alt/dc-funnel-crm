@@ -1696,6 +1696,7 @@ Safety:
 - Migration chỉ additive: CREATE TYPE, CREATE TABLE, CREATE INDEX.
 - Không DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
 - 2026-06-21: Founder duyệt, Codex đã chạy npx prisma migrate deploy thành công; DB schema up to date.
+- 2026-06-21: Code đã push main, Dokploy redeploy, production smoke /products + Catalog APIs PASS.
 ```
 
 ---
@@ -1789,6 +1790,8 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - npx prisma migrate status trước deploy: EXPECTED PENDING, có 1 migration chưa apply: 20260621_catalog_v2_foundation.
 - Founder duyệt, Codex đã chạy npx prisma migrate deploy: PASS.
 - npx prisma migrate status sau deploy: PASS, database schema is up to date.
+- git push origin main: PASS, latest commit deployed by Dokploy.
+- Production smoke: PASS login, /products, GET catalog items/categories/media, POST catalog item, PATCH soft-delete.
 - Migration safety scan: PASS, không thấy DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
 
 ### Blocker
@@ -1804,8 +1807,8 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Claude có thể polish UI Catalog sau khi migration apply; contract 16.12 đã READY.
 
 ### Kế hoạch tiếp theo
-- Push/deploy app để Dokploy build bản có Catalog v2, sau đó smoke /products + Catalog APIs.
 - Phase 2: migration/seed backfill ProductLite sang CatalogItem nếu muốn thống nhất dữ liệu cũ.
+- Chốt D-013 storage ảnh thật trước khi làm binary upload.
 ```
 
 #### 2026-06-21 — AI Product/Service Completion
@@ -5834,7 +5837,7 @@ Local production next start smoke: blocked by expected fail-fast default AUTH_SE
 ### 18.26. Product/Service Catalog v2 Phase 1 — Foundation
 
 **Owner:** Codex
-**Status:** `DONE_MIGRATED_DEPLOY_PENDING`
+**Status:** `DONE_DEPLOYED`
 **Branch:** `main`
 **Commit/PR link:** pending commit
 
@@ -5871,6 +5874,7 @@ Migration review:
 - No DROP, DELETE FROM, TRUNCATE, SET NOT NULL on old tables, ON DELETE CASCADE.
 - 2026-06-21: Founder approved and Codex ran npx prisma migrate deploy successfully.
 - npx prisma migrate status after deploy: PASS, database schema is up to date.
+- Code pushed to main and Dokploy redeployed.
 ```
 
 #### API Contract
@@ -5927,14 +5931,23 @@ npx prisma migrate status before deploy: EXPECTED PENDING, 20260621_catalog_v2_f
 npx prisma migrate deploy: PASS, applied 20260621_catalog_v2_foundation.
 npx prisma migrate status after deploy: PASS, database schema is up to date.
 Migration destructive scan: PASS.
-
-Runtime smoke with DB writes is deferred until the pushed app is deployed.
+git push origin main: PASS.
+Dokploy deploy: PASS, app container restarted.
+Production smoke:
+- GET /login: 200.
+- POST /api/auth/login: 200.
+- GET /products: 200.
+- GET /api/catalog/items: 200.
+- GET /api/catalog/categories: 200.
+- GET /api/media: 200.
+- POST /api/catalog/items: 201.
+- PATCH /api/catalog/items/:id soft-delete smoke record: 200.
 ```
 
 #### Risks / Handoff
 
 ```text
-- Production DB has CatalogItem/CatalogCategory/MediaAsset tables; pushed app deploy still needs to complete before UI/API smoke.
+- Production DB has CatalogItem/CatalogCategory/MediaAsset tables and pushed app deploy smoke passed.
 - No binary upload/storage in Phase 1; MediaAsset supports URL metadata only.
 - No ProductLite -> CatalogItem backfill in Phase 1; fallback keeps legacy ProductLite usable.
 - Claude handoff: Catalog UI can be polished after migration apply; API contract is in 16.12.
@@ -5955,7 +5968,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | PARTIAL — receive OK, manage_engagement pending | OAuth scope đã request `pages_manage_engagement`, `pages_read_engagement`, `pages_messaging`; production env đã set App ID/Secret và OAuth redirect PASS. 2026-06-21 DB smoke: webhookLogs/messages đã tăng và latest webhook là message/PROCESSED, nên nhận Messenger đã có tín hiệu thật. `pages_manage_engagement`/reply-hide comment vẫn chưa chốt; comments chưa tăng. Cần founder cấp/duyệt quyền + reconnect nếu Meta yêu cầu. |
 | D-009 | Production Webhook Real Smoke (nhận inbox/comment thật) | Claude/Cowork | PARTIAL — Messenger confirmed, comment pending | 2026-06-17 đã fix Traefik + App-level subscription và POST ký hợp lệ → PROCESSED. 2026-06-21 read-only DB: webhookLogs 5→6, messages 15→1713, comments 3→3. Kết luận: Messenger/message path confirmed PARTIAL; comment real event vẫn chưa confirmed, cần test 1 comment thật sau khi quyền/feed subscription ổn. |
 | D-010 | AI model key có cấu hình chưa? | Codex | OPEN — fallback active | 2026-06-21 local check: OPENAI_API_KEY=false. App vẫn dùng được bằng rule-based fallback. Nếu muốn AI model thật, founder nhập OPENAI_API_KEY trực tiếp trong Dokploy Environment, không gửi qua chat. |
-| D-011 | Deploy AI Product/Service completion lên production? | Founder | OPEN | Code deploy-ready: /products CRUD/detail/edit, Product Auditor save suggestions, Offer Suggestion actions, AI Growth UI. Cần founder duyệt push/deploy; không cần migrate deploy vì DB up to date. |
+| D-011 | Deploy AI Product/Service completion lên production? | Founder | DONE | 2026-06-21: Catalog v2/Product/Service code đã push main, Dokploy redeploy PASS, production smoke /products + Catalog APIs PASS. |
 | D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | DONE | Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công ngày 2026-06-21. npx prisma migrate status sau deploy: schema up to date. |
 | D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | OPEN | Phase 1 chỉ lưu URL metadata trong MediaAsset. Cần chốt S3/R2/UploadThing/Dokploy volume/CDN trước khi làm upload binary. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
