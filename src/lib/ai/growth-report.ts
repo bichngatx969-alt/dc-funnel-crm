@@ -19,12 +19,35 @@ export type GrowthReportBlock = {
   items: string[];
 };
 
+type GrowthProduct = {
+  id: string;
+  sourceType: "CATALOG_ITEM" | "PRODUCT_LITE";
+  name: string;
+  priceVnd: number;
+  aiAuditScore: number | null;
+  aiAuditedAt: Date | null;
+  coverImageId?: string | null;
+};
+
 export async function buildAiGrowthReport(params: {
   workspaceId: string;
   filters: FounderStatsFilters;
 }) {
-  const [stats, products, offers] = await Promise.all([
+  const [stats, catalogItems, legacyProducts, offers] = await Promise.all([
     buildFounderStats({ workspaceId: params.workspaceId, filters: params.filters }),
+    prisma.catalogItem.findMany({
+      where: { workspaceId: params.workspaceId, deletedAt: null, status: "ACTIVE" },
+      orderBy: [{ aiAuditScore: "asc" }, { updatedAt: "desc" }],
+      take: 12,
+      select: {
+        id: true,
+        name: true,
+        basePriceVnd: true,
+        aiAuditScore: true,
+        aiAuditedAt: true,
+        coverImageId: true,
+      },
+    }),
     prisma.productLite.findMany({
       where: { workspaceId: params.workspaceId, deletedAt: null, isActive: true },
       orderBy: [{ aiAuditScore: "asc" }, { updatedAt: "desc" }],
@@ -50,6 +73,24 @@ export async function buildAiGrowthReport(params: {
       },
     }),
   ]);
+  const products: GrowthProduct[] = catalogItems.length
+    ? catalogItems.map((item) => ({
+        id: item.id,
+        sourceType: "CATALOG_ITEM" as const,
+        name: item.name,
+        priceVnd: item.basePriceVnd,
+        aiAuditScore: item.aiAuditScore,
+        aiAuditedAt: item.aiAuditedAt,
+        coverImageId: item.coverImageId,
+      }))
+    : legacyProducts.map((item) => ({
+        id: item.id,
+        sourceType: "PRODUCT_LITE" as const,
+        name: item.name,
+        priceVnd: item.priceVnd,
+        aiAuditScore: item.aiAuditScore,
+        aiAuditedAt: item.aiAuditedAt,
+      }));
 
   const blocks = buildBlocks(stats, products, offers);
 
@@ -65,14 +106,17 @@ export async function buildAiGrowthReport(params: {
 
 function buildBlocks(
   stats: Awaited<ReturnType<typeof buildFounderStats>>,
-  products: Array<{ id: string; name: string; priceVnd: number; aiAuditScore: number | null; aiAuditedAt: Date | null }>,
+  products: GrowthProduct[],
   offers: Array<{ id: string; title: string; product: string; priority: number; priceText: string | null }>
 ): GrowthReportBlock[] {
   const summary = stats.summary;
   const topStage = [...stats.pipeline.stages].sort((a, b) => b.valueVnd - a.valueVnd || b.count - a.count)[0] ?? null;
   const topSource = stats.sources.contactsBySource[0] ?? null;
   const topSale = stats.sales.byOwner[0] ?? null;
-  const weakProducts = products.filter((product) => product.aiAuditScore === null || product.aiAuditScore < 70).slice(0, 4);
+  const weakProducts = products
+    .filter((product) => product.aiAuditScore === null || product.aiAuditScore < 70 || (product.sourceType === "CATALOG_ITEM" && !product.coverImageId))
+    .slice(0, 4);
+  const missingImages = products.filter((product) => product.sourceType === "CATALOG_ITEM" && !product.coverImageId).length;
   const hasAttention =
     summary.overdueTasksCount > 0 ||
     summary.needsFollowUpCommentsCount > 0 ||
@@ -181,6 +225,7 @@ function buildBlocks(
       metrics: {
         activeProductsSampled: products.length,
         weakProducts: weakProducts.length,
+        missingImages,
       },
       items: weakProducts.length
         ? weakProducts.map((product) => `${product.name}: audit score ${product.aiAuditScore ?? "chưa audit"}.`)

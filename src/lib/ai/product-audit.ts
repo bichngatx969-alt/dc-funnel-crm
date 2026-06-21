@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { catalogItemSelect } from "@/lib/catalog";
 import { getAIProviderStatus, generateStructuredAIResponse } from "@/lib/ai/provider";
 
 export type ProductAuditPayload = {
@@ -19,10 +20,17 @@ export type ProductAuditPayload = {
 type ProductAuditResult = {
   aiConfigured: boolean;
   status: "SUCCESS" | "FAILED" | "SKIPPED";
-  product: Awaited<ReturnType<typeof prisma.productLite.update>>;
+  sourceType: "PRODUCT_LITE" | "CATALOG_ITEM";
+  product: Awaited<ReturnType<typeof prisma.productLite.update>> | Awaited<ReturnType<typeof prisma.catalogItem.update>>;
   audit: ProductAuditPayload;
   error?: string;
 };
+
+type ProductLiteRecord = NonNullable<Awaited<ReturnType<typeof prisma.productLite.findFirst>>>;
+type CatalogItemRecord = NonNullable<Awaited<ReturnType<typeof prisma.catalogItem.findFirst>>>;
+type AuditSubject =
+  | { sourceType: "PRODUCT_LITE"; record: ProductLiteRecord }
+  | { sourceType: "CATALOG_ITEM"; record: CatalogItemRecord };
 
 const SYSTEM_PROMPT = `Bạn là AI Product/Service Auditor cho CRM bán hàng.
 Nhiệm vụ: kiểm tra thông tin sản phẩm/dịch vụ còn thiếu để sale tư vấn tốt hơn.
@@ -32,10 +40,8 @@ export async function auditProductService(params: {
   workspaceId: string;
   productId: string;
 }): Promise<ProductAuditResult | null> {
-  const product = await prisma.productLite.findFirst({
-    where: { id: params.productId, workspaceId: params.workspaceId, deletedAt: null },
-  });
-  if (!product) return null;
+  const subject = await findAuditSubject(params.workspaceId, params.productId);
+  if (!subject) return null;
 
   let audit: ProductAuditPayload;
   let status: ProductAuditResult["status"] = "SUCCESS";
@@ -44,38 +50,67 @@ export async function auditProductService(params: {
 
   if (aiConfigured) {
     try {
-      audit = normalizeAudit(await auditWithOpenAI(product));
+      audit = normalizeAudit(await auditWithOpenAI(subject));
     } catch (err) {
       status = "FAILED";
       error = err instanceof Error ? err.message : String(err);
-      audit = buildRuleBasedAudit(product);
+      audit = buildRuleBasedAudit(subject);
     }
   } else {
     status = "SKIPPED";
     error = "AI_NOT_CONFIGURED";
-    audit = buildRuleBasedAudit(product);
+    audit = buildRuleBasedAudit(subject);
   }
 
-  const updated = await prisma.productLite.update({
-    where: { id: product.id },
-    data: {
-      aiAuditScore: audit.completenessScore,
-      aiAuditJson: {
-        ...audit,
-        aiConfigured,
-        status,
-        fallback: !aiConfigured || status === "FAILED",
-        error,
-      } as Prisma.InputJsonValue,
-      aiAuditedAt: new Date(),
-    },
-  });
-
-  return { aiConfigured, status, product: updated, audit, error };
+  const updated = await updateAuditCache(subject, audit, { aiConfigured, status, error });
+  return { aiConfigured, status, sourceType: subject.sourceType, product: updated, audit, error };
 }
 
-async function auditWithOpenAI(product: Awaited<ReturnType<typeof prisma.productLite.findFirst>>) {
-  if (!product) throw new Error("PRODUCT_NOT_FOUND");
+async function findAuditSubject(workspaceId: string, id: string): Promise<AuditSubject | null> {
+  const product = await prisma.productLite.findFirst({
+    where: { id, workspaceId, deletedAt: null },
+  });
+  if (product) return { sourceType: "PRODUCT_LITE", record: product };
+  const catalogItem = await prisma.catalogItem.findFirst({
+    where: { id, workspaceId, deletedAt: null },
+    select: catalogItemSelect,
+  });
+  if (catalogItem) return { sourceType: "CATALOG_ITEM", record: catalogItem };
+  return null;
+}
+
+async function updateAuditCache(
+  subject: AuditSubject,
+  audit: ProductAuditPayload,
+  meta: { aiConfigured: boolean; status: ProductAuditResult["status"]; error?: string }
+) {
+  const data = {
+    aiAuditScore: audit.completenessScore,
+    aiAuditJson: {
+      ...audit,
+      aiConfigured: meta.aiConfigured,
+      status: meta.status,
+      fallback: !meta.aiConfigured || meta.status === "FAILED",
+      error: meta.error,
+      sourceType: subject.sourceType,
+    } as Prisma.InputJsonValue,
+    aiAuditedAt: new Date(),
+  };
+  if (subject.sourceType === "CATALOG_ITEM") {
+    return prisma.catalogItem.update({
+      where: { id: subject.record.id },
+      data,
+      select: catalogItemSelect,
+    });
+  }
+  return prisma.productLite.update({
+    where: { id: subject.record.id },
+    data,
+  });
+}
+
+async function auditWithOpenAI(subject: AuditSubject) {
+  const product = subject.record;
   return generateStructuredAIResponse({
     task: "product-audit",
     system: SYSTEM_PROMPT,
@@ -99,7 +134,15 @@ async function auditWithOpenAI(product: Awaited<ReturnType<typeof prisma.product
 Sản phẩm:
 - Tên: ${product.name}
 - SKU: ${product.sku ?? "chưa có"}
-- Giá VND: ${product.priceVnd}
+- Nguồn dữ liệu: ${subject.sourceType}
+- Loại catalog: ${getSubjectTypeLabel(subject)}
+- Trạng thái: ${getSubjectStatusLabel(subject)}
+- Giá VND: ${getPriceVnd(subject)}
+- Giá so sánh VND: ${getCompareAtPriceLabel(subject)}
+- Giá vốn VND: ${product.costVnd ?? "chưa có"}
+- Margin VND: ${product.marginVnd ?? "chưa có"}
+- Category: ${getCategoryLabel(subject)}
+- Cover image: ${getCoverImageLabel(subject)}
 - Mô tả: ${product.description ?? "chưa có"}
 - Target segment hiện có: ${product.targetSegment ?? "chưa có"}
 - Script sale hiện có: ${product.salesScript ?? "chưa có"}
@@ -113,10 +156,11 @@ Chỉ gợi ý phần thiếu. Không tự sửa field gốc.`,
   });
 }
 
-function buildRuleBasedAudit(product: NonNullable<Awaited<ReturnType<typeof prisma.productLite.findFirst>>>): ProductAuditPayload {
+function buildRuleBasedAudit(subject: AuditSubject): ProductAuditPayload {
+  const product = subject.record;
   const missingFields: string[] = [];
   if (!product.description || product.description.trim().length < 30) missingFields.push("Mô tả sản phẩm/dịch vụ đủ rõ");
-  if (!product.priceVnd || product.priceVnd <= 0) missingFields.push("Giá bán VND");
+  if (!getPriceVnd(subject) || getPriceVnd(subject) <= 0) missingFields.push("Giá bán VND");
   if (!product.targetSegment) missingFields.push("Chân dung khách hàng mục tiêu");
   if (!product.painPointsJson) missingFields.push("Pain point khách hàng");
   if (!product.benefitsJson) missingFields.push("Lợi ích/USP");
@@ -124,8 +168,18 @@ function buildRuleBasedAudit(product: NonNullable<Awaited<ReturnType<typeof pris
   if (!product.objectionsJson) missingFields.push("Xử lý phản đối");
   if (!product.offerIdeasJson) missingFields.push("Ý tưởng offer/combo");
   if (!product.salesScript) missingFields.push("Sales script ngắn cho inbox");
+  if (subject.sourceType === "CATALOG_ITEM") {
+    const catalogItem = subject.record;
+    if (!catalogItem.coverImageId) missingFields.push("Ảnh cover");
+    if (!catalogItem.galleryJson) missingFields.push("Gallery ảnh");
+    if (!catalogItem.categoryId) missingFields.push("Danh mục catalog");
+    if (catalogItem.costVnd === null) missingFields.push("Giá vốn để tính margin");
+    if (catalogItem.type === "PHYSICAL_PRODUCT") missingFields.push("Phase 2: variant/tồn kho/khối lượng");
+    if (catalogItem.type === "BOOKABLE_SERVICE") missingFields.push("Phase 3: thời lượng/booking/staff/deposit");
+  }
 
-  const completenessScore = Math.max(0, Math.min(100, Math.round(((9 - missingFields.length) / 9) * 100)));
+  const totalFields = subject.sourceType === "CATALOG_ITEM" ? 15 : 9;
+  const completenessScore = Math.max(0, Math.min(100, Math.round(((totalFields - missingFields.length) / totalFields) * 100)));
   const productName = product.name;
 
   return {
@@ -155,6 +209,30 @@ function buildRuleBasedAudit(product: NonNullable<Awaited<ReturnType<typeof pris
       ? missingFields.slice(0, 5).map((field) => `Bổ sung: ${field}`)
       : ["Thông tin sản phẩm khá đầy đủ; có thể test offer và theo dõi tỷ lệ chốt."],
   };
+}
+
+function getPriceVnd(subject: AuditSubject): number {
+  return subject.sourceType === "CATALOG_ITEM" ? subject.record.basePriceVnd : subject.record.priceVnd;
+}
+
+function getSubjectTypeLabel(subject: AuditSubject): string {
+  return subject.sourceType === "CATALOG_ITEM" ? subject.record.type : "ProductLite cũ";
+}
+
+function getSubjectStatusLabel(subject: AuditSubject): string {
+  return subject.sourceType === "CATALOG_ITEM" ? subject.record.status : subject.record.isActive ? "ACTIVE" : "ARCHIVED";
+}
+
+function getCompareAtPriceLabel(subject: AuditSubject): string | number {
+  return subject.sourceType === "CATALOG_ITEM" ? subject.record.compareAtPriceVnd ?? "chưa có" : "không có";
+}
+
+function getCategoryLabel(subject: AuditSubject): string {
+  return subject.sourceType === "CATALOG_ITEM" ? subject.record.categoryId ?? "chưa có" : "không có";
+}
+
+function getCoverImageLabel(subject: AuditSubject): string {
+  return subject.sourceType === "CATALOG_ITEM" ? subject.record.coverImageId ?? "chưa có" : "không có";
 }
 
 function normalizeAudit(raw: Record<string, unknown>): ProductAuditPayload {

@@ -31,9 +31,11 @@ type OfferCandidate = {
 
 type ProductCandidate = {
   id: string;
+  sourceType: "CATALOG_ITEM" | "PRODUCT_LITE";
   name: string;
   priceVnd: number;
   description: string | null;
+  targetSegment?: string | null;
   score: number;
 };
 
@@ -61,7 +63,7 @@ export async function suggestOfferForConversation(params: {
   });
   if (!conversation) return null;
 
-  const [messagesDesc, offers, products, orders] = await Promise.all([
+  const [messagesDesc, offers, catalogItems, products, orders] = await Promise.all([
     prisma.message.findMany({
       where: { workspaceId: params.workspaceId, conversationId: conversation.id },
       orderBy: { createdAt: "desc" },
@@ -82,6 +84,20 @@ export async function suggestOfferForConversation(params: {
       orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
       take: 12,
     }),
+    prisma.catalogItem.findMany({
+      where: { workspaceId: params.workspaceId, status: "ACTIVE", deletedAt: null },
+      orderBy: [{ aiAuditScore: "desc" }, { updatedAt: "desc" }],
+      take: 24,
+      select: {
+        id: true,
+        name: true,
+        basePriceVnd: true,
+        shortDescription: true,
+        description: true,
+        targetSegment: true,
+        tagsJson: true,
+      },
+    }),
     prisma.productLite.findMany({
       where: { workspaceId: params.workspaceId, isActive: true, deletedAt: null },
       orderBy: [{ updatedAt: "desc" }],
@@ -98,7 +114,9 @@ export async function suggestOfferForConversation(params: {
   const messages = messagesDesc.reverse();
   const conversationText = messages.map((message) => message.text ?? "").join("\n").toLowerCase();
   const offerCandidates = rankOffers(offers, conversationText, conversation.customer.tags);
-  const productCandidates = rankProducts(products, conversationText);
+  const productCandidates = catalogItems.length
+    ? rankCatalogItems(catalogItems, conversationText)
+    : rankProducts(products, conversationText);
 
   let suggestion: OfferSuggestionPayload;
   let status: SuggestionResult["status"] = "SUCCESS";
@@ -249,7 +267,40 @@ function rankProducts(products: Array<{
       if (product.description && hasAny(text, product.description.toLowerCase().split(/\s+/).filter((word) => word.length > 4).slice(0, 12))) {
         score += 8;
       }
-      return { ...product, score };
+      return { ...product, sourceType: "PRODUCT_LITE" as const, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
+function rankCatalogItems(products: Array<{
+  id: string;
+  name: string;
+  basePriceVnd: number;
+  shortDescription: string | null;
+  description: string | null;
+  targetSegment: string | null;
+  tagsJson: unknown;
+}>, text: string): ProductCandidate[] {
+  return products
+    .map((product) => {
+      let score = 4;
+      if (containsText(text, product.name)) score += 30;
+      const description = [product.shortDescription, product.description, product.targetSegment].filter(Boolean).join(" ");
+      if (description && hasAny(text, description.toLowerCase().split(/\s+/).filter((word) => word.length > 4).slice(0, 16))) {
+        score += 10;
+      }
+      const tags = Array.isArray(product.tagsJson) ? product.tagsJson.map((item) => String(item ?? "")) : [];
+      if (tags.length && hasAny(text, tags)) score += 12;
+      return {
+        id: product.id,
+        sourceType: "CATALOG_ITEM" as const,
+        name: product.name,
+        priceVnd: product.basePriceVnd,
+        description: product.shortDescription ?? product.description,
+        targetSegment: product.targetSegment,
+        score,
+      };
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);

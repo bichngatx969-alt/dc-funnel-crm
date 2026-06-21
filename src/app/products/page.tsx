@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
-import { isAiEnabled } from "@/lib/env";
+import { getAIProviderStatus } from "@/lib/ai/provider";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ProductsClient } from "@/components/products/ProductsClient";
@@ -16,9 +16,9 @@ export default async function ProductsPage() {
       <div className="mx-auto max-w-7xl p-4 sm:p-6">
         <PageHeader
           title="Sản phẩm / Dịch vụ"
-          subtitle="Quản lý sản phẩm và để AI kiểm tra thông tin còn thiếu, đề xuất phân khúc, pain point, FAQ, xử lý phản đối và sales script."
+          subtitle="Quản lý catalog để AI tư vấn, gợi ý offer và hỗ trợ sale theo từng sản phẩm, dịch vụ hoặc combo."
         />
-        <ProductsClient aiEnabled={isAiEnabled()} />
+        <ProductsClient aiEnabled={getAIProviderStatus().configured} />
       </div>
     </AppShell>
   );

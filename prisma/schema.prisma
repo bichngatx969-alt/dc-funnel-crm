@@ -112,6 +112,26 @@ enum Industry {
   OTHER
 }
 
+enum CatalogItemType {
+  PHYSICAL_PRODUCT
+  DIGITAL_PRODUCT
+  BOOKABLE_SERVICE
+  PACKAGE
+}
+
+enum CatalogItemStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum MediaAssetSource {
+  UPLOAD
+  URL
+  AI_GENERATED
+  IMPORT
+}
+
 enum FacebookPageStatus {
   CONNECTED
   MISSING_PERMISSION
@@ -826,6 +846,82 @@ model ProductLite {
   @@index([sku])
   @@index([isActive])
   @@index([deletedAt])
+}
+
+model CatalogCategory {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  parentId    String?
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId])
+  @@index([workspaceId, slug])
+}
+
+model MediaAsset {
+  id          String           @id @default(cuid())
+  workspaceId String
+  url         String
+  fileName    String?
+  mimeType    String?
+  sizeBytes   Int?
+  width       Int?
+  height      Int?
+  altText     String?
+  source      MediaAssetSource @default(URL)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+
+  @@index([workspaceId])
+  @@index([workspaceId, source])
+}
+
+model CatalogItem {
+  id                  String            @id @default(cuid())
+  workspaceId         String
+  type                CatalogItemType
+  name                String
+  slug                String
+  sku                 String?
+  shortDescription    String?
+  description         String?
+  status              CatalogItemStatus @default(DRAFT)
+  categoryId          String?
+  basePriceVnd        Int               @default(0)
+  compareAtPriceVnd   Int?
+  costVnd             Int?
+  marginVnd           Int?
+  currency            String            @default("VND")
+  tagsJson            Json?
+  coverImageId        String?
+  galleryJson         Json?
+  targetSegment       String?
+  painPointsJson      Json?
+  benefitsJson        Json?
+  faqsJson            Json?
+  objectionsJson      Json?
+  offerIdeasJson      Json?
+  salesScript         String?
+  aiAuditScore        Int?
+  aiAuditJson         Json?
+  aiAuditedAt         DateTime?
+  legacyProductLiteId String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+
+  @@index([workspaceId])
+  @@index([workspaceId, type])
+  @@index([workspaceId, status])
+  @@index([workspaceId, categoryId])
+  @@index([workspaceId, slug])
+  @@index([workspaceId, legacyProductLiteId])
 }
 
 model Order {

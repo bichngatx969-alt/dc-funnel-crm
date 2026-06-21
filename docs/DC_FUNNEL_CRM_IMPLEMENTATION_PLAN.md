@@ -1646,6 +1646,60 @@ Safety:
 
 ---
 
+### 16.12. Product/Service Catalog v2 API Contract
+
+**Status:** `READY_CODED`
+**Owner:** Codex
+**Last updated:** 2026-06-21
+
+```http
+GET /api/catalog/items?q=&type=&status=&categoryId=&hasImage=&lowAiScore=&page=&pageSize=
+POST /api/catalog/items
+GET /api/catalog/items/:id
+PATCH /api/catalog/items/:id
+POST /api/catalog/items/:id/ai-audit
+GET /api/catalog/categories
+POST /api/catalog/categories
+PATCH /api/catalog/categories/:id
+GET /api/media
+POST /api/media
+```
+
+Notes:
+
+```text
+Auth:
+- Tất cả endpoint require logged-in user.
+- Tất cả query/write filter currentWorkspaceId.
+- Không đọc/sửa item/category/media workspace khác.
+
+Schema:
+- CatalogItem là core entity mới cho Product/Service Catalog v2.
+- CatalogCategory và MediaAsset là nền additive cho category + ảnh URL.
+- ProductLite vẫn giữ nguyên để OrderItem/Order Lite/backward compatibility không vỡ.
+- Migration pending: prisma/migrations/20260621_catalog_v2_foundation/migration.sql.
+
+CatalogItem:
+- type: PHYSICAL_PRODUCT | DIGITAL_PRODUCT | BOOKABLE_SERVICE | PACKAGE.
+- status: DRAFT | ACTIVE | ARCHIVED.
+- basePriceVnd, compareAtPriceVnd, costVnd, marginVnd là integer VND.
+- Có sales/AI fields: targetSegment, painPointsJson, benefitsJson, faqsJson, objectionsJson, offerIdeasJson, salesScript, aiAuditScore, aiAuditJson, aiAuditedAt.
+- deletedAt dùng soft-delete/archived, không hard delete.
+
+Compatibility:
+- /products UI đã dùng Catalog v2 API.
+- /api/products và ProductLite vẫn giữ cho legacy/order compatibility.
+- Product AI Auditor đọc ProductLite trước, sau đó fallback CatalogItem; endpoint alias /api/catalog/items/:id/ai-audit dùng chung logic.
+- Offer Suggestion và AI Growth Report ưu tiên CatalogItem ACTIVE; nếu chưa có CatalogItem thì fallback ProductLite.
+
+Safety:
+- Migration chỉ additive: CREATE TYPE, CREATE TABLE, CREATE INDEX.
+- Không DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
+- Chưa chạy migrate deploy production; cần founder duyệt riêng trước khi apply.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -1686,6 +1740,71 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-21 — Catalog v2 Phase 1 Foundation
+
+```text
+## 2026-06-21 — Catalog v2 Phase 1 Foundation
+
+### Đang làm
+- Product/Service Catalog v2 Phase 1 theo PRODUCT_SERVICE_CATALOG_V2_EXECUTION_PLAN.md.
+
+### Đã làm hôm nay
+- Đọc plan Catalog v2 và audit ProductLite/Order/AI/Product UI hiện tại.
+- Thêm schema additive cho CatalogItem, CatalogCategory, MediaAsset.
+- Tạo migration additive prisma/migrations/20260621_catalog_v2_foundation/migration.sql.
+- Thêm Catalog v2 APIs: items, item detail/update, item AI audit alias, categories, media URL.
+- Giữ ProductLite và /api/products để không phá Order Lite/legacy compatibility.
+- Wire Product AI Auditor đọc ProductLite hoặc CatalogItem.
+- Wire Offer Suggestion và AI Growth Report ưu tiên CatalogItem ACTIVE, fallback ProductLite nếu workspace chưa migrate/dùng Catalog v2.
+- Nâng /products UI sang Catalog v2: loại sản phẩm/dịch vụ, category, ảnh URL, giá/cost/margin, sales/AI fields, audit panel.
+- Cập nhật mục 16.12, 17, 18, 19 trong plan tổng.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260621_catalog_v2_foundation/migration.sql
+- src/lib/catalog.ts
+- src/app/api/catalog/items/route.ts
+- src/app/api/catalog/items/[id]/route.ts
+- src/app/api/catalog/items/[id]/ai-audit/route.ts
+- src/app/api/catalog/categories/route.ts
+- src/app/api/catalog/categories/[id]/route.ts
+- src/app/api/media/route.ts
+- src/lib/ai/product-audit.ts
+- src/app/api/ai/products/[id]/audit/route.ts
+- src/lib/ai/offer-suggestion.ts
+- src/lib/ai/growth-report.ts
+- src/components/products/ProductsClient.tsx
+- src/app/products/page.tsx
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: src/components/products/ProductsClient.tsx là UI-owned, nhưng founder giao trực tiếp Product/Service Catalog v2 end-to-end. Không sửa dashboard/inbox/pipeline/order/comment UI lớn.
+
+### Typecheck/build/test
+- npx prisma format: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- npx prisma migrate status: EXPECTED PENDING, có 1 migration chưa apply: 20260621_catalog_v2_foundation.
+- Migration safety scan: PASS, không thấy DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
+
+### Blocker
+- Không có blocker code/build.
+- Production chưa có bảng Catalog v2 vì migration chưa apply; cần founder duyệt migrate deploy trước khi deploy/use production.
+- Phase 1 chỉ hỗ trợ ảnh URL/MediaAsset metadata; chưa làm upload binary/storage thật.
+
+### Cần founder quyết
+- D-012: Duyệt apply migration Catalog v2 lên production sau khi review additive-only.
+- D-013: Chọn storage ảnh thật cho Phase 2 (S3/R2/UploadThing/Dokploy volume/CDN).
+
+### Cần agent kia hỗ trợ
+- Claude có thể polish UI Catalog sau khi migration apply; contract 16.12 đã READY_CODED.
+
+### Kế hoạch tiếp theo
+- Nếu founder duyệt: chạy npx prisma migrate deploy production, deploy app, smoke /products + Catalog APIs.
+- Phase 2: migration/seed backfill ProductLite sang CatalogItem nếu muốn thống nhất dữ liệu cũ.
+```
 
 #### 2026-06-21 — AI Product/Service Completion
 
@@ -5710,6 +5829,115 @@ Local production next start smoke: blocked by expected fail-fast default AUTH_SE
 
 ---
 
+### 18.26. Product/Service Catalog v2 Phase 1 — Foundation
+
+**Owner:** Codex
+**Status:** `DONE_CODED_MIGRATION_PENDING`
+**Branch:** `main`
+**Commit/PR link:** pending commit
+
+#### Summary
+
+```text
+Completed Catalog v2 Phase 1 foundation:
+- Added CatalogItem as the new core product/service entity.
+- Added CatalogCategory for lightweight category tree support.
+- Added MediaAsset for URL-based image/media metadata.
+- Rebuilt /products against Catalog v2 while keeping ProductLite compatibility.
+- Kept old /api/products and ProductLite untouched so Order Lite/OrderItem/legacy code remain safe.
+- Product AI Auditor, Offer Suggestion and AI Growth Report now prefer CatalogItem but fallback to ProductLite.
+```
+
+#### Schema / Migration
+
+```text
+New Prisma enums:
+- CatalogItemType: PHYSICAL_PRODUCT, DIGITAL_PRODUCT, BOOKABLE_SERVICE, PACKAGE.
+- CatalogItemStatus: DRAFT, ACTIVE, ARCHIVED.
+- MediaAssetSource: UPLOAD, URL, AI_GENERATED, IMPORT.
+
+New Prisma models:
+- CatalogCategory
+- MediaAsset
+- CatalogItem
+
+Migration file:
+- prisma/migrations/20260621_catalog_v2_foundation/migration.sql
+
+Migration review:
+- Additive-only: CREATE TYPE, CREATE TABLE, CREATE INDEX.
+- No DROP, DELETE FROM, TRUNCATE, SET NOT NULL on old tables, ON DELETE CASCADE.
+- Not applied to production yet. npx prisma migrate status reports this migration pending.
+```
+
+#### API Contract
+
+```text
+Catalog v2:
+- GET /api/catalog/items
+- POST /api/catalog/items
+- GET /api/catalog/items/:id
+- PATCH /api/catalog/items/:id
+- POST/GET /api/catalog/items/:id/ai-audit
+- GET /api/catalog/categories
+- POST /api/catalog/categories
+- PATCH /api/catalog/categories/:id
+- GET /api/media
+- POST /api/media
+
+Compatibility:
+- GET/POST /api/products remains available for ProductLite.
+- GET/PATCH /api/products/:id remains available for ProductLite.
+- Product AI Auditor searches ProductLite first, then CatalogItem.
+- Offer/Growth paths use CatalogItem ACTIVE first, fallback ProductLite.
+```
+
+#### Files changed
+
+```text
+prisma/schema.prisma
+prisma/migrations/20260621_catalog_v2_foundation/migration.sql
+src/lib/catalog.ts
+src/app/api/catalog/items/route.ts
+src/app/api/catalog/items/[id]/route.ts
+src/app/api/catalog/items/[id]/ai-audit/route.ts
+src/app/api/catalog/categories/route.ts
+src/app/api/catalog/categories/[id]/route.ts
+src/app/api/media/route.ts
+src/lib/ai/product-audit.ts
+src/app/api/ai/products/[id]/audit/route.ts
+src/lib/ai/offer-suggestion.ts
+src/lib/ai/growth-report.ts
+src/components/products/ProductsClient.tsx
+src/app/products/page.tsx
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests / Smoke
+
+```text
+npx prisma format: PASS.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+npx prisma migrate status: EXPECTED PENDING, 20260621_catalog_v2_foundation not applied.
+Migration destructive scan: PASS.
+
+Runtime smoke with DB writes was not run because production migration is not applied and founder has not approved migrate deploy for this new migration yet.
+```
+
+#### Risks / Handoff
+
+```text
+- Production cannot use CatalogItem APIs until migration deploy is approved/applied.
+- No binary upload/storage in Phase 1; MediaAsset supports URL metadata only.
+- No ProductLite -> CatalogItem backfill in Phase 1; fallback keeps legacy ProductLite usable.
+- Claude handoff: Catalog UI can be polished after migration apply; API contract is in 16.12.
+- Founder decision: approve production migrate deploy for 20260621_catalog_v2_foundation when ready.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -5723,6 +5951,8 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-009 | Production Webhook Real Smoke (nhận inbox/comment thật) | Claude/Cowork | PARTIAL — Messenger confirmed, comment pending | 2026-06-17 đã fix Traefik + App-level subscription và POST ký hợp lệ → PROCESSED. 2026-06-21 read-only DB: webhookLogs 5→6, messages 15→1713, comments 3→3. Kết luận: Messenger/message path confirmed PARTIAL; comment real event vẫn chưa confirmed, cần test 1 comment thật sau khi quyền/feed subscription ổn. |
 | D-010 | AI model key có cấu hình chưa? | Codex | OPEN — fallback active | 2026-06-21 local check: OPENAI_API_KEY=false. App vẫn dùng được bằng rule-based fallback. Nếu muốn AI model thật, founder nhập OPENAI_API_KEY trực tiếp trong Dokploy Environment, không gửi qua chat. |
 | D-011 | Deploy AI Product/Service completion lên production? | Founder | OPEN | Code deploy-ready: /products CRUD/detail/edit, Product Auditor save suggestions, Offer Suggestion actions, AI Growth UI. Cần founder duyệt push/deploy; không cần migrate deploy vì DB up to date. |
+| D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | OPEN — approval needed | Codex đã tạo/review migration additive-only, build/typecheck PASS. Chưa chạy migrate deploy production. |
+| D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | OPEN | Phase 1 chỉ lưu URL metadata trong MediaAsset. Cần chốt S3/R2/UploadThing/Dokploy volume/CDN trước khi làm upload binary. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -5733,6 +5963,10 @@ Agent nào gặp blocker phải ghi vào đây.
 ### 19.2. Blockers Log
 
 ```text
+[2026-06-21 · Codex · Catalog v2 Phase 1]
+- B-026 (APPROVAL): Catalog v2 code/build is complete, but production DB does not have CatalogCategory/MediaAsset/CatalogItem yet. Migration 20260621_catalog_v2_foundation is pending and requires founder approval before npx prisma migrate deploy.
+- B-027 (PHASE 2 DECISION): MediaAsset Phase 1 stores URL metadata only. Binary upload/storage/CDN must be chosen before implementing real image upload.
+
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
   PR #1B làm trực tiếp trên working tree. Đề nghị founder git init + tạo branch trước PR #2/#2B (xem D-008).
