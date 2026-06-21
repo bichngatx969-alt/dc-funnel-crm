@@ -9,6 +9,7 @@ import {
   parseVnd,
   productSelect,
 } from "@/lib/order";
+import { syncProductLiteToCatalogItem } from "@/lib/catalog-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,7 @@ export async function POST(req: Request) {
     },
     select: productSelect,
   });
+  await syncProductLiteToCatalogItem(product.id, { mode: "mirror" });
 
   return jsonOk({ product }, 201);
 }

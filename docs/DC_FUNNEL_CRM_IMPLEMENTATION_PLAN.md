@@ -1689,6 +1689,8 @@ CatalogItem:
 Compatibility:
 - /products UI đã dùng Catalog v2 API.
 - /api/products và ProductLite vẫn giữ cho legacy/order compatibility.
+- /api/products POST/PATCH mirror ProductLite sang CatalogItem qua legacyProductLiteId để Order Lite cũ và Catalog v2 không lệch dữ liệu.
+- Legacy ProductLite đã được backfill sang CatalogItem bằng script idempotent `npm run catalog:backfill -- --apply`.
 - Product AI Auditor đọc ProductLite trước, sau đó fallback CatalogItem; endpoint alias /api/catalog/items/:id/ai-audit dùng chung logic.
 - Offer Suggestion và AI Growth Report ưu tiên CatalogItem ACTIVE; nếu chưa có CatalogItem thì fallback ProductLite.
 
@@ -1741,6 +1743,61 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-21 — Catalog v2 Phase 1B Legacy Backfill + Sync
+
+```text
+## 2026-06-21 — Catalog v2 Phase 1B Legacy Backfill + Sync
+
+### Đang làm
+- Hoàn thiện phần còn lại an toàn sau Catalog v2 Phase 1: thống nhất ProductLite cũ sang CatalogItem.
+
+### Đã làm hôm nay
+- Audit /api/products cũ, ProductLite, OrderItem và CatalogItem compatibility.
+- Thêm helper src/lib/catalog-sync.ts để map ProductLite -> CatalogItem theo legacyProductLiteId.
+- Nối /api/products POST/PATCH cũ sang CatalogItem mirror mode, không đổi response shape cũ.
+- Thêm script scripts/backfill-catalog-items.ts và npm script catalog:backfill.
+- Chạy dry-run backfill: scanned 3 ProductLite, would create 3 CatalogItem.
+- Chạy apply backfill: created 3 CatalogItem, không xóa/sửa ProductLite, không đổi OrderItem.
+- Chạy lại dry-run: existing 3, created 0, xác nhận idempotent.
+- Production API smoke sau backfill: GET /api/catalog/items 200, workspace hiện tại thấy 2 legacy-linked CatalogItem.
+
+### Files đã sửa
+- package.json
+- src/lib/catalog-sync.ts
+- src/app/api/products/route.ts
+- src/app/api/products/[id]/route.ts
+- scripts/backfill-catalog-items.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Không sửa UI lớn. Chỉ sửa backend/API/script/docs trong ownership Codex.
+
+### Typecheck/build/test
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run catalog:backfill: PASS dry-run.
+- npm run catalog:backfill -- --apply: PASS, created 3.
+- npm run catalog:backfill rerun: PASS, existing 3, created 0.
+- npx prisma migrate status: PASS, schema up to date, không pending.
+- npm run build: PASS.
+- Production GET /api/catalog/items: PASS 200, total 2 trong currentWorkspaceId, legacyLinked 2.
+
+### Blocker
+- Không có blocker cho legacy sync/backfill.
+- D-013 vẫn OPEN: chưa chọn storage ảnh thật nên chưa làm upload binary.
+
+### Cần founder quyết
+- D-013: chọn storage ảnh thật cho Phase 2 upload ảnh.
+- Nếu muốn Phase 2 Variant/Inventory thật, cần xác nhận scope vì plan ban đầu loại trừ inventory phức tạp khỏi Phase 1.
+
+### Cần agent kia hỗ trợ
+- Claude có thể polish /products UI sau khi dữ liệu cũ đã hiện trong Catalog v2.
+
+### Kế hoạch tiếp theo
+- Push/deploy code sync để các lần tạo/sửa ProductLite cũ tự mirror sang CatalogItem.
+- Sau đó, chỉ còn D-013 storage ảnh và roadmap Phase 2 Variant/Inventory/Service Booking nếu founder muốn mở tiếp.
+```
 
 #### 2026-06-21 — Catalog v2 Phase 1 Foundation
 
@@ -5956,6 +6013,69 @@ Production smoke:
 
 ---
 
+### 18.27. Product/Service Catalog v2 Phase 1B — Legacy ProductLite Backfill + Sync
+
+**Owner:** Codex
+**Status:** `DONE_CODED_BACKFILLED_DEPLOY_PENDING`
+**Branch:** `main`
+**Commit/PR link:** pending commit
+
+#### Summary
+
+```text
+Completed the safe legacy bridge between ProductLite and CatalogItem:
+- ProductLite remains intact for Order Lite and OrderItem compatibility.
+- CatalogItem is now the primary Product/Service UI data source.
+- Existing ProductLite rows were backfilled into CatalogItem with legacyProductLiteId.
+- Old /api/products POST/PATCH now mirrors ProductLite changes into CatalogItem.
+- Backfill is idempotent; rerun does not duplicate CatalogItem rows.
+```
+
+#### Schema / Migration
+
+```text
+- No new schema change.
+- No new migration.
+- npx prisma migrate status: PASS, database schema is up to date.
+- No reset, no db push, no hard delete.
+```
+
+#### Files changed
+
+```text
+package.json
+src/lib/catalog-sync.ts
+src/app/api/products/route.ts
+src/app/api/products/[id]/route.ts
+scripts/backfill-catalog-items.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests / Smoke
+
+```text
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+npm run catalog:backfill dry-run: PASS, scanned 3, existing 0, created 3.
+npm run catalog:backfill -- --apply: PASS, created 3 CatalogItem.
+npm run catalog:backfill dry-run after apply: PASS, existing 3, created 0.
+npx prisma migrate status: PASS, schema up to date.
+Production GET /api/catalog/items after backfill: PASS 200, currentWorkspaceId total 2, legacyLinked 2.
+```
+
+#### Risks / Handoff
+
+```text
+- Existing ProductLite is not deleted or renamed.
+- Order Lite still uses ProductLite; Catalog v2 displays synced data.
+- ProductLite -> CatalogItem mirror deploy still pending push/deploy for future old API writes.
+- D-013 remains OPEN: real image upload/storage is not implemented until storage provider is chosen.
+- Phase 2 Variant/Inventory remains separate scope and should be kept small/additive.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -5984,6 +6104,7 @@ Agent nào gặp blocker phải ghi vào đây.
 [2026-06-21 · Codex · Catalog v2 Phase 1]
 - B-026 (RESOLVED): Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công cho 20260621_catalog_v2_foundation. Production DB đã có CatalogCategory/MediaAsset/CatalogItem, migrate status up to date.
 - B-027 (PHASE 2 DECISION): MediaAsset Phase 1 stores URL metadata only. Binary upload/storage/CDN must be chosen before implementing real image upload.
+- B-028 (RESOLVED): ProductLite legacy backfill completed safely. `npm run catalog:backfill -- --apply` created 3 CatalogItem rows, rerun dry-run shows existing 3 / created 0. /api/products POST/PATCH now mirrors ProductLite to CatalogItem for future compatibility.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
