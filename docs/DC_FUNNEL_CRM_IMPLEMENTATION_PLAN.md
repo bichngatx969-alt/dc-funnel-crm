@@ -1675,6 +1675,53 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### 17.1. Daily Reports Log
 
+#### 2026-06-21 — Codex
+
+```text
+## 2026-06-21 — Codex
+
+### Đang làm
+- Production webhook follow-up + Customer 360 AI wire.
+
+### Đã làm hôm nay
+- Đọc lại docs/PRODUCTION_WEBHOOK_DIAGNOSIS.md và plan tổng.
+- Kiểm DB production read-only sau founder test: webhookLogs 5 -> 6, messages 15 -> 1713, comments 3 -> 3.
+- Kết luận smoke: Messenger/message path PARTIAL confirmed; comment thật vẫn chưa confirmed vì FacebookComment chưa tăng.
+- Kiểm npx prisma migrate status: PASS, schema up to date, 11 migrations found, không pending/failed migration.
+- Xác nhận không chạy migrate deploy vì không có pending migration và chưa cần duyệt deploy mới.
+- Nối Customer 360 Offer Suggestion UI vào API thật POST /api/ai/conversations/:id/offer-suggestion.
+- AI Insight block đã dùng API thật analyze/insight; Customer 360 vẫn đọc contact/order/timeline qua API sẵn có.
+
+### Files đã sửa
+- src/components/inbox/ContactProfilePanel.tsx
+- src/components/inbox/profile/OfferSuggestionBlock.tsx
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: src/components/inbox/** là UI-owned, nhưng founder yêu cầu trực tiếp nối Customer 360 + AI Insight + Offer Suggestion vào API. Không sửa schema, auth, env, facebook core.
+
+### Typecheck/build/test
+- npx prisma migrate status: PASS, database schema up to date.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+
+### Blocker
+- D-009 còn PARTIAL: comment real event chưa tăng trong DB.
+- D-002 còn PARTIAL: pages_manage_engagement/reply-hide comment vẫn cần Meta permission/App Review/reconnect nếu Meta yêu cầu.
+
+### Cần founder quyết
+- Nếu muốn chốt D-009 RESOLVED: test thêm 1 comment thật sau khi page/feed permission ổn, rồi báo Codex soi lại DB.
+- Nếu muốn UI Offer Suggestion lên production: duyệt push/deploy bước riêng.
+
+### Cần agent kia hỗ trợ
+- Claude có thể polish UI Offer Suggestion nếu muốn, nhưng block hiện đã gọi API thật và build pass.
+
+### Kế hoạch tiếp theo
+- Nếu founder duyệt: push/deploy UI wire mới; sau đó smoke nút AI gợi ý offer trên production.
+- Tiếp tục theo plan: xác nhận comment realtime, rồi tối ưu/deep-link/realtime inbox nếu vẫn trễ.
+```
+
 #### 2026-06-20 — Codex
 
 ```text
@@ -5442,6 +5489,74 @@ npm run build: PASS
 
 ---
 
+### 18.24. Customer 360 AI Wire — Offer Suggestion UI + Production Smoke Check
+
+**Owner:** Codex
+**Status:** `DONE_CODED`
+**Branch:** `main`
+**Commit/PR link:** pending commit
+
+#### Summary
+
+```text
+Completed the remaining Customer 360 AI wire for Offer Engine.
+OfferSuggestionBlock now calls:
+- POST /api/ai/conversations/:id/offer-suggestion
+and renders best offer/product, confidence, reason, suggested reply, next actions,
+alternatives, copy-to-clipboard, and fallback/AI status.
+AI Insight was already wired to analyze/insight APIs; no backend/schema change in this step.
+```
+
+#### Production DB Smoke
+
+```text
+Read-only DB check after founder test:
+- webhookLogs: 5 baseline -> 6 current
+- messages: 15 baseline -> 1713 current
+- comments: 3 baseline -> 3 current
+
+Latest webhook log is message/PROCESSED without error.
+Latest message has workspaceId and Meta message id.
+FacebookComment did not increase, so comment real smoke remains pending.
+```
+
+#### Migration State
+
+```text
+npx prisma migrate status: PASS.
+Database schema is up to date.
+11 migrations found, no pending/failed migration.
+MetaBusinessConnection and AI/Product migrations appear applied on the current target DB.
+No migrate deploy was run.
+```
+
+#### Files changed
+
+```text
+src/components/inbox/ContactProfilePanel.tsx
+src/components/inbox/profile/OfferSuggestionBlock.tsx
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests
+
+```text
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+```
+
+#### Risks / Follow-up
+
+```text
+- D-009 remains PARTIAL: Messenger/message path confirmed, comment real event still not confirmed.
+- D-002 remains PARTIAL/PENDING for pages_manage_engagement: reply/hide comment still needs Meta permission/App Review and reconnect if required.
+- Offer suggestion quality depends on current Offer/Product data; missing OPENAI_API_KEY degrades to rule-based fallback without crashing.
+- Need push/deploy separately if founder wants production UI updated.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -5451,8 +5566,8 @@ Agent nào gặp blocker phải ghi vào đây.
 | ID | Decision Needed | Owner hỏi | Status | Founder Answer |
 |---|---|---|---|---|
 | D-001 | DB credential đã rotate chưa? | Codex | DONE | Đã rotate Neon DB credential và cập nhật DATABASE_URL mới vào .env local. |
-| D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | PENDING_REAL_SMOKE | OAuth scope đã request `pages_manage_engagement`, `pages_read_engagement`, `pages_messaging`; production env đã set App ID/Secret và OAuth redirect PASS. 2026-06-17: token 2 page thật có `pages_messaging`+`pages_read_engagement`+`pages_manage_metadata` (đủ NHẬN inbox/comment); **chưa** có `pages_manage_engagement` ⇒ ẩn/trả lời comment vẫn chờ. Cần founder cấp quyền + (nếu khách lạ) Live mode/App Review. |
-| D-009 | Production Webhook Real Smoke (nhận inbox/comment thật) | Claude/Cowork | PARTIAL — hạ tầng RESOLVED, chờ event thật | 2026-06-17: nguyên nhân gốc = Traefik chết (nginx host chiếm cổng 80 sau reboot) ⇒ mất HTTPS/443 ⇒ Meta verify 503 ⇒ 0 webhook; cộng webhook App-level trống. ĐÃ FIX: disable nginx + start Traefik (restart=always) + `POST /{app-id}/subscriptions` → active:true; test POST ký hợp lệ → PROCESSED. Còn chờ founder gửi 1 tin + 1 comment thật để chốt RESOLVED. |
+| D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | PARTIAL — receive OK, manage_engagement pending | OAuth scope đã request `pages_manage_engagement`, `pages_read_engagement`, `pages_messaging`; production env đã set App ID/Secret và OAuth redirect PASS. 2026-06-21 DB smoke: webhookLogs/messages đã tăng và latest webhook là message/PROCESSED, nên nhận Messenger đã có tín hiệu thật. `pages_manage_engagement`/reply-hide comment vẫn chưa chốt; comments chưa tăng. Cần founder cấp/duyệt quyền + reconnect nếu Meta yêu cầu. |
+| D-009 | Production Webhook Real Smoke (nhận inbox/comment thật) | Claude/Cowork | PARTIAL — Messenger confirmed, comment pending | 2026-06-17 đã fix Traefik + App-level subscription và POST ký hợp lệ → PROCESSED. 2026-06-21 read-only DB: webhookLogs 5→6, messages 15→1713, comments 3→3. Kết luận: Messenger/message path confirmed PARTIAL; comment real event vẫn chưa confirmed, cần test 1 comment thật sau khi quyền/feed subscription ổn. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -5647,6 +5762,16 @@ Agent nào gặp blocker phải ghi vào đây.
 - Không tạo migration mới; Prisma migrate status báo database schema up to date.
 - Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
 - B-030 RESOLVED: npx prisma migrate status hiện up to date, không pending migration; Prisma query MetaBusinessConnection count OK.
+
+[2026-06-21 · Codex · Webhook DB Smoke + Customer 360 Offer Suggestion UI]
+- Đọc lại docs/PRODUCTION_WEBHOOK_DIAGNOSIS.md và plan tổng trước khi làm.
+- Kiểm DB production read-only sau founder test: baseline diagnosis 2026-06-17 là webhookLogs=5, messages=15, comments=3; hiện tại webhookLogs=6, messages=1713, comments=3.
+- Latest webhook log là eventType=message, processingStatus=PROCESSED, không có error; latest message có workspaceId + metaMessageId. Kết luận: Messenger/message path PARTIAL confirmed, nhưng comment thật CHƯA confirmed vì FacebookComment vẫn = 3 bản ghi cũ.
+- Chạy npx prisma migrate status: PASS, schema up to date, 11 migrations found, không pending/failed migration. Các migration MetaBusinessConnection + AI/Product đã ở trạng thái applied trên DB hiện tại; KHÔNG chạy migrate deploy.
+- Nối Customer 360 block "Ưu đãi / Gợi ý bán hàng" vào API thật POST /api/ai/conversations/:id/offer-suggestion; AI chỉ gợi ý, sale copy/duyệt thủ công, không tự gửi tin hay mutate dữ liệu.
+- Xác nhận AI Insight block đã dùng API thật analyze/insight; Customer 360 đang đọc contact/order/timeline qua API sẵn có.
+- Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
+- Không deploy, không reset DB, không in secret, không chạy migration.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -5940,12 +6065,12 @@ Mục tiêu: nâng CRM từ "công cụ quản lý" thành **AI Growth Copilot**
 4. **Offer Engine** — AI đề xuất offer/combo/sản phẩm theo ngữ cảnh hội thoại + tồn kho + lịch sử mua.
 5. **Optimization Loop** — AI tổng hợp mỗi ngày: điểm nghẽn pipeline, khách cần follow-up, offer nên test, sản phẩm nên đẩy, ghi chú huấn luyện sale, việc nên làm ngày mai (route `/dashboard/ai-growth`).
 
-**Trạng thái UI (Claude) — 2026-06-20:**
+**Trạng thái UI — 2026-06-21:**
 - DONE Conversation Copilot (gợi ý câu trả lời) — nút AI ở composer + AI Insight block trong Customer 360 (dùng `POST /api/ai/suggest`).
-- DONE AI Insight block (khung phân tích sâu) — UI sẵn, phần phân tích ở trạng thái "chờ backend".
-- DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối; API `/api/ai/growth-report` đã CODED để wire dữ liệu thật.
-- PENDING Offer Engine UI — API backend đã CODED, còn chờ UI wire vào block "Ưu đãi / Gợi ý bán hàng".
-- PENDING Product Auditor UI — API backend đã CODED, còn chờ migration production + UI route/module Sản phẩm wire vào.
+- DONE AI Insight block (Customer 360) — gọi API thật `GET/POST /api/ai/conversations/:id/insight|analyze`, có fallback rõ khi thiếu AI config.
+- DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối; API `/api/ai/growth-report` đã CODED.
+- DONE Offer Engine UI — block "Ưu đãi / Gợi ý bán hàng" gọi API thật `POST /api/ai/conversations/:id/offer-suggestion`; AI chỉ gợi ý, sale copy/duyệt thủ công.
+- DONE Product Auditor UI — route `/products` + audit panel gọi Product AI Auditor API; production migration AI/Product đã được ghi nhận applied ở deploy log.
 
 **Data requirements:** lịch sử message/comment theo conversation, brand profile, danh mục offer/sản phẩm (giá, mô tả, tồn), lịch sử đơn theo khách, stage/lead score, tags — tất cả filter theo `workspaceId`.
 
@@ -5997,4 +6122,4 @@ Mỗi insight kèm `confidence` (độ tin cậy) để sale biết trọng số
 - `prisma migrate deploy` (trong container production) áp dụng ADDITIVE: `20260620_ai_conversation_insight` + `20260620_product_ai_auditor` — thành công, KHÔNG reset/không xoá dữ liệu.
 - Verify production: bảng `AIConversationInsight`/`AIAnalysisRun` query OK; cột audit `ProductLite` OK (2 sản phẩm); smoke `/login` 200, `/inbox` `/products` `/dashboard/ai-growth` = 307 (redirect auth, route sống).
 - ⇒ **AI Insight (Customer 360) + Product AI Auditor (/products) đã hoạt động thật trên production.**
-- Còn chờ (founder hoãn — việc 2/3): wire Offer Engine UI (API `a647a4a` đã có) + Growth Report data (API đang Codex làm); migration `MetaBusinessConnection`; cảnh báo secret (ADMIN_PASSWORD/Neon URL trong build log).
+- Cập nhật 2026-06-21: Offer Engine UI đã wire local vào API thật và build pass; cần push/deploy riêng nếu muốn lên production. Growth Report API đã CODED; migration `MetaBusinessConnection` hiện không còn pending theo `npx prisma migrate status` trên target DB hiện tại. Còn theo dõi cảnh báo secret trong build log, không in secret vào chat.
