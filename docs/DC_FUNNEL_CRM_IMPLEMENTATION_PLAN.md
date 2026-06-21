@@ -1648,7 +1648,7 @@ Safety:
 
 ### 16.12. Product/Service Catalog v2 API Contract
 
-**Status:** `READY_CODED`
+**Status:** `READY`
 **Owner:** Codex
 **Last updated:** 2026-06-21
 
@@ -1677,7 +1677,7 @@ Schema:
 - CatalogItem là core entity mới cho Product/Service Catalog v2.
 - CatalogCategory và MediaAsset là nền additive cho category + ảnh URL.
 - ProductLite vẫn giữ nguyên để OrderItem/Order Lite/backward compatibility không vỡ.
-- Migration pending: prisma/migrations/20260621_catalog_v2_foundation/migration.sql.
+- Migration applied: prisma/migrations/20260621_catalog_v2_foundation/migration.sql.
 
 CatalogItem:
 - type: PHYSICAL_PRODUCT | DIGITAL_PRODUCT | BOOKABLE_SERVICE | PACKAGE.
@@ -1695,7 +1695,7 @@ Compatibility:
 Safety:
 - Migration chỉ additive: CREATE TYPE, CREATE TABLE, CREATE INDEX.
 - Không DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
-- Chưa chạy migrate deploy production; cần founder duyệt riêng trước khi apply.
+- 2026-06-21: Founder duyệt, Codex đã chạy npx prisma migrate deploy thành công; DB schema up to date.
 ```
 
 ---
@@ -1786,23 +1786,25 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - npx prisma generate: PASS.
 - npm run typecheck: PASS.
 - npm run build: PASS.
-- npx prisma migrate status: EXPECTED PENDING, có 1 migration chưa apply: 20260621_catalog_v2_foundation.
+- npx prisma migrate status trước deploy: EXPECTED PENDING, có 1 migration chưa apply: 20260621_catalog_v2_foundation.
+- Founder duyệt, Codex đã chạy npx prisma migrate deploy: PASS.
+- npx prisma migrate status sau deploy: PASS, database schema is up to date.
 - Migration safety scan: PASS, không thấy DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
 
 ### Blocker
 - Không có blocker code/build.
-- Production chưa có bảng Catalog v2 vì migration chưa apply; cần founder duyệt migrate deploy trước khi deploy/use production.
+- Catalog v2 tables đã có trên production DB sau migrate deploy.
 - Phase 1 chỉ hỗ trợ ảnh URL/MediaAsset metadata; chưa làm upload binary/storage thật.
 
 ### Cần founder quyết
-- D-012: Duyệt apply migration Catalog v2 lên production sau khi review additive-only.
+- D-012: DONE, founder đã duyệt và migration Catalog v2 đã apply thành công.
 - D-013: Chọn storage ảnh thật cho Phase 2 (S3/R2/UploadThing/Dokploy volume/CDN).
 
 ### Cần agent kia hỗ trợ
-- Claude có thể polish UI Catalog sau khi migration apply; contract 16.12 đã READY_CODED.
+- Claude có thể polish UI Catalog sau khi migration apply; contract 16.12 đã READY.
 
 ### Kế hoạch tiếp theo
-- Nếu founder duyệt: chạy npx prisma migrate deploy production, deploy app, smoke /products + Catalog APIs.
+- Push/deploy app để Dokploy build bản có Catalog v2, sau đó smoke /products + Catalog APIs.
 - Phase 2: migration/seed backfill ProductLite sang CatalogItem nếu muốn thống nhất dữ liệu cũ.
 ```
 
@@ -5832,7 +5834,7 @@ Local production next start smoke: blocked by expected fail-fast default AUTH_SE
 ### 18.26. Product/Service Catalog v2 Phase 1 — Foundation
 
 **Owner:** Codex
-**Status:** `DONE_CODED_MIGRATION_PENDING`
+**Status:** `DONE_MIGRATED_DEPLOY_PENDING`
 **Branch:** `main`
 **Commit/PR link:** pending commit
 
@@ -5867,7 +5869,8 @@ Migration file:
 Migration review:
 - Additive-only: CREATE TYPE, CREATE TABLE, CREATE INDEX.
 - No DROP, DELETE FROM, TRUNCATE, SET NOT NULL on old tables, ON DELETE CASCADE.
-- Not applied to production yet. npx prisma migrate status reports this migration pending.
+- 2026-06-21: Founder approved and Codex ran npx prisma migrate deploy successfully.
+- npx prisma migrate status after deploy: PASS, database schema is up to date.
 ```
 
 #### API Contract
@@ -5920,20 +5923,22 @@ npx prisma format: PASS.
 npx prisma generate: PASS.
 npm run typecheck: PASS.
 npm run build: PASS.
-npx prisma migrate status: EXPECTED PENDING, 20260621_catalog_v2_foundation not applied.
+npx prisma migrate status before deploy: EXPECTED PENDING, 20260621_catalog_v2_foundation not applied.
+npx prisma migrate deploy: PASS, applied 20260621_catalog_v2_foundation.
+npx prisma migrate status after deploy: PASS, database schema is up to date.
 Migration destructive scan: PASS.
 
-Runtime smoke with DB writes was not run because production migration is not applied and founder has not approved migrate deploy for this new migration yet.
+Runtime smoke with DB writes is deferred until the pushed app is deployed.
 ```
 
 #### Risks / Handoff
 
 ```text
-- Production cannot use CatalogItem APIs until migration deploy is approved/applied.
+- Production DB has CatalogItem/CatalogCategory/MediaAsset tables; pushed app deploy still needs to complete before UI/API smoke.
 - No binary upload/storage in Phase 1; MediaAsset supports URL metadata only.
 - No ProductLite -> CatalogItem backfill in Phase 1; fallback keeps legacy ProductLite usable.
 - Claude handoff: Catalog UI can be polished after migration apply; API contract is in 16.12.
-- Founder decision: approve production migrate deploy for 20260621_catalog_v2_foundation when ready.
+- Founder decision D-012 resolved: production migrate deploy approved and applied.
 ```
 
 ---
@@ -5951,7 +5956,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-009 | Production Webhook Real Smoke (nhận inbox/comment thật) | Claude/Cowork | PARTIAL — Messenger confirmed, comment pending | 2026-06-17 đã fix Traefik + App-level subscription và POST ký hợp lệ → PROCESSED. 2026-06-21 read-only DB: webhookLogs 5→6, messages 15→1713, comments 3→3. Kết luận: Messenger/message path confirmed PARTIAL; comment real event vẫn chưa confirmed, cần test 1 comment thật sau khi quyền/feed subscription ổn. |
 | D-010 | AI model key có cấu hình chưa? | Codex | OPEN — fallback active | 2026-06-21 local check: OPENAI_API_KEY=false. App vẫn dùng được bằng rule-based fallback. Nếu muốn AI model thật, founder nhập OPENAI_API_KEY trực tiếp trong Dokploy Environment, không gửi qua chat. |
 | D-011 | Deploy AI Product/Service completion lên production? | Founder | OPEN | Code deploy-ready: /products CRUD/detail/edit, Product Auditor save suggestions, Offer Suggestion actions, AI Growth UI. Cần founder duyệt push/deploy; không cần migrate deploy vì DB up to date. |
-| D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | OPEN — approval needed | Codex đã tạo/review migration additive-only, build/typecheck PASS. Chưa chạy migrate deploy production. |
+| D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | DONE | Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công ngày 2026-06-21. npx prisma migrate status sau deploy: schema up to date. |
 | D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | OPEN | Phase 1 chỉ lưu URL metadata trong MediaAsset. Cần chốt S3/R2/UploadThing/Dokploy volume/CDN trước khi làm upload binary. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
@@ -5964,7 +5969,7 @@ Agent nào gặp blocker phải ghi vào đây.
 
 ```text
 [2026-06-21 · Codex · Catalog v2 Phase 1]
-- B-026 (APPROVAL): Catalog v2 code/build is complete, but production DB does not have CatalogCategory/MediaAsset/CatalogItem yet. Migration 20260621_catalog_v2_foundation is pending and requires founder approval before npx prisma migrate deploy.
+- B-026 (RESOLVED): Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công cho 20260621_catalog_v2_foundation. Production DB đã có CatalogCategory/MediaAsset/CatalogItem, migrate status up to date.
 - B-027 (PHASE 2 DECISION): MediaAsset Phase 1 stores URL metadata only. Binary upload/storage/CDN must be chosen before implementing real image upload.
 
 [2026-06-14 · Claude · PR #1B]
