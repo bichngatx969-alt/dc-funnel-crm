@@ -1504,11 +1504,15 @@ Safety:
 
 ### 16.9. Product/Service AI Auditor API Contract
 
-**Status:** `READY_CODED`
+**Status:** `READY`
 **Owner:** Codex
-**Last updated:** 2026-06-20
+**Last updated:** 2026-06-21
 
 ```http
+GET /api/products
+POST /api/products
+GET /api/products/:id
+PATCH /api/products/:id
 POST /api/ai/products/:id/audit
 GET /api/ai/products/:id/audit
 GET /api/products/:id/ai-audit
@@ -1526,7 +1530,14 @@ Schema additive:
 - ProductLite thêm field nullable: costVnd, marginVnd, targetSegment, painPointsJson, benefitsJson,
   faqsJson, objectionsJson, offerIdeasJson, salesScript, aiAuditScore, aiAuditJson, aiAuditedAt.
 - Migration tạo: prisma/migrations/20260620_product_ai_auditor/migration.sql.
-- Migration CHƯA apply production trong task này.
+- Current migration status 2026-06-21: DB schema up to date, no pending migration.
+
+Product CRUD:
+- GET /api/products: list ProductLite trong currentWorkspaceId, bỏ deletedAt.
+- POST /api/products: tạo sản phẩm/dịch vụ với core + sales/AI fields.
+- GET /api/products/:id: đọc chi tiết trong currentWorkspaceId.
+- PATCH /api/products/:id: allowlist field an toàn; không xoá cứng; money integer VND; marginVnd tính từ priceVnd - costVnd nếu có.
+- JSON list fields có thể nhận textarea string mỗi dòng một ý hoặc array JSON.
 
 POST /api/ai/products/:id/audit:
 - Đọc ProductLite trong workspace hiện tại.
@@ -1553,9 +1564,9 @@ Safety:
 
 ### 16.10. Offer Engine API Contract
 
-**Status:** `READY_CODED`
+**Status:** `READY`
 **Owner:** Codex
-**Last updated:** 2026-06-20
+**Last updated:** 2026-06-21
 
 ```http
 POST /api/ai/conversations/:id/offer-suggestion
@@ -1600,9 +1611,9 @@ Safety:
 
 ### 16.11. AI Growth Report API Contract
 
-**Status:** `READY_CODED`
+**Status:** `READY`
 **Owner:** Codex
-**Last updated:** 2026-06-20
+**Last updated:** 2026-06-21
 
 ```http
 GET /api/ai/growth-report?range=today|7d|30d|90d|custom&from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -1624,6 +1635,7 @@ Response:
 - mode hiện là rule_based để không phụ thuộc secret AI.
 - blocks gồm 8 khối:
   overview, insights, bottlenecks, followUps, offerTests, products, salesTraining, tomorrowActions.
+- UI route /dashboard/ai-growth đã gọi API thật, có range Hôm nay/7 ngày/30 ngày, loading/error/empty state.
 
 Safety:
 - Không ghi DB.
@@ -1674,6 +1686,64 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-21 — AI Product/Service Completion
+
+```text
+## 2026-06-21 — AI Product/Service Completion
+
+### Đang làm
+- Hoàn thiện module Product/Service + AI Product Auditor + AI Growth UI deploy-ready.
+
+### Đã làm hôm nay
+- Đọc lại plan tổng và PRODUCTION_WEBHOOK_DIAGNOSIS.md.
+- Xác nhận ProductLite đã có đủ field sales/AI, không cần migration mới.
+- Hoàn thiện Product/Service CRUD API: POST /api/products nhận đủ field sales/AI; thêm GET/PATCH /api/products/:id filter currentWorkspaceId.
+- Hoàn thiện UI /products: list, search, detail, create/edit form, active/inactive, AI score, audit panel, empty/loading/error state.
+- Thêm action "Lưu gợi ý" từ Product AI Auditor: chỉ fill field đang trống, không ghi đè dữ liệu sale đã nhập.
+- Wire AI Growth Report UI vào API thật GET /api/ai/growth-report với range Hôm nay/7 ngày/30 ngày.
+- Bổ sung hành động Offer Suggestion trong Customer 360: tạo task follow-up và mở modal tạo đơn, vẫn không tự gửi tin.
+- Kiểm AI config boolean: OPENAI_API_KEY=false, rule-based fallback đang hoạt động.
+- Kiểm migration: npx prisma migrate status PASS, DB schema up to date, 11 migrations, không pending/failed.
+
+### Files đã sửa
+- src/app/api/products/route.ts
+- src/app/api/products/[id]/route.ts
+- src/components/products/ProductsClient.tsx
+- src/components/products/ProductAuditPanel.tsx
+- src/components/dashboard/AiGrowthReport.tsx
+- src/components/inbox/ContactProfilePanel.tsx
+- src/components/inbox/profile/OfferSuggestionBlock.tsx
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: src/components/** thuộc UI owner, nhưng founder giao trực tiếp Full-stack Product Engineer để hoàn thiện AI + Product/Service end-to-end. Không sửa schema, env, webhook core, database migration.
+
+### Typecheck/build/test
+- npx prisma migrate status: PASS, DB schema up to date.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- Local dev read-only smoke: PASS login + GET /api/products + GET detail + GET /api/products/:id/ai-audit + GET /api/ai/growth-report.
+- Local production next start smoke: blocked by expected fail-fast default AUTH_SECRET trong .env local; guardrail hoạt động, build vẫn PASS.
+
+### Blocker
+- Không có blocker code/migration cho Product/Service AI completion.
+- OPENAI_API_KEY chưa cấu hình nên đang dùng rule-based fallback, chất lượng AI thật sẽ tốt hơn sau khi founder nhập key trực tiếp trong Dokploy.
+- Runtime write smoke không tạo product giả trên production DB khi founder vắng; cần founder test sản phẩm thật sau deploy.
+
+### Cần founder quyết
+- Duyệt push/deploy để đưa UI/API mới lên production.
+- Nếu muốn AI model thật: nhập OPENAI_API_KEY trực tiếp trong Dokploy Environment, không gửi qua chat.
+- Thêm 3-5 sản phẩm/dịch vụ thật để AI Auditor, Offer Suggestion và Growth Report có dữ liệu tốt.
+
+### Cần agent kia hỗ trợ
+- Claude có thể polish UI sau khi live, nhưng hiện /products, /inbox AI blocks và /dashboard/ai-growth đã usable.
+
+### Kế hoạch tiếp theo
+- Sau khi founder duyệt: push/deploy, smoke production /products, /inbox AI Insight/Offer Suggestion, /dashboard/ai-growth.
+- Sau khi founder test 1 tin nhắn + 1 comment thật: soi DB webhookLogs/messages/comments để cập nhật D-002/D-009.
+```
 
 #### 2026-06-21 — Codex
 
@@ -5557,6 +5627,89 @@ npm run build: PASS
 
 ---
 
+### 18.25. AI Product/Service Completion — Deploy-ready
+
+**Owner:** Codex
+**Status:** `DONE_CODED_DEPLOY_READY`
+**Branch:** `main`
+**Commit/PR link:** pending commit
+
+#### Summary
+
+```text
+Completed the AI + Product/Service usability pass so the CRM can be used without waiting for external AI secrets:
+- Product/Service module now supports list, create, edit, detail, active/inactive, AI score and AI audit cache.
+- Product POST and detail PATCH support the sales/AI fields needed by Offer Engine and Product Auditor.
+- Product AI Auditor UI can run audit, show the required analysis blocks, and save suggestions into empty fields only.
+- AI Growth Report UI now reads GET /api/ai/growth-report and renders 8 report blocks with range filters.
+- Customer 360 Offer Suggestion can create a follow-up task or open the order modal, but still does not auto-send or auto-create without user action.
+```
+
+#### Schema / Migration
+
+```text
+- No new schema change in this completion task.
+- ProductLite already had costVnd, marginVnd, targetSegment, painPointsJson, benefitsJson, faqsJson, objectionsJson, offerIdeasJson, salesScript, aiAuditScore, aiAuditJson, aiAuditedAt.
+- npx prisma migrate status: PASS, DB schema up to date, 11 migrations found, no pending/failed migration.
+- No migrate deploy was run.
+```
+
+#### API Contract
+
+```text
+Product CRUD:
+- GET /api/products
+- POST /api/products
+- GET /api/products/:id
+- PATCH /api/products/:id
+
+AI/Product:
+- POST/GET /api/ai/products/:id/audit
+- POST/GET /api/products/:id/ai-audit
+
+AI Growth:
+- GET /api/ai/growth-report?range=today|7d|30d|90d|custom
+
+All endpoints require login, filter currentWorkspaceId, use integer VND, and keep AI suggestion-only.
+```
+
+#### Files changed
+
+```text
+src/app/api/products/route.ts
+src/app/api/products/[id]/route.ts
+src/components/products/ProductsClient.tsx
+src/components/products/ProductAuditPanel.tsx
+src/components/dashboard/AiGrowthReport.tsx
+src/components/inbox/ContactProfilePanel.tsx
+src/components/inbox/profile/OfferSuggestionBlock.tsx
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests / Smoke
+
+```text
+npx prisma migrate status: PASS
+npx prisma generate: PASS
+npm run typecheck: PASS
+npm run build: PASS
+AI config boolean check: OPENAI_API_KEY=false, rule-based fallback active.
+Local dev read-only smoke: PASS login, products list/detail/audit read, growth report read.
+Local production next start smoke: blocked by expected fail-fast default AUTH_SECRET in local .env; no code/build failure.
+```
+
+#### Risks / Handoff
+
+```text
+- OPENAI_API_KEY is not configured locally, so AI model calls are not active; fallback is working.
+- Production deploy was not run in this task; founder must approve push/deploy.
+- Write smoke was skipped to avoid fake data in the real DB while founder is absent.
+- Founder should add real products/services; suggestion quality depends on product/offer data completeness.
+- Claude handoff: UI can be polished after deploy, but current Product/Service, AI Auditor, Offer Suggestion and Growth Report flows are usable.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -5568,6 +5721,8 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-001 | DB credential đã rotate chưa? | Codex | DONE | Đã rotate Neon DB credential và cập nhật DATABASE_URL mới vào .env local. |
 | D-002 | App Facebook đã có quyền `pages_manage_engagement` chưa? | Codex | PARTIAL — receive OK, manage_engagement pending | OAuth scope đã request `pages_manage_engagement`, `pages_read_engagement`, `pages_messaging`; production env đã set App ID/Secret và OAuth redirect PASS. 2026-06-21 DB smoke: webhookLogs/messages đã tăng và latest webhook là message/PROCESSED, nên nhận Messenger đã có tín hiệu thật. `pages_manage_engagement`/reply-hide comment vẫn chưa chốt; comments chưa tăng. Cần founder cấp/duyệt quyền + reconnect nếu Meta yêu cầu. |
 | D-009 | Production Webhook Real Smoke (nhận inbox/comment thật) | Claude/Cowork | PARTIAL — Messenger confirmed, comment pending | 2026-06-17 đã fix Traefik + App-level subscription và POST ký hợp lệ → PROCESSED. 2026-06-21 read-only DB: webhookLogs 5→6, messages 15→1713, comments 3→3. Kết luận: Messenger/message path confirmed PARTIAL; comment real event vẫn chưa confirmed, cần test 1 comment thật sau khi quyền/feed subscription ổn. |
+| D-010 | AI model key có cấu hình chưa? | Codex | OPEN — fallback active | 2026-06-21 local check: OPENAI_API_KEY=false. App vẫn dùng được bằng rule-based fallback. Nếu muốn AI model thật, founder nhập OPENAI_API_KEY trực tiếp trong Dokploy Environment, không gửi qua chat. |
+| D-011 | Deploy AI Product/Service completion lên production? | Founder | OPEN | Code deploy-ready: /products CRUD/detail/edit, Product Auditor save suggestions, Offer Suggestion actions, AI Growth UI. Cần founder duyệt push/deploy; không cần migrate deploy vì DB up to date. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -5755,6 +5910,11 @@ Agent nào gặp blocker phải ghi vào đây.
 - mode hiện là rule_based để không cần secret AI; không ghi DB, không gửi tin, không tạo đơn/automation.
 - Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
 - B-031 còn phụ thuộc runtime production: cần apply 2 migration AI đã tạo trước đó để AI Insight/Product Auditor chạy thật (xem B-032). Growth Report và Offer Engine không cần migration mới.
+
+[2026-06-21 · Codex · AI Product/Service Completion]
+- B-031 RESOLVED for usable UI + API: Product/Service CRUD/detail/edit, Product Auditor UI + save empty suggestions, AI Insight already wired, Offer Suggestion actions, AI Growth UI reading API.
+- B-032 runtime dependency RESOLVED on current target DB: npx prisma migrate status shows DB schema up to date, no pending/failed migration; MetaBusinessConnection and AI/Product migrations are no longer pending.
+- Remaining founder decision is not a blocker: D-010 OPENAI_API_KEY is false, app uses rule-based fallback; D-011 deploy approval needed to ship this completion to production.
 
 [2026-06-21 · Codex · Workspace Members API]
 - Post-MVP P1 backend backlog DONE_CODED: thêm GET /api/workspaces/members.
@@ -6068,13 +6228,13 @@ Mục tiêu: nâng CRM từ "công cụ quản lý" thành **AI Growth Copilot**
 **Trạng thái UI — 2026-06-21:**
 - DONE Conversation Copilot (gợi ý câu trả lời) — nút AI ở composer + AI Insight block trong Customer 360 (dùng `POST /api/ai/suggest`).
 - DONE AI Insight block (Customer 360) — gọi API thật `GET/POST /api/ai/conversations/:id/insight|analyze`, có fallback rõ khi thiếu AI config.
-- DONE AI Growth route `/dashboard/ai-growth` — UI khung 8 khối; API `/api/ai/growth-report` đã CODED.
+- DONE AI Growth route `/dashboard/ai-growth` — UI gọi API thật `/api/ai/growth-report`, có 8 khối, range Hôm nay/7 ngày/30 ngày và fallback rule-based.
 - DONE Offer Engine UI — block "Ưu đãi / Gợi ý bán hàng" gọi API thật `POST /api/ai/conversations/:id/offer-suggestion`; AI chỉ gợi ý, sale copy/duyệt thủ công.
-- DONE Product Auditor UI — route `/products` + audit panel gọi Product AI Auditor API; production migration AI/Product đã được ghi nhận applied ở deploy log.
+- DONE Product Auditor UI — route `/products` + list/create/edit/detail + audit panel gọi Product AI Auditor API; có action lưu gợi ý vào field trống, không ghi đè dữ liệu sale.
 
 **Data requirements:** lịch sử message/comment theo conversation, brand profile, danh mục offer/sản phẩm (giá, mô tả, tồn), lịch sử đơn theo khách, stage/lead score, tags — tất cả filter theo `workspaceId`.
 
-**API contract cần Codex bổ sung (Claude KHÔNG tự tạo):**
+**API contract đã có (xem mục 16.8-16.11):**
 - `POST /api/ai/conversations/:id/analyze` → tạo insight (các trường ở mục 27).
 - `GET /api/ai/conversations/:id/insight` → đọc insight gần nhất (cache).
 - `POST /api/ai/conversations/:id/offer-suggestion` → offer phù hợp + lý do + câu gợi ý.

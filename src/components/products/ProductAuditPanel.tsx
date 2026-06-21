@@ -54,13 +54,17 @@ export function ProductAuditPanel({
   audit,
   auditing,
   aiEnabled,
+  applyingSuggestions = false,
   onAudit,
+  onApplySuggestions,
 }: {
   product: AuditProduct;
   audit: ProductAudit | null;
   auditing: boolean;
   aiEnabled: boolean;
+  applyingSuggestions?: boolean;
   onAudit: () => void;
+  onApplySuggestions?: () => void;
 }) {
   const score = audit?.completenessScore ?? product.aiAuditScore;
   const fallback = audit?.fallback ?? false;
@@ -75,12 +79,24 @@ export function ProductAuditPanel({
             {product.aiAuditedAt ? `Kiểm tra lần cuối: ${new Date(product.aiAuditedAt).toLocaleString("vi-VN")}` : "Chưa kiểm tra AI"}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           {score != null && (
             <div className="text-right">
               <div className={`text-2xl font-bold ${scoreTone(score)}`}>{score}%</div>
               <div className="text-[10px] text-gray-400">độ đầy đủ</div>
             </div>
+          )}
+          {audit && onApplySuggestions && (
+            <button
+              type="button"
+              onClick={onApplySuggestions}
+              disabled={applyingSuggestions}
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60"
+              title="Chỉ điền các field còn trống, không ghi đè dữ liệu sale đã nhập."
+            >
+              <Icon name="products" className="h-4 w-4" />
+              {applyingSuggestions ? "Đang lưu…" : "Lưu gợi ý"}
+            </button>
           )}
           <button
             onClick={onAudit}
@@ -112,6 +128,15 @@ export function ProductAuditPanel({
                 Phân tích quy tắc cơ bản (AI chưa bật hoặc lỗi tạm) — không phải dữ liệu giả.
               </div>
             ) : null}
+            <div className="py-2">
+              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Điểm hoàn thiện</div>
+              <div className="rounded-xl bg-gray-50 p-3">
+                <div className={`text-3xl font-bold ${scoreTone(audit.completenessScore)}`}>{audit.completenessScore}%</div>
+                <p className="mt-1 text-[12px] text-gray-500">
+                  Điểm dựa trên độ đầy đủ mô tả, giá, phân khúc, pain point, benefit, FAQ, xử lý phản đối, offer và sales script.
+                </p>
+              </div>
+            </div>
             <ListSection title="Thông tin còn thiếu" items={audit.missingFields} tone="warn" />
             <ListSection title="Phân khúc khách đề xuất" items={audit.targetSegments} />
             <ListSection title="Pain points" items={audit.painPoints} />

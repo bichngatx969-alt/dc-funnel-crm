@@ -150,7 +150,11 @@ export function ContactProfilePanel({
         <AiInsightBlock conversationId={conversationId} aiEnabled={aiEnabled} onCreateTask={createTask} />
         <PurchaseHistoryBlock orders={orders} onCreateOrder={() => setShowOrder(true)} />
         <FollowUpTaskBlock tasks={contact?.tasks ?? []} onCreateTask={createTask} />
-        <OfferSuggestionBlock conversationId={conversationId} />
+        <OfferSuggestionBlock
+          conversationId={conversationId}
+          onCreateTask={createTask}
+          onCreateOrder={() => setShowOrder(true)}
+        />
         <ContactInfoBlock contact={contact} pageName={pageName} />
         <TagsBlock tags={contact?.tags ?? baseCustomer.tags ?? []} onAddTag={addTag} onRemoveTag={removeTag} />
         <InternalNotesBlock notes={contact?.notes ?? []} onAddNote={addNote} />

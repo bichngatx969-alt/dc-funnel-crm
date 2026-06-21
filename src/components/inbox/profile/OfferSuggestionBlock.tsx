@@ -30,12 +30,21 @@ type OfferSuggestionResp = {
   error?: string | null;
 };
 
-export function OfferSuggestionBlock({ conversationId }: { conversationId: string }) {
+export function OfferSuggestionBlock({
+  conversationId,
+  onCreateTask,
+  onCreateOrder,
+}: {
+  conversationId: string;
+  onCreateTask?: (title: string) => void | Promise<void>;
+  onCreateOrder?: () => void;
+}) {
   const [suggestion, setSuggestion] = useState<OfferSuggestion | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fallback, setFallback] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [taskCreated, setTaskCreated] = useState(false);
 
   async function loadSuggestion() {
     setLoading(true);
@@ -65,6 +74,14 @@ export function OfferSuggestionBlock({ conversationId }: { conversationId: strin
     } catch {
       /* ignore */
     }
+  }
+
+  async function createTaskFromSuggestion() {
+    if (!suggestion || !onCreateTask) return;
+    const title = suggestion.nextActions[0] ?? `Follow-up offer: ${suggestion.offerTitle ?? suggestion.productName ?? "khách hàng"}`;
+    await onCreateTask(title.slice(0, 140));
+    setTaskCreated(true);
+    setTimeout(() => setTaskCreated(false), 1500);
   }
 
   const confidence = suggestion ? Math.round(suggestion.confidence * 100) : null;
@@ -172,6 +189,30 @@ export function OfferSuggestionBlock({ conversationId }: { conversationId: strin
             <span className={`h-1.5 w-1.5 rounded-full ${fallback ? "bg-amber-400" : "bg-emerald-400"}`} />
             {fallback ? "Gợi ý quy tắc cơ bản" : "Gợi ý bởi AI"}
           </div>
+          {(onCreateTask || onCreateOrder) && (
+            <div className="flex flex-wrap gap-2">
+              {onCreateTask && (
+                <button
+                  type="button"
+                  onClick={createTaskFromSuggestion}
+                  className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
+                >
+                  <InboxIcon name={taskCreated ? "userCheck" : "calendar"} className="h-3.5 w-3.5" />
+                  {taskCreated ? "Đã tạo task" : "Tạo task follow-up"}
+                </button>
+              )}
+              {onCreateOrder && (
+                <button
+                  type="button"
+                  onClick={onCreateOrder}
+                  className="inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-dark"
+                >
+                  <InboxIcon name="cart" className="h-3.5 w-3.5" />
+                  Tạo đơn
+                </button>
+              )}
+            </div>
+          )}
           {error && <p className="text-[11px] text-amber-600">{error}</p>}
         </div>
       )}
