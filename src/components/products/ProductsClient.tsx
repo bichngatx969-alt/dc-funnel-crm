@@ -284,7 +284,10 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
   }, [search]);
 
   useEffect(() => {
-    void load();
+    const timer = setTimeout(() => {
+      void load();
+    }, 280);
+    return () => clearTimeout(timer);
   }, [load]);
 
   const filteredItems = useMemo(() => {
@@ -411,14 +414,14 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Catalog items" value={items.length} hint={`${activeCount} đang bán`} />
         <StatCard label="Thiếu ảnh" value={missingImageCount} hint="Cần bổ sung cover URL" tone={missingImageCount ? "warn" : "good"} />
-        <StatCard label="AI audit TB" value={avgScore == null ? "—" : `${avgScore}%`} hint="Độ đầy đủ dữ liệu bán hàng" />
-        <StatCard label="Trạng thái AI" value={aiEnabled ? "AI model" : "Fallback"} hint="Không có key vẫn dùng rule-based" />
+        <StatCard label="Điểm AI TB" value={avgScore == null ? "—" : `${avgScore}%`} hint="Độ đầy đủ dữ liệu bán hàng" />
+        <StatCard label="Trạng thái AI" value={aiEnabled ? "AI model" : "Cơ bản"} hint="Chưa có key vẫn chạy chế độ cơ bản" />
       </div>
 
-      <div className="dc-card flex h-[calc(100vh-245px)] min-h-[700px] overflow-hidden rounded-2xl">
+      <div className="dc-card flex h-[calc(100vh-245px)] min-h-[560px] overflow-hidden rounded-2xl sm:min-h-[700px]">
         <div className={`flex w-full flex-col border-r border-gray-100 xl:w-[430px] ${selectedId ? "hidden xl:flex" : "flex"}`}>
           <div className="space-y-3 border-b border-gray-100 p-3">
             <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 focus-within:border-brand focus-within:bg-white">
@@ -471,6 +474,8 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
                   <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />
                 ))}
               </div>
+            ) : error && items.length === 0 ? (
+              <ListError message={error} onRetry={() => void load()} />
             ) : filteredItems.length === 0 ? (
               <EmptyCatalog onCreate={() => startCreate()} />
             ) : (
@@ -584,6 +589,19 @@ function EmptyCatalog({ onCreate }: { onCreate: () => void }) {
       </p>
       <button type="button" onClick={onCreate} className="mt-2 rounded-full bg-brand px-3 py-1.5 text-[12px] font-semibold text-white">
         Thêm sản phẩm/dịch vụ
+      </button>
+    </div>
+  );
+}
+
+function ListError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+      <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-xl font-bold text-rose-400">!</span>
+      <p className="text-[13px] font-medium text-gray-600">Không tải được catalog</p>
+      <p className="max-w-[18rem] text-[12px] text-gray-400">{message}</p>
+      <button type="button" onClick={onRetry} className="mt-2 rounded-full border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50">
+        Thử lại
       </button>
     </div>
   );
@@ -755,7 +773,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 
 function CatalogDetail({ item, onEdit }: { item: CatalogItem; onEdit: () => void }) {
   return (
-    <div className="scroll-thin min-h-0 overflow-y-auto border-r border-gray-100 p-4">
+    <div className="scroll-thin min-h-0 overflow-y-auto border-b border-gray-100 p-4 2xl:border-b-0 2xl:border-r">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2">
