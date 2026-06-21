@@ -1704,7 +1704,7 @@ Safety:
 - Không DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
 - 2026-06-21: Founder duyệt, Codex đã chạy npx prisma migrate deploy thành công; DB schema up to date.
 - 2026-06-21: Code đã push main, Dokploy redeploy, production smoke /products + Catalog APIs PASS.
-- 2026-06-21: Media Upload API code complete, no migration needed. npx prisma generate/typecheck/migrate status/build PASS. Production durable upload still needs R2 env configured in Dokploy.
+- 2026-06-21: Media Upload API code complete and deployed, no migration needed. npx prisma generate/typecheck/migrate status/build PASS. Production smoke PASS without DB write: /api/media/upload returns 400 for missing file, /api/catalog/items includes galleryMedia. Durable upload still needs R2 env configured in Dokploy.
 ```
 
 ---
@@ -1791,7 +1791,9 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - npx prisma generate: PASS.
 - npx prisma migrate status: PASS, schema up to date.
 - npm run build: PASS.
-- Runtime upload API chưa smoke ghi DB vì local .env đang trỏ DB production và R2 env chưa cấu hình; tránh tạo media test không bền.
+- Production deploy PASS via Docker service update.
+- Production smoke no-write PASS: login 200, /products 200, /api/media 200, /api/media/upload without file 400, /api/catalog/items 200 with galleryMedia field.
+- Runtime upload write smoke chưa chạy vì R2 env chưa cấu hình; tránh tạo media test không bền.
 
 ### Blocker
 - Không blocker code backend.
@@ -6152,9 +6154,9 @@ Production read-only smoke after deploy: PASS, login 200, /products 200, /api/ca
 ### 18.28. Product/Service Catalog v2 Phase 1B — Media Upload + Gallery Backend
 
 **Owner:** Codex
-**Status:** `DONE_CODED_TESTED_DEPLOY_PENDING`
+**Status:** `DONE_DEPLOYED`
 **Branch:** `main`
-**Commit/PR link:** pending commit
+**Commit/PR link:** 5ad5404
 
 #### Summary
 
@@ -6233,7 +6235,10 @@ npm run typecheck: PASS.
 npx prisma generate: PASS.
 npx prisma migrate status: PASS, schema up to date.
 npm run build: PASS.
-Upload runtime smoke not executed yet because local .env points at production DB and production R2 env is not configured; avoided creating non-durable local media rows.
+Git push origin main: PASS, commit 5ad5404.
+Production deploy: PASS via Docker service update.
+Production no-write smoke: PASS, login 200, /products 200, /api/media 200, /api/media/upload without file 400, /api/catalog/items 200 with galleryMedia field.
+Upload write smoke not executed yet because production R2 env is not configured; avoided creating non-durable local media rows.
 ```
 
 #### Risks / Handoff
