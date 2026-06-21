@@ -842,12 +842,13 @@ Codex bắt buộc cập nhật mục này sau mỗi backend PR.
 
 **Status:** `READY`
 **Owner:** Codex  
-**Last updated:** 2026-06-14
+**Last updated:** 2026-06-21
 
 ```http
 GET /api/workspaces
 POST /api/workspaces
 POST /api/workspaces/switch
+GET /api/workspaces/members
 ```
 
 Response:
@@ -891,10 +892,39 @@ POST /api/workspaces/switch
 - Sets HttpOnly cookie dc_workspace_id.
 - Response envelope: { ok: true, data: { workspace, currentWorkspaceId } }.
 
+GET /api/workspaces/members
+- Auth: logged-in user with WorkspaceMember access to currentWorkspaceId.
+- Query: q optional, role optional.
+- Filters by currentWorkspaceId; does not expose members from another workspace.
+- Used by UI owner/sale pickers for Contact, Order, Pipeline, Dashboard filters, Automation action config.
+- Response envelope: { ok: true, data: { items } }.
+
 Role compatibility:
 - Prisma Role keeps legacy ADMIN for safe migration compatibility.
 - New workspace roles are available: AGENCY_ADMIN, OWNER, MANAGER, SALE, MARKETER.
 - Legacy ADMIN is mapped to workspace OWNER when creating default membership.
+```
+
+GET /api/workspaces/members response item:
+
+```json
+{
+  "id": "membership_id",
+  "workspaceId": "workspace_id",
+  "userId": "user_id",
+  "role": "SALE",
+  "assignedOnly": false,
+  "createdAt": "2026-06-21T00:00:00.000Z",
+  "label": "Sale A",
+  "isCurrentUser": false,
+  "user": {
+    "id": "user_id",
+    "name": "Sale A",
+    "email": "sale@example.com",
+    "role": "SALE",
+    "createdAt": "2026-06-21T00:00:00.000Z"
+  }
+}
 ```
 
 ---
@@ -5610,6 +5640,13 @@ Agent nào gặp blocker phải ghi vào đây.
 - mode hiện là rule_based để không cần secret AI; không ghi DB, không gửi tin, không tạo đơn/automation.
 - Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
 - B-031 còn phụ thuộc runtime production: cần apply 2 migration AI đã tạo trước đó để AI Insight/Product Auditor chạy thật (xem B-032). Growth Report và Offer Engine không cần migration mới.
+
+[2026-06-21 · Codex · Workspace Members API]
+- Post-MVP P1 backend backlog DONE_CODED: thêm GET /api/workspaces/members.
+- API require login, filter currentWorkspaceId, hỗ trợ q/role, trả member + user label để UI chọn owner/sale và filter dashboard/contact/order/pipeline.
+- Không tạo migration mới; Prisma migrate status báo database schema up to date.
+- Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
+- B-030 preflight: npx prisma migrate status hiện up to date, không pending migration trong repo local.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
@@ -5640,7 +5677,7 @@ Vận hành / hoàn tất ngay:
 - Kiểm tenant isolation đầu cuối: đăng nhập, tạo >=2 workspace có data, switch và đối chiếu dashboard/contact/order/pipeline không lẫn.
 
 Nên có sớm (P1, ngoài MVP1):
-- API list workspace members -> picker owner cho Contact/Order/Pipeline + lọc dashboard theo sale.
+- DONE_CODED: API list workspace members (`GET /api/workspaces/members`) -> picker owner cho Contact/Order/Pipeline + lọc dashboard theo sale.
 - Deep-link conversation trong Inbox (comment "Mở hội thoại" trỏ đúng hội thoại thay vì /inbox chung).
 - Realtime inbox (thay polling) nếu cần.
 - Bật SEND_EMAIL/WEBHOOK automation thật khi có consent/config (đang SKIPPED an toàn).
