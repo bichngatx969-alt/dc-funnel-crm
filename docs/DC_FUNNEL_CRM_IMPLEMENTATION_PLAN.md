@@ -6323,3 +6323,34 @@ AI_TEMPERATURE=0.2   AI_MAX_TOKENS=900   AI_TIMEOUT_MS=30000
 ### 30.5. Mục 19 — Blocker / Founder Decision
 - **D-011 (FOUNDER):** Set `ANTHROPIC_API_KEY` (+ `AI_PROVIDER=anthropic`) vào env production (Dokploy) để bật Claude. Trước khi set: AI chạy rule-based fallback (không lỗi). Sau khi set + redeploy: AI dùng Claude.
 - Claude provider: **READY về code** (chờ key của founder).
+
+---
+
+## 31. Inbox / Comment Fix (2026-06-21 — Claude)
+
+### 31.1. Audit DB production (PHASE 0)
+- customers **208**, conversations **207**, messages **1758** (inbound 432) → **Messenger Inbox nhận data thật OK**.
+- nullWorkspace customers/messages = **0** → workspace mapping chuẩn, không data bị ẩn.
+- comments = **3** (toàn smoke 14/06), hasPhoneComments 3, fb_comment messages 3 → **chưa có comment THẬT nào**.
+- webhookLogs = **6** (thấp) → message chủ yếu vào qua **inbox-sync** (pull lịch sử), real-time webhook cần test thật.
+- phoneFilled **33**, emailFilled **2**.
+- Pages thật CONNECTED + subscribed `feed`+`messages`: Nguyễn Hồng Đức, NamNguyên-Store, HiChaos. (D.C Studio DISCONNECTED — không token.)
+
+### 31.2. Lỗi đã sửa
+- **Bug (commit 699beae):** `inbox-sync.ts` import tin INBOUND nhưng KHÔNG gọi `updateCustomerContactSignals` → SĐT/email trong tin sync không tự điền (phoneFilled kẹt 33 dù inbound 432). Đã fix: gom text inbound mỗi hội thoại → gọi extractor (chỉ điền field trống, không ghi đè). typecheck+build PASS, đã deploy.
+
+### 31.3. Không cần sửa (đã đúng sẵn)
+- Comment handler (`handleFacebookFeedChange`): map page→workspace, dedupe externalCommentId, set hasPhone/needsFollowUp, tạo Message INBOUND `fb_comment:*`.
+- Comment API: filter workspace/status/hasPhone/needsFollowUp/isHidden/page/search; order `needsFollowUp desc, createdAt desc`.
+- Comment UI: QuickFilter (Tất cả/Có SĐT/Cần xử lý/Đã trả lời/Đã ẩn), badge "Có SĐT" + "Cần xử lý" + viền trái rose nổi bật, quick actions (ẩn/trả lời/follow-up/archive), deep-link `?filter=hasPhone`.
+- Inbox: order `lastMessageAt desc`, polling 15s + SSE + refetch sau send, skeleton/empty state.
+- Customer 360: phone/email + copy, stage/tags/task/order/notes/activity + AI Insight.
+
+### 31.4. Backfill (PHASE 3)
+- Dry-run production: scanned 207, +4 phones, 31 đã có, **172 không có SĐT trong chat** (không phải bug). Chờ founder duyệt `--apply` cho 4 số.
+
+### 31.5. Mục 19 — Blockers
+- **D-009 (Comment real event): PARTIAL** — hạ tầng đủ (page subscribed `feed`, app-level webhook active, handler+API+UI đúng), nhưng **chưa có comment thật** để xác nhận. Cần founder **comment thật vào 1 bài của page HiChaos/NamNguyên** → soi `FacebookComment`/`webhookLogs` tăng.
+- **D-002 (Ẩn/trả lời comment): OPEN** — cần Meta scope `pages_manage_engagement` (chưa cấp). UI báo lỗi rõ, không crash. → App Review/permission là việc founder.
+- **Webhook real-time message: cần test** — gửi 1 tin mới từ tài khoản khác xem `webhookLogs` tăng (hiện inbox đầy nhờ sync).
+- **D-007 (phone dedup):** extraction đúng; fill rate thấp do khách không để lại SĐT.
