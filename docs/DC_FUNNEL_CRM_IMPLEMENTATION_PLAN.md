@@ -5646,7 +5646,7 @@ Agent nào gặp blocker phải ghi vào đây.
 - API require login, filter currentWorkspaceId, hỗ trợ q/role, trả member + user label để UI chọn owner/sale và filter dashboard/contact/order/pipeline.
 - Không tạo migration mới; Prisma migrate status báo database schema up to date.
 - Tests local: npx prisma generate PASS, npm run typecheck PASS, npm run build PASS.
-- B-030 preflight: npx prisma migrate status hiện up to date, không pending migration trong repo local.
+- B-030 RESOLVED: npx prisma migrate status hiện up to date, không pending migration; Prisma query MetaBusinessConnection count OK.
 ```
 
 #### Đề xuất bước tiếp theo cho Workspace UI (PR #2B — chờ Codex PR #2 API READY)
