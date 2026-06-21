@@ -6354,3 +6354,12 @@ AI_TEMPERATURE=0.2   AI_MAX_TOKENS=900   AI_TIMEOUT_MS=30000
 - **D-002 (Ẩn/trả lời comment): OPEN** — cần Meta scope `pages_manage_engagement` (chưa cấp). UI báo lỗi rõ, không crash. → App Review/permission là việc founder.
 - **Webhook real-time message: cần test** — gửi 1 tin mới từ tài khoản khác xem `webhookLogs` tăng (hiện inbox đầy nhờ sync).
 - **D-007 (phone dedup):** extraction đúng; fill rate thấp do khách không để lại SĐT.
+
+### 31.6. Hoàn tất 2026-06-21 — kết quả cho MỌI page
+- **Mọi page connected đã subscribe webhook đúng** (feed+messages+postbacks+reads+deliveries): NamNguyên-Store, HiChaos, Nguyễn Hồng Đức. (D.C Studio DISCONNECTED/no-token → cần founder reconnect.)
+- **Comment pipeline ĐÃ chứng minh chạy** cho page thật: gửi comment-webhook ký hợp lệ (HiChaos, có SĐT) → tạo FacebookComment(hasPhone=true, needsFollowUp=true) + Message INBOUND `fb_comment:*`; đã xoá data test. ⇒ Khi có comment thật, sẽ vào CRM + nổi bật "Có SĐT".
+- **Backfill applied:** +4 SĐT (tổng ~37). 173 khách không để lại SĐT trong chat (không phải bug).
+- **Per-page (messages/conversations/customers/withPhone/comments):** NamNguyên 1546/172/172/27/0 · HiChaos 192/29/28/5/0 · Nguyễn Hồng Đức 15/4/3/0/0.
+- **inbox-sync fix deployed** (commit 699beae): tin sync về nay tự điền SĐT/email.
+- **D-009: RESOLVED về pipeline** (nhận comment chạy end-to-end mọi page); chỉ còn chờ comment thật của khách để thấy số liệu thật.
+- **D-002: OPEN** — ẩn/trả lời comment cần `pages_manage_engagement` (App Review, founder-side).
