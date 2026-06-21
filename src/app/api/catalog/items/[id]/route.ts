@@ -4,13 +4,16 @@ import {
   catalogItemSelect,
   createUrlMediaAsset,
   enrichCatalogItems,
+  mediaIdListToJson,
   normalizeCatalogItemStatus,
   normalizeCatalogItemType,
+  normalizeMediaIdList,
   normalizeSlug,
   normalizeTextList,
   parseOptionalVnd,
   validateCategory,
   validateMediaAsset,
+  validateMediaAssets,
 } from "@/lib/catalog";
 import { normalizeNullableText, normalizeText, parseVnd } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
@@ -99,7 +102,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.marginVnd = nextCost === null ? null : nextPrice - nextCost;
   }
   if ("tagsJson" in body || "tags" in body) data.tagsJson = normalizeTextList(body.tagsJson ?? body.tags);
-  if ("galleryJson" in body || "gallery" in body) data.galleryJson = normalizeTextList(body.galleryJson ?? body.gallery);
+  if ("galleryJson" in body || "gallery" in body) {
+    const galleryIds = normalizeMediaIdList(body.galleryJson ?? body.gallery);
+    if (galleryIds.length && !(await validateMediaAssets(workspaceId, galleryIds))) {
+      return jsonError("Gallery có ảnh không thuộc workspace hiện tại", 400);
+    }
+    data.galleryJson = mediaIdListToJson(galleryIds);
+  }
   if ("targetSegment" in body) data.targetSegment = normalizeNullableText(body.targetSegment);
   if ("painPointsJson" in body || "painPoints" in body) data.painPointsJson = normalizeTextList(body.painPointsJson ?? body.painPoints);
   if ("benefitsJson" in body || "benefits" in body) data.benefitsJson = normalizeTextList(body.benefitsJson ?? body.benefits);

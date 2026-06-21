@@ -41,5 +41,8 @@ env.txt
 # logs
 *.log
 
+# local media upload fallback
+.data/
+
 # typescript
 *.tsbuildinfo

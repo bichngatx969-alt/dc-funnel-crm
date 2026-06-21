@@ -42,6 +42,17 @@ export const env = {
   // App
   appBaseUrl: readEnv("APP_BASE_URL", "NEXT_PUBLIC_APP_URL") || "http://localhost:3000",
 
+  // Media storage
+  mediaStorageProvider: (process.env.MEDIA_STORAGE_PROVIDER || "local").trim().toLowerCase(),
+  mediaMaxUploadMb: parsePositiveInt(process.env.MEDIA_MAX_UPLOAD_MB, 10),
+  mediaLocalDir: process.env.MEDIA_LOCAL_DIR || "",
+  r2AccountId: process.env.R2_ACCOUNT_ID ?? "",
+  r2AccessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
+  r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
+  r2Bucket: process.env.R2_BUCKET ?? "",
+  r2PublicBaseUrl: process.env.R2_PUBLIC_BASE_URL ?? "",
+  r2Region: process.env.R2_REGION || "auto",
+
   // Email (Resend) — tùy chọn
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET ?? "",
@@ -113,4 +124,10 @@ function readEnv(...names: string[]): string {
   }
 
   return "";
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
 }

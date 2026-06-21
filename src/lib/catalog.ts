@@ -79,6 +79,7 @@ export const mediaAssetSelect = {
 export type CatalogItemDTO = Prisma.CatalogItemGetPayload<{ select: typeof catalogItemSelect }> & {
   category?: Prisma.CatalogCategoryGetPayload<{ select: typeof catalogCategorySelect }> | null;
   coverImage?: Prisma.MediaAssetGetPayload<{ select: typeof mediaAssetSelect }> | null;
+  galleryMedia?: Array<Prisma.MediaAssetGetPayload<{ select: typeof mediaAssetSelect }>>;
 };
 
 export { parsePagination };
@@ -120,6 +121,26 @@ export function normalizeTextList(value: unknown): Prisma.InputJsonValue | typeo
     .filter(Boolean)
     .slice(0, 80);
   return normalized.length ? normalized : Prisma.JsonNull;
+}
+
+export function normalizeMediaIdList(value: unknown): string[] {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/\r?\n|,/)
+      : [];
+  return Array.from(
+    new Set(
+      items
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean)
+        .slice(0, 80)
+    )
+  );
+}
+
+export function mediaIdListToJson(mediaIds: string[]): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return mediaIds.length ? mediaIds : Prisma.JsonNull;
 }
 
 export function normalizeSlug(value: unknown, fallback: string): string {
@@ -164,6 +185,16 @@ export async function validateMediaAsset(workspaceId: string, mediaId: string | 
   });
 }
 
+export async function validateMediaAssets(workspaceId: string, mediaIds: string[]) {
+  if (!mediaIds.length) return [];
+  const assets = await prisma.mediaAsset.findMany({
+    where: { id: { in: mediaIds }, workspaceId, deletedAt: null },
+    select: mediaAssetSelect,
+  });
+  if (assets.length !== mediaIds.length) return null;
+  return assets;
+}
+
 export async function createUrlMediaAsset(workspaceId: string, input: {
   url?: unknown;
   fileName?: unknown;
@@ -186,9 +217,14 @@ export async function createUrlMediaAsset(workspaceId: string, input: {
 export async function enrichCatalogItems<T extends Prisma.CatalogItemGetPayload<{ select: typeof catalogItemSelect }>>(
   workspaceId: string,
   items: T[]
-): Promise<Array<T & Pick<CatalogItemDTO, "category" | "coverImage">>> {
+): Promise<Array<T & Pick<CatalogItemDTO, "category" | "coverImage" | "galleryMedia">>> {
   const categoryIds = Array.from(new Set(items.map((item) => item.categoryId).filter((id): id is string => Boolean(id))));
-  const mediaIds = Array.from(new Set(items.map((item) => item.coverImageId).filter((id): id is string => Boolean(id))));
+  const mediaIds = Array.from(
+    new Set([
+      ...items.map((item) => item.coverImageId).filter((id): id is string => Boolean(id)),
+      ...items.flatMap((item) => extractTextArray(item.galleryJson)),
+    ])
+  );
   const [categories, media] = await Promise.all([
     categoryIds.length
       ? prisma.catalogCategory.findMany({
@@ -209,5 +245,13 @@ export async function enrichCatalogItems<T extends Prisma.CatalogItemGetPayload<
     ...item,
     category: item.categoryId ? categoryById.get(item.categoryId) ?? null : null,
     coverImage: item.coverImageId ? mediaById.get(item.coverImageId) ?? null : null,
+    galleryMedia: extractTextArray(item.galleryJson)
+      .map((id) => mediaById.get(id))
+      .filter((asset): asset is Prisma.MediaAssetGetPayload<{ select: typeof mediaAssetSelect }> => Boolean(asset)),
   }));
+}
+
+function extractTextArray(value: Prisma.JsonValue | null): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item ?? "").trim()).filter(Boolean);
 }

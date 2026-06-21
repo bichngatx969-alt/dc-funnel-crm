@@ -5,14 +5,17 @@ import {
   catalogItemSelect,
   createUrlMediaAsset,
   enrichCatalogItems,
+  mediaIdListToJson,
   normalizeCatalogItemStatus,
   normalizeCatalogItemType,
+  normalizeMediaIdList,
   normalizeSlug,
   normalizeTextList,
   parseOptionalVnd,
   parsePagination,
   validateCategory,
   validateMediaAsset,
+  validateMediaAssets,
 } from "@/lib/catalog";
 import { normalizeNullableText, normalizeText, parseVnd } from "@/lib/order";
 import { prisma } from "@/lib/prisma";
@@ -107,6 +110,10 @@ export async function POST(req: Request) {
     });
     coverImageId = asset?.id ?? null;
   }
+  const galleryIds = normalizeMediaIdList(body.galleryJson ?? body.gallery);
+  if (galleryIds.length && !(await validateMediaAssets(workspaceId, galleryIds))) {
+    return jsonError("Gallery có ảnh không thuộc workspace hiện tại", 400);
+  }
 
   const basePriceVnd = parseVnd(body.basePriceVnd ?? body.priceVnd);
   const costVnd = parseOptionalVnd(body.costVnd);
@@ -128,7 +135,7 @@ export async function POST(req: Request) {
       currency: "VND",
       tagsJson: normalizeTextList(body.tagsJson ?? body.tags),
       coverImageId,
-      galleryJson: normalizeTextList(body.galleryJson ?? body.gallery),
+      galleryJson: mediaIdListToJson(galleryIds),
       targetSegment: normalizeNullableText(body.targetSegment),
       painPointsJson: normalizeTextList(body.painPointsJson ?? body.painPoints),
       benefitsJson: normalizeTextList(body.benefitsJson ?? body.benefits),

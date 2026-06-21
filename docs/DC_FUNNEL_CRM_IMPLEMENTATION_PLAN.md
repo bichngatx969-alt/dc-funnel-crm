@@ -1663,6 +1663,8 @@ POST /api/catalog/categories
 PATCH /api/catalog/categories/:id
 GET /api/media
 POST /api/media
+POST /api/media/upload
+GET /api/media/local/:key
 ```
 
 Notes:
@@ -1675,7 +1677,7 @@ Auth:
 
 Schema:
 - CatalogItem là core entity mới cho Product/Service Catalog v2.
-- CatalogCategory và MediaAsset là nền additive cho category + ảnh URL.
+- CatalogCategory và MediaAsset là nền additive cho category + ảnh URL/upload metadata.
 - ProductLite vẫn giữ nguyên để OrderItem/Order Lite/backward compatibility không vỡ.
 - Migration applied: prisma/migrations/20260621_catalog_v2_foundation/migration.sql.
 
@@ -1691,6 +1693,9 @@ Compatibility:
 - /api/products và ProductLite vẫn giữ cho legacy/order compatibility.
 - /api/products POST/PATCH mirror ProductLite sang CatalogItem qua legacyProductLiteId để Order Lite cũ và Catalog v2 không lệch dữ liệu.
 - Legacy ProductLite đã được backfill sang CatalogItem bằng script idempotent `npm run catalog:backfill -- --apply`.
+- POST /api/media/upload nhận multipart/form-data file + altText?, validate JPG/PNG/WebP và size theo MEDIA_MAX_UPLOAD_MB.
+- MEDIA_STORAGE_PROVIDER=r2 dùng Cloudflare R2/S3-compatible qua @aws-sdk/client-s3; MEDIA_STORAGE_PROVIDER=local dùng dev/local fallback qua /api/media/local/:key.
+- PATCH/POST /api/catalog/items validate coverImageId/gallery IDs thuộc currentWorkspaceId; response enrich thêm coverImage và galleryMedia.
 - Product AI Auditor đọc ProductLite trước, sau đó fallback CatalogItem; endpoint alias /api/catalog/items/:id/ai-audit dùng chung logic.
 - Offer Suggestion và AI Growth Report ưu tiên CatalogItem ACTIVE; nếu chưa có CatalogItem thì fallback ProductLite.
 
@@ -1699,6 +1704,7 @@ Safety:
 - Không DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
 - 2026-06-21: Founder duyệt, Codex đã chạy npx prisma migrate deploy thành công; DB schema up to date.
 - 2026-06-21: Code đã push main, Dokploy redeploy, production smoke /products + Catalog APIs PASS.
+- 2026-06-21: Media Upload API code complete, no migration needed. npx prisma generate/typecheck/migrate status/build PASS. Production durable upload still needs R2 env configured in Dokploy.
 ```
 
 ---
@@ -1743,6 +1749,64 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-21 — Catalog v2 Phase 1B Media Upload API
+
+```text
+## 2026-06-21 — Catalog v2 Phase 1B Media Upload API
+
+### Đang làm
+- Tiếp tục Catalog v2 full-phase master plan: PR-CAT-1B Media Upload + Gallery backend.
+
+### Đã làm hôm nay
+- Đọc 2 CATALOG_V2_FULL_PHASE_MASTER_EXECUTION_PLAN.md.
+- Thêm @aws-sdk/client-s3 để hỗ trợ Cloudflare R2/S3-compatible storage.
+- Thêm src/lib/storage/media-storage.ts với uploadMediaFile, deleteMediaObject, getPublicUrl.
+- Thêm POST /api/media/upload multipart/form-data cho JPG/PNG/WebP, size limit MEDIA_MAX_UPLOAD_MB.
+- Thêm local fallback /api/media/local/:key cho dev/test khi chưa có R2.
+- Thêm env media/R2 placeholders vào .env.example và env reader.
+- Thêm .data/ vào .gitignore để local upload fallback không bị commit.
+- Nâng enrichCatalogItems trả galleryMedia.
+- Nâng POST/PATCH /api/catalog/items validate coverImageId/gallery IDs thuộc currentWorkspaceId.
+
+### Files đã sửa
+- package.json
+- package-lock.json
+- .env.example
+- .gitignore
+- src/lib/env.ts
+- src/lib/catalog.ts
+- src/lib/storage/media-storage.ts
+- src/app/api/media/upload/route.ts
+- src/app/api/media/local/[...key]/route.ts
+- src/app/api/catalog/items/route.ts
+- src/app/api/catalog/items/[id]/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Không sửa UI. Không stage các file diagnostic/untracked cũ.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- npx prisma generate: PASS.
+- npx prisma migrate status: PASS, schema up to date.
+- npm run build: PASS.
+- Runtime upload API chưa smoke ghi DB vì local .env đang trỏ DB production và R2 env chưa cấu hình; tránh tạo media test không bền.
+
+### Blocker
+- Không blocker code backend.
+- Production durable upload cần founder cấu hình R2 env trong Dokploy.
+
+### Cần founder quyết
+- Cung cấp R2/S3-compatible env production nếu muốn upload ảnh thật bền qua redeploy.
+
+### Cần agent kia hỗ trợ
+- Claude nối UI upload/gallery vào POST /api/media/upload và galleryMedia.
+
+### Kế hoạch tiếp theo
+- Sau khi R2 env có đủ, smoke POST /api/media/upload production.
+- Tiếp tục Phase 2A Variant Schema + API nếu founder muốn đi tiếp.
+```
 
 #### 2026-06-21 — Catalog v2 Phase 1B Legacy Backfill + Sync
 
@@ -6079,8 +6143,106 @@ Production read-only smoke after deploy: PASS, login 200, /products 200, /api/ca
 - Existing ProductLite is not deleted or renamed.
 - Order Lite still uses ProductLite; Catalog v2 displays synced data.
 - ProductLite -> CatalogItem mirror is deployed for future old API writes.
-- D-013 remains OPEN: real image upload/storage is not implemented until storage provider is chosen.
+- D-013 is now PARTIAL: backend upload code supports R2/S3-compatible storage, but production durable upload still needs R2 env configured in Dokploy.
 - Phase 2 Variant/Inventory remains separate scope and should be kept small/additive.
+```
+
+---
+
+### 18.28. Product/Service Catalog v2 Phase 1B — Media Upload + Gallery Backend
+
+**Owner:** Codex
+**Status:** `DONE_CODED_TESTED_DEPLOY_PENDING`
+**Branch:** `main`
+**Commit/PR link:** pending commit
+
+#### Summary
+
+```text
+Completed backend foundation for real Catalog v2 media upload:
+- Added storage abstraction for Cloudflare R2/S3-compatible storage.
+- Added local fallback storage for dev/test only.
+- Added multipart upload API for JPG/PNG/WebP.
+- MediaAsset remains the source of truth; no binary is stored in DB.
+- CatalogItem create/update now validates coverImageId and gallery media IDs by currentWorkspaceId.
+- CatalogItem response now enriches galleryMedia for UI reload.
+```
+
+#### API Contract
+
+```http
+POST /api/media/upload
+GET /api/media/local/:key
+GET /api/media
+POST /api/media
+POST /api/catalog/items
+PATCH /api/catalog/items/:id
+```
+
+POST /api/media/upload:
+
+```text
+Auth: logged-in user.
+Body: multipart/form-data with file and optional altText.
+Allowed MIME: image/jpeg, image/png, image/webp.
+Max size: MEDIA_MAX_UPLOAD_MB, default 10MB.
+Response: { ok: true, data: { media } }.
+Storage:
+- MEDIA_STORAGE_PROVIDER=r2 => R2/S3-compatible upload through @aws-sdk/client-s3.
+- MEDIA_STORAGE_PROVIDER=local => writes to .data/media and serves via /api/media/local/:key.
+```
+
+Catalog item media:
+
+```text
+coverImageId must belong to currentWorkspaceId.
+gallery/galleryJson must be an array/list of MediaAsset IDs in currentWorkspaceId.
+Response includes coverImage and galleryMedia.
+```
+
+#### Schema / Migration
+
+```text
+No schema change.
+No migration.
+Existing MediaAsset/CatalogItem coverImageId/galleryJson fields are reused.
+No reset, no db push, no hard delete.
+```
+
+#### Files changed
+
+```text
+.env.example
+.gitignore
+package.json
+package-lock.json
+src/lib/env.ts
+src/lib/catalog.ts
+src/lib/storage/media-storage.ts
+src/app/api/media/upload/route.ts
+src/app/api/media/local/[...key]/route.ts
+src/app/api/catalog/items/route.ts
+src/app/api/catalog/items/[id]/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests / Smoke
+
+```text
+npm run typecheck: PASS.
+npx prisma generate: PASS.
+npx prisma migrate status: PASS, schema up to date.
+npm run build: PASS.
+Upload runtime smoke not executed yet because local .env points at production DB and production R2 env is not configured; avoided creating non-durable local media rows.
+```
+
+#### Risks / Handoff
+
+```text
+- Production durable upload needs R2/S3 env values in Dokploy: MEDIA_STORAGE_PROVIDER=r2, R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, R2_PUBLIC_BASE_URL, R2_REGION=auto.
+- Local provider is for dev/test; container-local uploads can disappear on redeploy if used in production.
+- Claude handoff: wire /products upload UI to POST /api/media/upload, use returned media.id for coverImageId/gallery.
+- Next Codex phase: Phase 2A Variant Schema + API.
 ```
 
 ---
@@ -6099,7 +6261,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-010 | AI model key có cấu hình chưa? | Codex | OPEN — fallback active | 2026-06-21 local check: OPENAI_API_KEY=false. App vẫn dùng được bằng rule-based fallback. Nếu muốn AI model thật, founder nhập OPENAI_API_KEY trực tiếp trong Dokploy Environment, không gửi qua chat. |
 | D-011 | Deploy AI Product/Service completion lên production? | Founder | DONE | 2026-06-21: Catalog v2/Product/Service code đã push main, Dokploy redeploy PASS, production smoke /products + Catalog APIs PASS. |
 | D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | DONE | Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công ngày 2026-06-21. npx prisma migrate status sau deploy: schema up to date. |
-| D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | OPEN | Phase 1 chỉ lưu URL metadata trong MediaAsset. Cần chốt S3/R2/UploadThing/Dokploy volume/CDN trước khi làm upload binary. |
+| D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | PARTIAL — code ready, env pending | 2026-06-21 Codex đã implement backend upload với MEDIA_STORAGE_PROVIDER=r2 qua Cloudflare R2/S3-compatible và local fallback dev/test. Production durable upload cần founder cấu hình R2 env trực tiếp trong Dokploy; không gửi secret qua chat. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -6112,8 +6274,9 @@ Agent nào gặp blocker phải ghi vào đây.
 ```text
 [2026-06-21 · Codex · Catalog v2 Phase 1]
 - B-026 (RESOLVED): Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công cho 20260621_catalog_v2_foundation. Production DB đã có CatalogCategory/MediaAsset/CatalogItem, migrate status up to date.
-- B-027 (PHASE 2 DECISION): MediaAsset Phase 1 stores URL metadata only. Binary upload/storage/CDN must be chosen before implementing real image upload.
+- B-027 (PARTIAL): Media upload backend implemented for R2/S3-compatible storage plus dev local fallback. Production still needs R2 env in Dokploy before durable upload smoke.
 - B-028 (RESOLVED): ProductLite legacy backfill completed safely. `npm run catalog:backfill -- --apply` created 3 CatalogItem rows, rerun dry-run shows existing 3 / created 0. /api/products POST/PATCH now mirrors ProductLite to CatalogItem for future compatibility.
+- B-029 (OPEN): POST /api/media/upload runtime write smoke is intentionally not run against production until R2 env is configured; local fallback in production would be non-durable across redeploy.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
