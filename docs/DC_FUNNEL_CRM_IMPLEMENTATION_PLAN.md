@@ -1665,6 +1665,15 @@ GET /api/media
 POST /api/media
 POST /api/media/upload
 GET /api/media/local/:key
+GET /api/catalog/items/:id/options
+POST /api/catalog/items/:id/options
+PATCH /api/catalog/items/:id/options/:optionId
+GET /api/catalog/items/:id/variants
+POST /api/catalog/items/:id/variants
+POST /api/catalog/items/:id/variants/generate
+PATCH /api/catalog/items/:id/variants/:variantId
+GET /api/catalog/variants/:variantId/inventory
+POST /api/catalog/variants/:variantId/inventory/adjust
 ```
 
 Notes:
@@ -1696,6 +1705,10 @@ Compatibility:
 - POST /api/media/upload nhận multipart/form-data file + altText?, validate JPG/PNG/WebP và size theo MEDIA_MAX_UPLOAD_MB.
 - MEDIA_STORAGE_PROVIDER=r2 dùng Cloudflare R2/S3-compatible qua @aws-sdk/client-s3; MEDIA_STORAGE_PROVIDER=local dùng dev/local fallback qua /api/media/local/:key.
 - PATCH/POST /api/catalog/items validate coverImageId/gallery IDs thuộc currentWorkspaceId; response enrich thêm coverImage và galleryMedia.
+- Phase 2A Variant API coded: CatalogOption, CatalogVariant, InventoryMovement.
+- Variant endpoints chỉ cho CatalogItem type=PHYSICAL_PRODUCT.
+- Generate variants sinh tổ hợp từ option values, giới hạn 200 biến thể/lần.
+- Inventory adjust ghi InventoryMovement và không cho inventoryQuantity âm khi inventoryTracked=true.
 - Product AI Auditor đọc ProductLite trước, sau đó fallback CatalogItem; endpoint alias /api/catalog/items/:id/ai-audit dùng chung logic.
 - Offer Suggestion và AI Growth Report ưu tiên CatalogItem ACTIVE; nếu chưa có CatalogItem thì fallback ProductLite.
 
@@ -1705,6 +1718,7 @@ Safety:
 - 2026-06-21: Founder duyệt, Codex đã chạy npx prisma migrate deploy thành công; DB schema up to date.
 - 2026-06-21: Code đã push main, Dokploy redeploy, production smoke /products + Catalog APIs PASS.
 - 2026-06-21: Media Upload API code complete and deployed, no migration needed. npx prisma generate/typecheck/migrate status/build PASS. Production smoke PASS without DB write: /api/media/upload returns 400 for missing file, /api/catalog/items includes galleryMedia. Durable upload still needs R2 env configured in Dokploy.
+- 2026-06-21: Variant/Inventory API code complete with additive migration 20260621_catalog_v2_phase2_variants. npx prisma format/generate/typecheck/build PASS. Migration is pending and NOT applied/deployed until founder approves.
 ```
 
 ---
@@ -1808,6 +1822,61 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ### Kế hoạch tiếp theo
 - Sau khi R2 env có đủ, smoke POST /api/media/upload production.
 - Tiếp tục Phase 2A Variant Schema + API nếu founder muốn đi tiếp.
+```
+
+#### 2026-06-21 — Catalog v2 Phase 2A Variant Schema + API
+
+```text
+## 2026-06-21 — Catalog v2 Phase 2A Variant Schema + API
+
+### Đang làm
+- Tiếp tục master plan: Phase 2A backend cho variant, option và inventory movement.
+
+### Đã làm hôm nay
+- Thêm Prisma models CatalogOption, CatalogVariant, InventoryMovement.
+- Tạo migration additive prisma/migrations/20260621_catalog_v2_phase2_variants/migration.sql.
+- Thêm helper src/lib/catalog-variants.ts.
+- Thêm options API: GET/POST /api/catalog/items/:id/options, PATCH /api/catalog/items/:id/options/:optionId.
+- Thêm variants API: GET/POST /api/catalog/items/:id/variants, POST /api/catalog/items/:id/variants/generate, PATCH /api/catalog/items/:id/variants/:variantId.
+- Thêm inventory API: GET /api/catalog/variants/:variantId/inventory, POST /api/catalog/variants/:variantId/inventory/adjust.
+- Business rules: chỉ PHYSICAL_PRODUCT có variant, generate cap 200, inventory adjust không cho tồn âm nếu tracked.
+- Review migration không có DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260621_catalog_v2_phase2_variants/migration.sql
+- src/lib/catalog-variants.ts
+- src/app/api/catalog/items/[id]/options/route.ts
+- src/app/api/catalog/items/[id]/options/[optionId]/route.ts
+- src/app/api/catalog/items/[id]/variants/route.ts
+- src/app/api/catalog/items/[id]/variants/generate/route.ts
+- src/app/api/catalog/items/[id]/variants/[variantId]/route.ts
+- src/app/api/catalog/variants/[variantId]/inventory/route.ts
+- src/app/api/catalog/variants/[variantId]/inventory/adjust/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Không sửa UI.
+
+### Typecheck/build/test
+- npx prisma format: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- npx prisma migrate status: PENDING migration 20260621_catalog_v2_phase2_variants, expected.
+
+### Blocker
+- B-030: Production migration chưa apply; cần founder duyệt trước khi chạy npx prisma migrate deploy.
+
+### Cần founder quyết
+- D-014: Duyệt apply migration 20260621_catalog_v2_phase2_variants lên Neon production?
+
+### Cần agent kia hỗ trợ
+- Claude PR-CAT-2B Variant UI sau khi migration apply.
+
+### Kế hoạch tiếp theo
+- Khi founder duyệt migration: chạy npx prisma migrate deploy, smoke API variants/inventory.
+- Sau đó tiếp tục Phase 2B UI hoặc Phase 2C inventory alert tùy ưu tiên.
 ```
 
 #### 2026-06-21 — Catalog v2 Phase 1B Legacy Backfill + Sync
@@ -6252,6 +6321,117 @@ Upload write smoke not executed yet because production R2 env is not configured;
 
 ---
 
+### 18.29. Product/Service Catalog v2 Phase 2A — Variant Schema + API
+
+**Owner:** Codex
+**Status:** `DONE_CODED_MIGRATION_PENDING`
+**Branch:** `main`
+**Commit/PR link:** pending commit
+
+#### Summary
+
+```text
+Completed backend/API foundation for Catalog v2 variants and inventory:
+- CatalogOption supports option names and values such as Size/Màu/Chất liệu.
+- CatalogVariant supports SKU/barcode, optionValuesJson, price/cost/margin, image, status, physical dimensions, inventory quantity and low stock threshold.
+- InventoryMovement records every stock adjustment.
+- APIs are workspace-scoped and require logged-in user.
+- Variant APIs only allow PHYSICAL_PRODUCT items.
+```
+
+#### API Contract
+
+```http
+GET /api/catalog/items/:id/options
+POST /api/catalog/items/:id/options
+PATCH /api/catalog/items/:id/options/:optionId
+
+GET /api/catalog/items/:id/variants
+POST /api/catalog/items/:id/variants
+POST /api/catalog/items/:id/variants/generate
+PATCH /api/catalog/items/:id/variants/:variantId
+
+GET /api/catalog/variants/:variantId/inventory
+POST /api/catalog/variants/:variantId/inventory/adjust
+```
+
+Business rules:
+
+```text
+- Auth required.
+- All query/write filter currentWorkspaceId.
+- Variant endpoints require CatalogItem.type=PHYSICAL_PRODUCT.
+- Generate endpoint uses active options and skips existing optionValuesJson combinations.
+- Generate cap is 200 variants.
+- Inventory adjust uses integer delta quantity.
+- inventoryQuantity cannot go below 0 when inventoryTracked=true.
+- Inventory adjust writes InventoryMovement in the same transaction as stock update.
+- No hard delete; option/variant PATCH supports soft archive/delete semantics.
+```
+
+#### Schema / Migration
+
+```text
+Migration file:
+prisma/migrations/20260621_catalog_v2_phase2_variants/migration.sql
+
+Adds:
+- CatalogOption
+- CatalogVariant
+- InventoryMovement
+- indexes by workspaceId, catalogItemId, sku, status, variantId, type, createdAt
+
+Migration review:
+- Additive only.
+- No DROP.
+- No DELETE FROM.
+- No TRUNCATE.
+- No SET NOT NULL on existing tables.
+- No ON DELETE CASCADE.
+
+Migration status:
+- npx prisma migrate status shows 20260621_catalog_v2_phase2_variants pending.
+- NOT applied to production yet.
+```
+
+#### Files changed
+
+```text
+prisma/schema.prisma
+prisma/migrations/20260621_catalog_v2_phase2_variants/migration.sql
+src/lib/catalog-variants.ts
+src/app/api/catalog/items/[id]/options/route.ts
+src/app/api/catalog/items/[id]/options/[optionId]/route.ts
+src/app/api/catalog/items/[id]/variants/route.ts
+src/app/api/catalog/items/[id]/variants/generate/route.ts
+src/app/api/catalog/items/[id]/variants/[variantId]/route.ts
+src/app/api/catalog/variants/[variantId]/inventory/route.ts
+src/app/api/catalog/variants/[variantId]/inventory/adjust/route.ts
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests / Smoke
+
+```text
+npx prisma format: PASS.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+npx prisma migrate status: expected pending migration 20260621_catalog_v2_phase2_variants.
+Runtime API smoke not run because migration has not been applied.
+```
+
+#### Risks / Handoff
+
+```text
+- Do not deploy/use variant endpoints in production before migration deploy.
+- Founder approval required before npx prisma migrate deploy.
+- Claude handoff after migration apply: PR-CAT-2B Variant Manager UI.
+- Next Codex step after approval: apply migration, smoke options/variants/generate/inventory adjust, then update this report to DONE_DEPLOYED.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -6267,6 +6447,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-011 | Deploy AI Product/Service completion lên production? | Founder | DONE | 2026-06-21: Catalog v2/Product/Service code đã push main, Dokploy redeploy PASS, production smoke /products + Catalog APIs PASS. |
 | D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | DONE | Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công ngày 2026-06-21. npx prisma migrate status sau deploy: schema up to date. |
 | D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | PARTIAL — code ready, env pending | 2026-06-21 Codex đã implement backend upload với MEDIA_STORAGE_PROVIDER=r2 qua Cloudflare R2/S3-compatible và local fallback dev/test. Production durable upload cần founder cấu hình R2 env trực tiếp trong Dokploy; không gửi secret qua chat. |
+| D-014 | Duyệt apply migration Catalog v2 Phase 2A `20260621_catalog_v2_phase2_variants` lên production? | Codex | OPEN | Migration additive-only đã tạo và review PASS; chưa chạy npx prisma migrate deploy. Cần founder duyệt trước khi apply/smoke production. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -6282,6 +6463,7 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-027 (PARTIAL): Media upload backend implemented for R2/S3-compatible storage plus dev local fallback. Production still needs R2 env in Dokploy before durable upload smoke.
 - B-028 (RESOLVED): ProductLite legacy backfill completed safely. `npm run catalog:backfill -- --apply` created 3 CatalogItem rows, rerun dry-run shows existing 3 / created 0. /api/products POST/PATCH now mirrors ProductLite to CatalogItem for future compatibility.
 - B-029 (OPEN): POST /api/media/upload runtime write smoke is intentionally not run against production until R2 env is configured; local fallback in production would be non-durable across redeploy.
+- B-030 (OPEN): Catalog v2 Phase 2A Variant/Inventory migration is pending. Do not deploy/use variant endpoints in production until founder approves `npx prisma migrate deploy` and smoke test passes.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;

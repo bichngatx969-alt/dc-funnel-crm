@@ -924,6 +924,71 @@ model CatalogItem {
   @@index([workspaceId, legacyProductLiteId])
 }
 
+model CatalogOption {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  catalogItemId String
+  name          String
+  valuesJson    Json
+  position      Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  @@index([workspaceId])
+  @@index([workspaceId, catalogItemId])
+}
+
+model CatalogVariant {
+  id                String    @id @default(cuid())
+  workspaceId       String
+  catalogItemId     String
+  name              String
+  sku               String?
+  barcode           String?
+  optionValuesJson  Json?
+  priceVnd          Int       @default(0)
+  compareAtPriceVnd Int?
+  costVnd           Int?
+  marginVnd         Int?
+  inventoryTracked  Boolean   @default(true)
+  inventoryQuantity Int       @default(0)
+  lowStockThreshold Int?
+  weightGram        Int?
+  lengthCm          Float?
+  widthCm           Float?
+  heightCm          Float?
+  imageId           String?
+  status            String    @default("ACTIVE")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  @@index([workspaceId])
+  @@index([workspaceId, catalogItemId])
+  @@index([workspaceId, sku])
+  @@index([workspaceId, status])
+}
+
+model InventoryMovement {
+  id          String   @id @default(cuid())
+  workspaceId String
+  variantId   String
+  type        String
+  quantity    Int
+  reason      String?
+  sourceType  String?
+  sourceId    String?
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([workspaceId, variantId])
+  @@index([workspaceId, type])
+  @@index([workspaceId, createdAt])
+}
+
 model Order {
   id              String         @id @default(cuid())
   workspaceId     String
