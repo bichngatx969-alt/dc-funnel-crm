@@ -1718,7 +1718,7 @@ Safety:
 - 2026-06-21: Founder duyệt, Codex đã chạy npx prisma migrate deploy thành công; DB schema up to date.
 - 2026-06-21: Code đã push main, Dokploy redeploy, production smoke /products + Catalog APIs PASS.
 - 2026-06-21: Media Upload API code complete and deployed, no migration needed. npx prisma generate/typecheck/migrate status/build PASS. Production smoke PASS without DB write: /api/media/upload returns 400 for missing file, /api/catalog/items includes galleryMedia. Durable upload still needs R2 env configured in Dokploy.
-- 2026-06-21: Variant/Inventory API code complete with additive migration 20260621_catalog_v2_phase2_variants. npx prisma format/generate/typecheck/build PASS. Migration is pending and NOT applied/deployed until founder approves.
+- 2026-06-21: Variant/Inventory API deployed. Founder approved, Codex applied additive migration 20260621_catalog_v2_phase2_variants with npx prisma migrate deploy. Production smoke PASS: create physical CatalogItem, create option, generate variants, list variants, adjust inventory, list inventory movement, archive smoke item.
 ```
 
 ---
@@ -1863,20 +1863,25 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - npx prisma generate: PASS.
 - npm run typecheck: PASS.
 - npm run build: PASS.
-- npx prisma migrate status: PENDING migration 20260621_catalog_v2_phase2_variants, expected.
+- npx prisma migrate status before approval: PENDING migration 20260621_catalog_v2_phase2_variants, expected.
+- Founder approved migration.
+- npx prisma migrate deploy: PASS, applied 20260621_catalog_v2_phase2_variants.
+- npx prisma migrate status after deploy: PASS, schema up to date.
+- Production deploy PASS via Docker service update.
+- Production smoke PASS: create item 201, option 201, generate variants 200 (created 2), list variants 200, inventory adjust 201, inventory history 200, archive smoke item 200.
 
 ### Blocker
-- B-030: Production migration chưa apply; cần founder duyệt trước khi chạy npx prisma migrate deploy.
+- Không còn blocker cho Phase 2A sau khi migration/deploy/smoke PASS.
 
 ### Cần founder quyết
-- D-014: Duyệt apply migration 20260621_catalog_v2_phase2_variants lên Neon production?
+- Không cần thêm quyết định cho Phase 2A.
 
 ### Cần agent kia hỗ trợ
 - Claude PR-CAT-2B Variant UI sau khi migration apply.
 
 ### Kế hoạch tiếp theo
-- Khi founder duyệt migration: chạy npx prisma migrate deploy, smoke API variants/inventory.
-- Sau đó tiếp tục Phase 2B UI hoặc Phase 2C inventory alert tùy ưu tiên.
+- Handoff Claude PR-CAT-2B Variant UI.
+- Codex tiếp theo có thể làm Phase 2C inventory alert hoặc Phase 3A booking backend.
 ```
 
 #### 2026-06-21 — Catalog v2 Phase 1B Legacy Backfill + Sync
@@ -6324,9 +6329,9 @@ Upload write smoke not executed yet because production R2 env is not configured;
 ### 18.29. Product/Service Catalog v2 Phase 2A — Variant Schema + API
 
 **Owner:** Codex
-**Status:** `DONE_CODED_MIGRATION_PENDING`
+**Status:** `DONE_DEPLOYED`
 **Branch:** `main`
-**Commit/PR link:** pending commit
+**Commit/PR link:** 8ba4e8a
 
 #### Summary
 
@@ -6390,8 +6395,9 @@ Migration review:
 - No ON DELETE CASCADE.
 
 Migration status:
-- npx prisma migrate status shows 20260621_catalog_v2_phase2_variants pending.
-- NOT applied to production yet.
+- Founder approved.
+- npx prisma migrate deploy applied 20260621_catalog_v2_phase2_variants successfully.
+- npx prisma migrate status after deploy: database schema is up to date.
 ```
 
 #### Files changed
@@ -6417,17 +6423,21 @@ npx prisma format: PASS.
 npx prisma generate: PASS.
 npm run typecheck: PASS.
 npm run build: PASS.
-npx prisma migrate status: expected pending migration 20260621_catalog_v2_phase2_variants.
-Runtime API smoke not run because migration has not been applied.
+npx prisma migrate status before approval: expected pending migration 20260621_catalog_v2_phase2_variants.
+npx prisma migrate deploy: PASS.
+npx prisma migrate status after deploy: PASS, schema up to date.
+Git push origin main: PASS, commit 8ba4e8a.
+Production deploy: PASS via Docker service update.
+Production runtime smoke: PASS, create physical CatalogItem 201, create option 201, generate variants 200 (created 2), list variants 200, inventory adjust 201, inventory history 200, archive smoke item 200.
 ```
 
 #### Risks / Handoff
 
 ```text
-- Do not deploy/use variant endpoints in production before migration deploy.
-- Founder approval required before npx prisma migrate deploy.
-- Claude handoff after migration apply: PR-CAT-2B Variant Manager UI.
-- Next Codex step after approval: apply migration, smoke options/variants/generate/inventory adjust, then update this report to DONE_DEPLOYED.
+- Variant endpoints are deployed and smoke-tested.
+- Smoke CatalogItem was archived after test; InventoryMovement remains as audit for the archived smoke variant.
+- Claude handoff: PR-CAT-2B Variant Manager UI can start.
+- Next Codex step: Phase 2C inventory alert or Phase 3A service booking backend.
 ```
 
 ---
@@ -6447,7 +6457,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-011 | Deploy AI Product/Service completion lên production? | Founder | DONE | 2026-06-21: Catalog v2/Product/Service code đã push main, Dokploy redeploy PASS, production smoke /products + Catalog APIs PASS. |
 | D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | DONE | Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công ngày 2026-06-21. npx prisma migrate status sau deploy: schema up to date. |
 | D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | PARTIAL — code ready, env pending | 2026-06-21 Codex đã implement backend upload với MEDIA_STORAGE_PROVIDER=r2 qua Cloudflare R2/S3-compatible và local fallback dev/test. Production durable upload cần founder cấu hình R2 env trực tiếp trong Dokploy; không gửi secret qua chat. |
-| D-014 | Duyệt apply migration Catalog v2 Phase 2A `20260621_catalog_v2_phase2_variants` lên production? | Codex | OPEN | Migration additive-only đã tạo và review PASS; chưa chạy npx prisma migrate deploy. Cần founder duyệt trước khi apply/smoke production. |
+| D-014 | Duyệt apply migration Catalog v2 Phase 2A `20260621_catalog_v2_phase2_variants` lên production? | Codex | DONE | Founder duyệt ngày 2026-06-21; Codex đã chạy npx prisma migrate deploy thành công, migrate status sau deploy schema up to date, production smoke variants/inventory PASS. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -6463,7 +6473,7 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-027 (PARTIAL): Media upload backend implemented for R2/S3-compatible storage plus dev local fallback. Production still needs R2 env in Dokploy before durable upload smoke.
 - B-028 (RESOLVED): ProductLite legacy backfill completed safely. `npm run catalog:backfill -- --apply` created 3 CatalogItem rows, rerun dry-run shows existing 3 / created 0. /api/products POST/PATCH now mirrors ProductLite to CatalogItem for future compatibility.
 - B-029 (OPEN): POST /api/media/upload runtime write smoke is intentionally not run against production until R2 env is configured; local fallback in production would be non-durable across redeploy.
-- B-030 (OPEN): Catalog v2 Phase 2A Variant/Inventory migration is pending. Do not deploy/use variant endpoints in production until founder approves `npx prisma migrate deploy` and smoke test passes.
+- B-030 (RESOLVED): Catalog v2 Phase 2A Variant/Inventory migration applied and production smoke passed.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
