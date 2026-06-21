@@ -6602,3 +6602,17 @@ AI_TEMPERATURE=0.2   AI_MAX_TOKENS=900   AI_TIMEOUT_MS=30000
 - **inbox-sync fix deployed** (commit 699beae): tin sync về nay tự điền SĐT/email.
 - **D-009: RESOLVED về pipeline** (nhận comment chạy end-to-end mọi page); chỉ còn chờ comment thật của khách để thấy số liệu thật.
 - **D-002: OPEN** — ẩn/trả lời comment cần `pages_manage_engagement` (App Review, founder-side).
+
+---
+
+## 32. Catalog v2 Phase 1 — DEPLOYED (2026-06-21 — Claude verify + deploy)
+
+- Codex đã build full-stack (schema + API + UI); Claude verify tích hợp + deploy (founder duyệt push+migrate).
+- **Schema:** CatalogItem/CatalogCategory/MediaAsset + enum (additive-only, không đụng ProductLite/Order).
+- **API:** `/api/catalog/items(+:id,+ai-audit)`, `/api/catalog/categories(+:id)`, `/api/media`; `/api/products` cũ giữ nguyên.
+- **UI:** `/products` v2 (type selector, tabs, media URL, pricing, AI sales data, audit panel + "Lưu gợi ý").
+- **AI:** Product Auditor + Offer Suggestion đọc CatalogItem (fallback ProductLite); growth report đọc catalog health.
+- **Deploy:** push `62b1353` → Dokploy build → migration `20260621_catalog_v2_foundation` đã áp dụng production (migrate status: up to date). Verify: 3 bảng query được (count 0), ProductLite=3/Order=5 nguyên vẹn. Smoke /products 307, /api/catalog/items 401, /api/products 401, /login 200. typecheck+build PASS.
+- **D-CAT-001:** DONE. **D-CAT-005:** OK (không phá route/order cũ). **D-CAT-006:** DONE (founder duyệt, đã migrate+deploy).
+- **D-CAT-002 (storage ảnh):** Phase 1 dùng image URL; upload R2/S3 = Phase 1B (chờ founder cấu hình env).
+- **Còn lại:** founder nhập catalog item đầu tiên ở /products; Phase 2 (variant/inventory) sau.
