@@ -2,6 +2,7 @@ import type { FacebookPage } from "@prisma/client";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/security/token-encryption";
+import { updateCustomerContactSignals } from "@/lib/contact/update-contact-signals";
 
 const SYNC_TTL_MS = 4500;
 const GRAPH_SYNC_TIMEOUT_MS = 10000;
@@ -129,11 +130,13 @@ async function importGraphConversation(page: FacebookPage, graphConversation: Gr
   });
 
   let latestMessageAt: Date | null = null;
+  const inboundTexts: string[] = [];
   for (const message of messages) {
     const createdAt = parseGraphDate(message.created_time);
     const fromId = message.from?.id ?? null;
     const direction = fromId === page.pageId ? "OUTBOUND" : "INBOUND";
     const text = message.message ?? (message.attachments ? "[đính kèm]" : null);
+    if (direction === "INBOUND" && message.message) inboundTexts.push(message.message);
     const savedMessage = await prisma.message.upsert({
       where: { metaMessageId: message.id },
       update: {
@@ -172,6 +175,16 @@ async function importGraphConversation(page: FacebookPage, graphConversation: Gr
       data: { lastInteractionAt: latestMessageAt, lastActivityAt: latestMessageAt },
     }),
   ]);
+
+  // Tự nhận diện & điền SĐT/email từ tin khách nhắn (chỉ điền field trống, không ghi đè).
+  if (inboundTexts.length > 0) {
+    await updateCustomerContactSignals({
+      customerId: customer.id,
+      workspaceId: page.workspaceId,
+      text: inboundTexts.join("\n"),
+      source: "messenger",
+    });
+  }
 }
 
 async function findOrCreateSyncedCustomer(params: {
