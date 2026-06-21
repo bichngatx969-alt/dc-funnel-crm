@@ -1761,6 +1761,9 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Chạy apply backfill: created 3 CatalogItem, không xóa/sửa ProductLite, không đổi OrderItem.
 - Chạy lại dry-run: existing 3, created 0, xác nhận idempotent.
 - Production API smoke sau backfill: GET /api/catalog/items 200, workspace hiện tại thấy 2 legacy-linked CatalogItem.
+- Push code sync lên GitHub main tại commit f5b4520.
+- Production container đang chạy có src/lib/catalog-sync.ts và npm script catalog:backfill.
+- Production read-only smoke sau deploy: login PASS, /products 200, GET /api/catalog/items 200, GET /api/products 200.
 
 ### Files đã sửa
 - package.json
@@ -1782,6 +1785,9 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - npx prisma migrate status: PASS, schema up to date, không pending.
 - npm run build: PASS.
 - Production GET /api/catalog/items: PASS 200, total 2 trong currentWorkspaceId, legacyLinked 2.
+- Git push origin main: PASS, commit f5b4520.
+- Production deploy verification: PASS, running container includes catalog-sync code.
+- Production read-only smoke: PASS, login 200, /products 200, /api/catalog/items 200, /api/products 200.
 
 ### Blocker
 - Không có blocker cho legacy sync/backfill.
@@ -1795,8 +1801,8 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - Claude có thể polish /products UI sau khi dữ liệu cũ đã hiện trong Catalog v2.
 
 ### Kế hoạch tiếp theo
-- Push/deploy code sync để các lần tạo/sửa ProductLite cũ tự mirror sang CatalogItem.
-- Sau đó, chỉ còn D-013 storage ảnh và roadmap Phase 2 Variant/Inventory/Service Booking nếu founder muốn mở tiếp.
+- Chờ founder chốt D-013 storage ảnh thật nếu muốn làm upload binary.
+- Nếu founder mở tiếp Catalog v2 Phase 2, làm nhỏ/additive: variant/service booking trước, tránh inventory nặng.
 ```
 
 #### 2026-06-21 — Catalog v2 Phase 1 Foundation
@@ -6016,9 +6022,9 @@ Production smoke:
 ### 18.27. Product/Service Catalog v2 Phase 1B — Legacy ProductLite Backfill + Sync
 
 **Owner:** Codex
-**Status:** `DONE_CODED_BACKFILLED_DEPLOY_PENDING`
+**Status:** `DONE_DEPLOYED`
 **Branch:** `main`
-**Commit/PR link:** pending commit
+**Commit/PR link:** f5b4520
 
 #### Summary
 
@@ -6062,6 +6068,9 @@ npm run catalog:backfill -- --apply: PASS, created 3 CatalogItem.
 npm run catalog:backfill dry-run after apply: PASS, existing 3, created 0.
 npx prisma migrate status: PASS, schema up to date.
 Production GET /api/catalog/items after backfill: PASS 200, currentWorkspaceId total 2, legacyLinked 2.
+Git push origin main: PASS, commit f5b4520.
+Production deploy verification: PASS, running container includes catalog-sync code and catalog:backfill script.
+Production read-only smoke after deploy: PASS, login 200, /products 200, /api/catalog/items 200, /api/products 200.
 ```
 
 #### Risks / Handoff
@@ -6069,7 +6078,7 @@ Production GET /api/catalog/items after backfill: PASS 200, currentWorkspaceId t
 ```text
 - Existing ProductLite is not deleted or renamed.
 - Order Lite still uses ProductLite; Catalog v2 displays synced data.
-- ProductLite -> CatalogItem mirror deploy still pending push/deploy for future old API writes.
+- ProductLite -> CatalogItem mirror is deployed for future old API writes.
 - D-013 remains OPEN: real image upload/storage is not implemented until storage provider is chosen.
 - Phase 2 Variant/Inventory remains separate scope and should be kept small/additive.
 ```
