@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, apiSend } from "@/lib/client";
 import { Icon } from "@/components/layout/icons";
 import { formatVnd } from "@/components/money";
@@ -40,6 +40,7 @@ type CatalogItem = {
   coverImageId: string | null;
   coverImage?: MediaAsset | null;
   galleryJson: unknown;
+  galleryMedia?: MediaAsset[];
   targetSegment: string | null;
   painPointsJson: unknown;
   benefitsJson: unknown;
@@ -61,8 +62,11 @@ type CatalogForm = {
   status: CatalogStatus;
   shortDescription: string;
   description: string;
+  coverImageId: string;
+  coverImagePreviewUrl: string;
   coverImageUrl: string;
   coverImageAltText: string;
+  gallery: MediaAsset[];
   basePriceVnd: string;
   compareAtPriceVnd: string;
   costVnd: string;
@@ -84,8 +88,11 @@ const EMPTY_FORM: CatalogForm = {
   status: "ACTIVE",
   shortDescription: "",
   description: "",
+  coverImageId: "",
+  coverImagePreviewUrl: "",
   coverImageUrl: "",
   coverImageAltText: "",
+  gallery: [],
   basePriceVnd: "",
   compareAtPriceVnd: "",
   costVnd: "",
@@ -156,8 +163,11 @@ function formFromItem(item: CatalogItem): CatalogForm {
     status: item.status,
     shortDescription: item.shortDescription ?? "",
     description: item.description ?? "",
-    coverImageUrl: item.coverImage?.url ?? "",
+    coverImageId: item.coverImageId ?? "",
+    coverImagePreviewUrl: item.coverImage?.url ?? "",
+    coverImageUrl: "",
     coverImageAltText: item.coverImage?.altText ?? "",
+    gallery: item.galleryMedia ?? [],
     basePriceVnd: item.basePriceVnd ? String(item.basePriceVnd) : "",
     compareAtPriceVnd: item.compareAtPriceVnd ? String(item.compareAtPriceVnd) : "",
     costVnd: item.costVnd ? String(item.costVnd) : "",
@@ -193,13 +203,15 @@ function formPayload(form: CatalogForm, existing?: CatalogItem | null) {
     offerIdeas: form.offerIdeas,
     salesScript: form.salesScript.trim() || null,
   };
-  const coverUrl = form.coverImageUrl.trim();
-  const currentCoverUrl = existing?.coverImage?.url ?? "";
-  if (coverUrl && coverUrl !== currentCoverUrl) {
-    payload.coverImageUrl = coverUrl;
+  payload.gallery = form.gallery.map((media) => media.id);
+  if (form.coverImageId) {
+    payload.coverImageId = form.coverImageId;
+  } else if (form.coverImageUrl.trim()) {
+    payload.coverImageUrl = form.coverImageUrl.trim();
     payload.coverImageAltText = form.coverImageAltText.trim() || form.name.trim();
+  } else if (existing?.coverImageId) {
+    payload.coverImageId = null;
   }
-  if (!coverUrl && existing?.coverImageId) payload.coverImageId = null;
   return payload;
 }
 
@@ -497,6 +509,9 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusTone(item.status)}`}>{STATUS_LABEL[item.status]}</span>
                       {scoreChip(item.aiAuditScore)}
+                      {!item.coverImageId && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Thiếu ảnh</span>
+                      )}
                     </span>
                   </span>
                 </button>
@@ -686,15 +701,8 @@ function CatalogFormPanel({
         </FormField>
       </div>
 
-      <SectionTitle title="Media" />
-      <div className="grid gap-3 md:grid-cols-2">
-        <FormField label="Cover image URL">
-          <TextInput value={form.coverImageUrl} onChange={(e) => onChange("coverImageUrl", e.target.value)} placeholder="https://..." />
-        </FormField>
-        <FormField label="Alt text">
-          <TextInput value={form.coverImageAltText} onChange={(e) => onChange("coverImageAltText", e.target.value)} placeholder="Mô tả ảnh cho sale/AI" />
-        </FormField>
-      </div>
+      <SectionTitle title="Hình ảnh" />
+      <MediaManager form={form} onChange={onChange} />
 
       <SectionTitle title="Giá" />
       <div className="grid gap-3 md:grid-cols-3">
@@ -758,6 +766,192 @@ function CatalogFormPanel({
   );
 }
 
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+async function uploadMedia(file: File, altText?: string): Promise<MediaAsset> {
+  const fd = new FormData();
+  fd.append("file", file);
+  if (altText) fd.append("altText", altText);
+  const res = await fetch("/api/media/upload", { method: "POST", body: fd });
+  const json = (await res.json()) as { ok: boolean; data?: { media: MediaAsset }; error?: string };
+  if (!res.ok || !json.ok || !json.data?.media) throw new Error(json.error || `Lỗi ${res.status}`);
+  return json.data.media;
+}
+
+function MediaManager({
+  form,
+  onChange,
+}: {
+  form: CatalogForm;
+  onChange: <K extends keyof CatalogForm>(key: K, value: CatalogForm[K]) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const coverPreview = form.coverImageUrl.trim() || form.coverImagePreviewUrl;
+
+  async function handleFiles(fileList: FileList | File[]) {
+    const files = Array.from(fileList);
+    if (!files.length) return;
+    const valid = files.filter((file) => ACCEPTED_IMAGE_TYPES.includes(file.type));
+    if (!valid.length) {
+      setUploadError("Chỉ hỗ trợ ảnh JPG, PNG hoặc WebP.");
+      return;
+    }
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const uploaded: MediaAsset[] = [];
+      for (const file of valid) {
+        uploaded.push(await uploadMedia(file, form.coverImageAltText.trim() || form.name.trim()));
+      }
+      onChange("gallery", [...form.gallery, ...uploaded]);
+      if (!form.coverImageId && !form.coverImageUrl.trim() && uploaded[0]) {
+        onChange("coverImageId", uploaded[0].id);
+        onChange("coverImagePreviewUrl", uploaded[0].url);
+      }
+      if (valid.length < files.length) {
+        setUploadError("Một số file bị bỏ qua vì không phải JPG/PNG/WebP.");
+      }
+    } catch (error: any) {
+      setUploadError(error?.message ?? "Upload ảnh thất bại.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function setCover(media: MediaAsset) {
+    onChange("coverImageId", media.id);
+    onChange("coverImagePreviewUrl", media.url);
+    onChange("coverImageUrl", "");
+  }
+
+  function removeMedia(id: string) {
+    const nextGallery = form.gallery.filter((media) => media.id !== id);
+    onChange("gallery", nextGallery);
+    if (form.coverImageId === id) {
+      const fallback = nextGallery[0];
+      onChange("coverImageId", fallback?.id ?? "");
+      onChange("coverImagePreviewUrl", fallback?.url ?? "");
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 lg:grid-cols-[180px_minmax(0,1fr)]">
+        <div className="space-y-1.5">
+          <div className="aspect-square w-full overflow-hidden rounded-2xl border border-gray-100 bg-gray-50">
+            {coverPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverPreview} alt={form.coverImageAltText || form.name || "Ảnh đại diện"} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center px-2 text-center text-[12px] text-gray-300">Chưa có ảnh đại diện</div>
+            )}
+          </div>
+          <p className="text-center text-[11px] text-gray-400">Ảnh đại diện</p>
+        </div>
+
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void handleFiles(e.dataTransfer.files);
+          }}
+          className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition ${dragging ? "border-brand bg-brand-light/40" : "border-gray-200 bg-gray-50"}`}
+        >
+          <Icon name="products" className="h-6 w-6 text-gray-300" />
+          <p className="text-[13px] font-medium text-gray-600">Kéo thả ảnh vào đây hoặc</p>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="rounded-full bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
+          >
+            {uploading ? "Đang tải..." : "Chọn ảnh"}
+          </button>
+          <p className="text-[11px] text-gray-400">JPG, PNG, WebP — có thể chọn nhiều ảnh.</p>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) void handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </div>
+
+      {uploadError && <p className="text-[12px] text-rose-500">{uploadError}</p>}
+
+      {form.gallery.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5">
+          {form.gallery.map((media) => {
+            const isCover = media.id === form.coverImageId;
+            return (
+              <div
+                key={media.id}
+                className={`group relative aspect-square overflow-hidden rounded-xl border ${isCover ? "border-brand ring-2 ring-brand/20" : "border-gray-100"}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={media.url} alt={media.altText ?? ""} className="h-full w-full object-cover" />
+                {isCover && (
+                  <span className="absolute left-1 top-1 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold text-white">Đại diện</span>
+                )}
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-black/45 px-1.5 py-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100">
+                  {!isCover ? (
+                    <button type="button" onClick={() => setCover(media)} className="text-[10px] font-semibold text-white hover:underline">
+                      Đặt đại diện
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-white/70">Ảnh chính</span>
+                  )}
+                  <button type="button" onClick={() => removeMedia(media.id)} className="text-[10px] font-semibold text-white hover:underline">
+                    Xóa
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <FormField label="Hoặc dán URL ảnh" hint="Dùng khi chưa muốn upload file">
+          <TextInput
+            value={form.coverImageUrl}
+            onChange={(e) => {
+              const value = e.target.value;
+              onChange("coverImageUrl", value);
+              if (value.trim()) {
+                onChange("coverImageId", "");
+                onChange("coverImagePreviewUrl", "");
+              }
+            }}
+            placeholder="https://..."
+          />
+        </FormField>
+        <FormField label="Mô tả ảnh (alt text)" hint="Giúp sale/AI hiểu nội dung ảnh">
+          <TextInput
+            value={form.coverImageAltText}
+            onChange={(e) => onChange("coverImageAltText", e.target.value)}
+            placeholder="VD: Baby Tee Bướm Pink mặc trên người mẫu"
+          />
+        </FormField>
+      </div>
+    </div>
+  );
+}
+
 function SectionTitle({ title }: { title: string }) {
   return <h4 className="mb-2 mt-5 text-[12px] font-bold uppercase tracking-wide text-gray-500">{title}</h4>;
 }
@@ -790,10 +984,25 @@ function CatalogDetail({ item, onEdit }: { item: CatalogItem; onEdit: () => void
       </div>
 
       {item.coverImage?.url ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={item.coverImage.url} alt={item.coverImage.altText ?? item.name} className="mb-4 aspect-[16/9] w-full rounded-2xl object-cover ring-1 ring-gray-100" />
       ) : (
         <div className="mb-4 flex aspect-[16/9] w-full items-center justify-center rounded-2xl bg-gray-100 text-[13px] text-gray-400">
-          Chưa có cover image URL
+          Chưa có ảnh đại diện
+        </div>
+      )}
+
+      {item.galleryMedia && item.galleryMedia.length > 0 && (
+        <div className="mb-4 grid grid-cols-4 gap-2 sm:grid-cols-6">
+          {item.galleryMedia.map((media) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={media.id}
+              src={media.url}
+              alt={media.altText ?? item.name}
+              className="aspect-square w-full rounded-lg object-cover ring-1 ring-gray-100"
+            />
+          ))}
         </div>
       )}
 
