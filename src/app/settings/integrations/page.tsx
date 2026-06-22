@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function IntegrationsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  const workspaceId = await getCurrentWorkspaceId(user);
+  const workspaceId = await getCurrentWorkspaceId(user, { syncCookie: false });
   const connectedPageCount = await prisma.facebookPage.count({
     where: { workspaceId, status: { not: "DISCONNECTED" } },
   });

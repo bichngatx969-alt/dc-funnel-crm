@@ -24,7 +24,7 @@ export default async function AppsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
-  const workspaceId = await getCurrentWorkspaceId(user);
+  const workspaceId = await getCurrentWorkspaceId(user, { syncCookie: false });
   const [facebookPages, conversations, comments, catalogItems, activeRules] = await Promise.all([
     prisma.facebookPage.count({ where: { workspaceId, status: { not: "DISCONNECTED" } } }),
     prisma.conversation.count({ where: { workspaceId } }),

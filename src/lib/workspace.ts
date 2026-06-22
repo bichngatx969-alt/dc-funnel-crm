@@ -73,7 +73,11 @@ export async function listUserWorkspaces(user: SessionUser): Promise<{
   };
 }
 
-export async function getCurrentWorkspaceId(user: SessionUser): Promise<string> {
+export async function getCurrentWorkspaceId(
+  user: SessionUser,
+  options: { syncCookie?: boolean } = {}
+): Promise<string> {
+  const syncCookie = options.syncCookie ?? true;
   const cookieWorkspaceId = await getWorkspaceCookie();
   const cacheKey = `${user.id}:${cookieWorkspaceId ?? "default"}`;
   const now = Date.now();
@@ -99,7 +103,9 @@ export async function getCurrentWorkspaceId(user: SessionUser): Promise<string> 
   }
 
   const membership = await ensureDefaultWorkspaceForUser(user);
-  await setWorkspaceCookie(membership.workspaceId);
+  if (syncCookie) {
+    await setWorkspaceCookie(membership.workspaceId);
+  }
   currentWorkspaceCache.set(cacheKey, {
     workspaceId: membership.workspaceId,
     expiresAt: now + CURRENT_WORKSPACE_CACHE_TTL_MS,
