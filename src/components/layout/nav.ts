@@ -28,6 +28,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Growth OS",
     items: [
+      { label: "Nội dung (Content OS)", href: "/content", icon: "fanpage" },
+      { label: "Quảng cáo (Ads OS)", href: "/ads", icon: "offers" },
       { label: "Tự động hóa", href: "/automation", icon: "automation" },
       { label: "Fanpage / Kênh", href: "/settings/integrations/facebook", icon: "fanpage" },
       { label: "Ưu đãi", href: "/offers", icon: "offers" },

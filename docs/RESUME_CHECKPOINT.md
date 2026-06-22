@@ -6,7 +6,9 @@ _Cập nhật: 2026-06-23 (đêm) — Claude (DCOS Daily Intelligence)_
 - `main`
 
 ## Last completed step
-- DCOS Daily Intelligence **Phase 1 Foundation (compute-on-demand)** xong + typecheck PASS + build biên dịch PASS (chỉ flake OneDrive rename 500.html trên máy Windows, không phải lỗi code; Linux/Dokploy build sạch).
+- DCOS **Phase 1 (Daily Intelligence) + Phase 2 (Content OS) + Phase 3 (Ads OS fallback)** xong + typecheck PASS + build compile PASS (mọi route mới có trong build output; chỉ flake OneDrive rename 500.html trên Windows, Linux/Dokploy sạch).
+- Phase 1 đã commit+push `c132c0f`. Phase 2/3 commit kế tiếp.
+- Đã thêm: `/content` + `/api/content/posts` + `/api/content/insights` (internal PARTIAL), `/ads` + `/api/meta/ads/insights` (NOT_CONNECTED fallback), nav Content/Ads.
 
 ## Current task
 - Xây module DCOS Daily Intelligence theo `DCOS_DAILY_INTELLIGENCE_CONTENT_ADS_SALES_PLAN.md`.
