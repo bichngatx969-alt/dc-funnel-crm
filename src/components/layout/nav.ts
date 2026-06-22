@@ -11,7 +11,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Home", href: "/dashboard", icon: "dashboard" },
       { label: "App Center", href: "/apps", icon: "integrations" },
       { label: "Browser OS", href: "/browser", icon: "system" },
-      { label: "AI Copilot", href: "/dashboard/ai-growth", icon: "sparkles" },
+      { label: "AI Copilot", href: "/ai-copilot/daily", icon: "sparkles" },
     ],
   },
   {

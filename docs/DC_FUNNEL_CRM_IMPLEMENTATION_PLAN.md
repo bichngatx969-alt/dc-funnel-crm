@@ -1882,6 +1882,52 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### 17.1. Daily Reports Log
 
+#### 2026-06-23 — DCOS Daily Intelligence Phase 1 Foundation (Claude)
+
+```text
+## 2026-06-23 — DCOS Daily Intelligence Phase 1 (Claude — Full-stack)
+
+### Đang làm
+- DCOS_DAILY_INTELLIGENCE_CONTENT_ADS_SALES_PLAN.md — Phase 1 Daily Intelligence Foundation.
+
+### Đã làm hôm nay (compute-on-demand, KHÔNG cần bảng mới)
+- Collector + rule-based generator: src/lib/ai/daily-intelligence.ts (reuse buildFounderStats range hôm qua + query conversation/message/facebookPost/catalogItem/offer). Output: summary (headline/score/mainBottleneck/mainOpportunity), organic, ads(NOT_CONNECTED), inbox, sales, catalog, conversionFunnel, strengths/weaknesses/bottlenecks(TRUYỀN THÔNG|ADS|SALE|CATALOG-OFFER)/actionItems/lessons.
+- API: GET /api/ai/daily-intelligence?date=, POST /api/ai/daily-intelligence/generate, GET /history, GET /[id], POST|GET /api/cron/daily-intelligence (CRON_SECRET).
+- UI: /ai-copilot (redirect) + /ai-copilot/daily + DailyIntelligenceClient (date picker, tạo lại, hero điểm/nghẽn, 8 tab Tổng quan/Truyền thông/Ads/Inbox/Sale/Catalog/Việc cần làm/Bài học, loading/error/empty, mobile ok).
+- Nav: AI Copilot → /ai-copilot/daily.
+
+### Files đã sửa
+- src/lib/ai/daily-intelligence.ts (mới)
+- src/app/api/ai/daily-intelligence/{route,generate/route,history/route,[id]/route}.ts (mới)
+- src/app/api/cron/daily-intelligence/route.ts (mới)
+- src/app/ai-copilot/page.tsx + src/app/ai-copilot/daily/page.tsx (mới)
+- src/components/ai-copilot/DailyIntelligenceClient.tsx (mới)
+- src/components/layout/nav.ts (1 dòng)
+- docs/RESUME_CHECKPOINT.md, docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- KHÔNG. Không đụng prisma/schema.prisma (Codex đang sửa Phase 4 Package), không migration, không inbox/comment/catalog core. Chỉ add file mới + 1 dòng nav.
+
+### Typecheck/build/test
+- npm run typecheck: PASS.
+- npm run build: biên dịch PASS + types valid + static 8/8; fail bước rename .next/export/500.html (flake OneDrive trên Windows, Linux/Dokploy sạch).
+- Smoke production: chờ sau deploy.
+
+### Blocker
+- PERSISTENCE HOÃN: 4 model (DailyIntelligenceReport/AIFinding/AILesson/AIActionItem) + SocialPostSnapshot/AdInsightSnapshot chưa thêm vào schema để tránh đụng schema Codex đang sửa → history rỗng, cron compute chưa lưu, lesson library chưa tích lũy. Bổ sung khi schema Codex settle.
+- Meta Ads NOT_CONNECTED (chưa ads_read); Page insights PARTIAL (dùng nội bộ).
+
+### Cần founder quyết / cấu hình
+- Cấu hình cron service gọi POST /api/cron/daily-intelligence mỗi 08:00 Asia/Ho_Chi_Minh + set CRON_SECRET.
+- (Sau) kết nối Meta Ads (ads_read) + Page insights để bật Content/Ads OS đầy đủ.
+
+### Cần agent kia hỗ trợ (Codex)
+- Khi Phase 4 Package commit xong: phối hợp thêm 4 model DCOS + SocialPostSnapshot/AdInsightSnapshot (additive) để Claude bật persistence + Content/Ads OS.
+
+### Kế hoạch tiếp theo
+- Phase 2 Content OS (/content + /api/content/posts, internal PARTIAL), Phase 3 Ads OS (/ads, fallback NOT_CONNECTED), rồi persistence + Phase 4/5/6. Xem docs/RESUME_CHECKPOINT.md.
+```
+
 #### 2026-06-22 — Catalog v2 Phase 3A Booking Backend (Codex)
 
 ```text
