@@ -80,6 +80,11 @@ export type CatalogItemDTO = Prisma.CatalogItemGetPayload<{ select: typeof catal
   category?: Prisma.CatalogCategoryGetPayload<{ select: typeof catalogCategorySelect }> | null;
   coverImage?: Prisma.MediaAssetGetPayload<{ select: typeof mediaAssetSelect }> | null;
   galleryMedia?: Array<Prisma.MediaAssetGetPayload<{ select: typeof mediaAssetSelect }>>;
+  variantCount: number;
+  activeVariantCount: number;
+  totalStock: number;
+  lowStockVariantCount: number;
+  outOfStockVariantCount: number;
 };
 
 export { parsePagination };
@@ -217,7 +222,23 @@ export async function createUrlMediaAsset(workspaceId: string, input: {
 export async function enrichCatalogItems<T extends Prisma.CatalogItemGetPayload<{ select: typeof catalogItemSelect }>>(
   workspaceId: string,
   items: T[]
-): Promise<Array<T & Pick<CatalogItemDTO, "category" | "coverImage" | "galleryMedia">>> {
+): Promise<
+  Array<
+    T &
+      Pick<
+        CatalogItemDTO,
+        | "category"
+        | "coverImage"
+        | "galleryMedia"
+        | "variantCount"
+        | "activeVariantCount"
+        | "totalStock"
+        | "lowStockVariantCount"
+        | "outOfStockVariantCount"
+      >
+  >
+> {
+  const itemIds = items.map((item) => item.id);
   const categoryIds = Array.from(new Set(items.map((item) => item.categoryId).filter((id): id is string => Boolean(id))));
   const mediaIds = Array.from(
     new Set([
@@ -225,7 +246,7 @@ export async function enrichCatalogItems<T extends Prisma.CatalogItemGetPayload<
       ...items.flatMap((item) => extractTextArray(item.galleryJson)),
     ])
   );
-  const [categories, media] = await Promise.all([
+  const [categories, media, variants] = await Promise.all([
     categoryIds.length
       ? prisma.catalogCategory.findMany({
           where: { id: { in: categoryIds }, workspaceId, deletedAt: null },
@@ -238,9 +259,46 @@ export async function enrichCatalogItems<T extends Prisma.CatalogItemGetPayload<
           select: mediaAssetSelect,
         })
       : [],
+    itemIds.length
+      ? prisma.catalogVariant.findMany({
+          where: { catalogItemId: { in: itemIds }, workspaceId, deletedAt: null },
+          select: {
+            catalogItemId: true,
+            status: true,
+            inventoryTracked: true,
+            inventoryQuantity: true,
+            lowStockThreshold: true,
+          },
+        })
+      : [],
   ]);
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const mediaById = new Map(media.map((asset) => [asset.id, asset]));
+  const variantSummaryByItemId = new Map<
+    string,
+    Pick<CatalogItemDTO, "variantCount" | "activeVariantCount" | "totalStock" | "lowStockVariantCount" | "outOfStockVariantCount">
+  >();
+  for (const variant of variants) {
+    const summary =
+      variantSummaryByItemId.get(variant.catalogItemId) ??
+      {
+        variantCount: 0,
+        activeVariantCount: 0,
+        totalStock: 0,
+        lowStockVariantCount: 0,
+        outOfStockVariantCount: 0,
+      };
+    summary.variantCount += 1;
+    if (variant.status === "ACTIVE") summary.activeVariantCount += 1;
+    if (variant.inventoryTracked) {
+      summary.totalStock += variant.inventoryQuantity;
+      if (variant.inventoryQuantity <= 0) summary.outOfStockVariantCount += 1;
+      if (variant.lowStockThreshold !== null && variant.inventoryQuantity <= variant.lowStockThreshold) {
+        summary.lowStockVariantCount += 1;
+      }
+    }
+    variantSummaryByItemId.set(variant.catalogItemId, summary);
+  }
   return items.map((item) => ({
     ...item,
     category: item.categoryId ? categoryById.get(item.categoryId) ?? null : null,
@@ -248,6 +306,13 @@ export async function enrichCatalogItems<T extends Prisma.CatalogItemGetPayload<
     galleryMedia: extractTextArray(item.galleryJson)
       .map((id) => mediaById.get(id))
       .filter((asset): asset is Prisma.MediaAssetGetPayload<{ select: typeof mediaAssetSelect }> => Boolean(asset)),
+    ...(variantSummaryByItemId.get(item.id) ?? {
+      variantCount: 0,
+      activeVariantCount: 0,
+      totalStock: 0,
+      lowStockVariantCount: 0,
+      outOfStockVariantCount: 0,
+    }),
   }));
 }
 

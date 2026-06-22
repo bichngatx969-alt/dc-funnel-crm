@@ -34,7 +34,13 @@ function digits(value: string): string {
   return value.replace(/[^\d]/g, "");
 }
 
-export function InventoryPanel({ catalogItemId }: { catalogItemId: string }) {
+export function InventoryPanel({
+  catalogItemId,
+  onInventoryChanged,
+}: {
+  catalogItemId: string;
+  onInventoryChanged?: () => void;
+}) {
   const [variants, setVariants] = useState<CatalogVariant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +70,7 @@ export function InventoryPanel({ catalogItemId }: { catalogItemId: string }) {
 
   function applyVariant(updated: CatalogVariant) {
     setVariants((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
+    onInventoryChanged?.();
   }
 
   return (

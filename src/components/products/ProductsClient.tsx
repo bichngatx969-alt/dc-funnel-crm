@@ -38,6 +38,11 @@ type CatalogItem = {
   coverImage?: MediaAsset | null;
   galleryJson: unknown;
   galleryMedia?: MediaAsset[];
+  variantCount: number;
+  activeVariantCount: number;
+  totalStock: number;
+  lowStockVariantCount: number;
+  outOfStockVariantCount: number;
   targetSegment: string | null;
   painPointsJson: unknown;
   benefitsJson: unknown;
@@ -261,6 +266,9 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("all");
   const [missingImageOnly, setMissingImageOnly] = useState(false);
   const [lowAiOnly, setLowAiOnly] = useState(false);
+  const [hasVariantsOnly, setHasVariantsOnly] = useState(false);
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [outOfStockOnly, setOutOfStockOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [audit, setAudit] = useState<ProductAudit | null>(null);
   const [auditing, setAuditing] = useState(false);
@@ -304,11 +312,17 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
     return items
       .filter((item) => listMatchesTab(item, tab))
       .filter((item) => (missingImageOnly ? !item.coverImageId : true))
-      .filter((item) => (lowAiOnly ? item.aiAuditScore == null || item.aiAuditScore < 70 : true));
-  }, [items, tab, missingImageOnly, lowAiOnly]);
+      .filter((item) => (lowAiOnly ? item.aiAuditScore == null || item.aiAuditScore < 70 : true))
+      .filter((item) => (hasVariantsOnly ? item.variantCount > 0 : true))
+      .filter((item) => (lowStockOnly ? item.lowStockVariantCount > 0 : true))
+      .filter((item) => (outOfStockOnly ? item.outOfStockVariantCount > 0 : true));
+  }, [items, tab, missingImageOnly, lowAiOnly, hasVariantsOnly, lowStockOnly, outOfStockOnly]);
   const selected = items.find((p) => p.id === selectedId) ?? null;
   const activeCount = useMemo(() => items.filter((p) => p.status === "ACTIVE").length, [items]);
   const missingImageCount = useMemo(() => items.filter((p) => !p.coverImageId).length, [items]);
+  const variantItemCount = useMemo(() => items.filter((p) => p.variantCount > 0).length, [items]);
+  const lowStockItemCount = useMemo(() => items.filter((p) => p.lowStockVariantCount > 0).length, [items]);
+  const outOfStockItemCount = useMemo(() => items.filter((p) => p.outOfStockVariantCount > 0).length, [items]);
   const avgScore = useMemo(() => {
     const scored = items.filter((p) => typeof p.aiAuditScore === "number");
     if (!scored.length) return null;
@@ -425,11 +439,13 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
         <StatCard label="Catalog items" value={items.length} hint={`${activeCount} đang bán`} />
         <StatCard label="Thiếu ảnh" value={missingImageCount} hint="Cần bổ sung cover URL" tone={missingImageCount ? "warn" : "good"} />
+        <StatCard label="Có biến thể" value={variantItemCount} hint="Item vật lý đã cấu hình" />
+        <StatCard label="Sắp hết" value={lowStockItemCount} hint="Có variant dưới ngưỡng" tone={lowStockItemCount ? "warn" : "good"} />
+        <StatCard label="Hết hàng" value={outOfStockItemCount} hint="Có variant tồn 0" tone={outOfStockItemCount ? "bad" : "good"} />
         <StatCard label="Điểm AI TB" value={avgScore == null ? "—" : `${avgScore}%`} hint="Độ đầy đủ dữ liệu bán hàng" />
-        <StatCard label="Trạng thái AI" value={aiEnabled ? "AI model" : "Cơ bản"} hint="Chưa có key vẫn chạy chế độ cơ bản" />
       </div>
 
       <div className="dc-card flex h-[calc(100vh-245px)] min-h-[560px] overflow-hidden rounded-2xl sm:min-h-[700px]">
@@ -465,6 +481,18 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
                 <label className="inline-flex items-center gap-1.5 text-[12px] font-medium text-gray-500">
                   <input type="checkbox" checked={lowAiOnly} onChange={(e) => setLowAiOnly(e.target.checked)} />
                   AI thấp
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-[12px] font-medium text-gray-500">
+                  <input type="checkbox" checked={hasVariantsOnly} onChange={(e) => setHasVariantsOnly(e.target.checked)} />
+                  Có biến thể
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-[12px] font-medium text-gray-500">
+                  <input type="checkbox" checked={lowStockOnly} onChange={(e) => setLowStockOnly(e.target.checked)} />
+                  Sắp hết
+                </label>
+                <label className="inline-flex items-center gap-1.5 text-[12px] font-medium text-gray-500">
+                  <input type="checkbox" checked={outOfStockOnly} onChange={(e) => setOutOfStockOnly(e.target.checked)} />
+                  Hết hàng
                 </label>
               </div>
               <button
@@ -508,6 +536,16 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusTone(item.status)}`}>{STATUS_LABEL[item.status]}</span>
                       {scoreChip(item.aiAuditScore)}
+                      {item.variantCount > 0 && (
+                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                          {item.variantCount} biến thể
+                        </span>
+                      )}
+                      {item.variantCount > 0 && (
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.outOfStockVariantCount ? "bg-rose-50 text-rose-700" : item.lowStockVariantCount ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                          Tồn {item.totalStock}
+                        </span>
+                      )}
                       {!item.coverImageId && (
                         <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Thiếu ảnh</span>
                       )}
@@ -557,9 +595,9 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
               </div>
 
               {detailTab === "variants" && selected.type === "PHYSICAL_PRODUCT" ? (
-                <VariantManager catalogItemId={selected.id} />
+                <VariantManager catalogItemId={selected.id} onVariantsChanged={() => void load()} />
               ) : detailTab === "inventory" && selected.type === "PHYSICAL_PRODUCT" ? (
-                <InventoryPanel catalogItemId={selected.id} />
+                <InventoryPanel catalogItemId={selected.id} onInventoryChanged={() => void load()} />
               ) : (
                 <div className="grid min-h-0 flex-1 grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
                   <CatalogDetail item={selected} onEdit={() => startEdit(selected)} />
@@ -605,11 +643,11 @@ function DetailTab({ label, active, onClick }: { label: string; active: boolean;
   );
 }
 
-function StatCard({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint: string; tone?: "good" | "warn" }) {
+function StatCard({ label, value, hint, tone }: { label: string; value: React.ReactNode; hint: string; tone?: "good" | "warn" | "bad" }) {
   return (
     <div className="dc-card rounded-2xl p-4">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${tone === "warn" ? "text-amber-600" : tone === "good" ? "text-emerald-600" : "text-gray-900"}`}>{value}</div>
+      <div className={`mt-1 text-2xl font-bold ${tone === "bad" ? "text-rose-600" : tone === "warn" ? "text-amber-600" : tone === "good" ? "text-emerald-600" : "text-gray-900"}`}>{value}</div>
       <p className="text-[12px] text-gray-500">{hint}</p>
     </div>
   );
