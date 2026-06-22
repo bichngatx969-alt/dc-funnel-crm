@@ -125,6 +125,21 @@ enum CatalogItemStatus {
   ARCHIVED
 }
 
+enum ServiceLocationMode {
+  ONLINE
+  OFFLINE
+  CUSTOMER_LOCATION
+  HYBRID
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
 enum MediaAssetSource {
   UPLOAD
   URL
@@ -224,6 +239,7 @@ model User {
   ownedCustomers         Customer[]        @relation("OwnedCustomers")
   ownedOpportunities     Opportunity[]     @relation("OwnedOpportunities")
   ownedOrders            Order[]           @relation("OwnedOrders")
+  staffBookings          Booking[]         @relation("StaffBookings")
   authoredNotes          Note[]            @relation("AuthoredNotes")
   createdAutomationRules AutomationRule[]  @relation("CreatedAutomationRules")
   workspaceMemberships   WorkspaceMember[]
@@ -253,30 +269,33 @@ model Workspace {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  organization     Organization             @relation(fields: [organizationId], references: [id])
-  members          WorkspaceMember[]
-  facebookPages    FacebookPage[]
-  facebookPosts    FacebookPost[]
-  facebookComments FacebookComment[]
-  metaBusinesses   MetaBusinessConnection[]
-  metaCatalogs     MetaCatalogConnection[]
-  customers        Customer[]
-  conversations    Conversation[]
-  messages         Message[]
-  flows            Flow[]
-  offers           Offer[]
-  tasks            Task[]
-  pipelines        Pipeline[]
-  opportunities    Opportunity[]
-  notes            Note[]
-  products         ProductLite[]
-  orders           Order[]
-  automationRules  AutomationRule[]
-  automationRuns   AutomationRun[]
-  aiInsights       AIConversationInsight[]
-  aiAnalysisRuns   AIAnalysisRun[]
-  emailTemplates   EmailTemplate[]
-  emailSequences   EmailSequence[]
+  organization      Organization             @relation(fields: [organizationId], references: [id])
+  members           WorkspaceMember[]
+  facebookPages     FacebookPage[]
+  facebookPosts     FacebookPost[]
+  facebookComments  FacebookComment[]
+  metaBusinesses    MetaBusinessConnection[]
+  metaCatalogs      MetaCatalogConnection[]
+  customers         Customer[]
+  conversations     Conversation[]
+  messages          Message[]
+  flows             Flow[]
+  offers            Offer[]
+  tasks             Task[]
+  pipelines         Pipeline[]
+  opportunities     Opportunity[]
+  notes             Note[]
+  products          ProductLite[]
+  orders            Order[]
+  serviceProfiles   ServiceProfile[]
+  serviceVariations ServiceVariation[]
+  bookings          Booking[]
+  automationRules   AutomationRule[]
+  automationRuns    AutomationRun[]
+  aiInsights        AIConversationInsight[]
+  aiAnalysisRuns    AIAnalysisRun[]
+  emailTemplates    EmailTemplate[]
+  emailSequences    EmailSequence[]
 
   @@index([organizationId])
   @@index([deletedAt])
@@ -548,6 +567,7 @@ model Customer {
   tasks             Task[]
   opportunities     Opportunity[]
   orders            Order[]
+  bookings          Booking[]
   notes             Note[]
   facebookComments  FacebookComment[]
   emailLogs         EmailLog[]
@@ -916,6 +936,10 @@ model CatalogItem {
   updatedAt           DateTime          @updatedAt
   deletedAt           DateTime?
 
+  serviceProfile    ServiceProfile?
+  serviceVariations ServiceVariation[]
+  bookings          Booking[]
+
   @@index([workspaceId])
   @@index([workspaceId, type])
   @@index([workspaceId, status])
@@ -1020,6 +1044,7 @@ model Order {
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   owner       User?        @relation("OwnedOrders", fields: [ownerId], references: [id], onDelete: SetNull)
   items       OrderItem[]
+  bookings    Booking[]
 
   @@unique([workspaceId, code])
   @@index([workspaceId])
@@ -1053,6 +1078,94 @@ model OrderItem {
 
   @@index([orderId])
   @@index([productId])
+}
+
+model ServiceProfile {
+  id                     String              @id @default(cuid())
+  workspaceId            String
+  catalogItemId          String              @unique
+  bookingEnabled         Boolean             @default(false)
+  defaultDurationMinutes Int                 @default(60)
+  bufferBeforeMinutes    Int                 @default(0)
+  bufferAfterMinutes     Int                 @default(0)
+  depositRequired        Boolean             @default(false)
+  depositVnd             Int                 @default(0)
+  cancellationPolicy     String?
+  intakeFormJson         Json?
+  locationMode           ServiceLocationMode @default(OFFLINE)
+  location               String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  catalogItem CatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([workspaceId, bookingEnabled])
+}
+
+model ServiceVariation {
+  id              String    @id @default(cuid())
+  workspaceId     String
+  catalogItemId   String
+  name            String
+  durationMinutes Int       @default(60)
+  priceVnd        Int       @default(0)
+  description     String?
+  bookingEnabled  Boolean   @default(true)
+  staffIdsJson    Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  catalogItem CatalogItem @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+  bookings    Booking[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, catalogItemId])
+  @@index([workspaceId, bookingEnabled])
+  @@index([deletedAt])
+}
+
+model Booking {
+  id                 String        @id @default(cuid())
+  workspaceId        String
+  customerId         String?
+  catalogItemId      String
+  serviceVariationId String?
+  staffId            String?
+  status             BookingStatus @default(PENDING)
+  startAt            DateTime
+  endAt              DateTime
+  location           String?
+  intakeAnswersJson  Json?
+  depositVnd         Int           @default(0)
+  orderId            String?
+  note               String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  customer         Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  catalogItem      CatalogItem       @relation(fields: [catalogItemId], references: [id], onDelete: Restrict)
+  serviceVariation ServiceVariation? @relation(fields: [serviceVariationId], references: [id], onDelete: SetNull)
+  staff            User?             @relation("StaffBookings", fields: [staffId], references: [id], onDelete: SetNull)
+  order            Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([customerId])
+  @@index([catalogItemId])
+  @@index([serviceVariationId])
+  @@index([staffId])
+  @@index([orderId])
+  @@index([status])
+  @@index([startAt])
+  @@index([deletedAt])
+  @@index([workspaceId, deletedAt, startAt], map: "Booking_ws_start_idx")
+  @@index([workspaceId, status, startAt], map: "Booking_ws_status_start_idx")
+  @@index([workspaceId, staffId, startAt, endAt], map: "Booking_ws_staff_time_idx")
 }
 
 model AutomationRule {
