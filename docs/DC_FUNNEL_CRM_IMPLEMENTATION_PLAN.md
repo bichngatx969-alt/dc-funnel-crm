@@ -1810,6 +1810,37 @@ Safety:
 
 ---
 
+### 16.15. Catalog v2 Booking UI Contract
+
+**Status:** `DONE_DEPLOYED`
+**Owner:** Codex
+**Last updated:** 2026-06-23
+
+Routes/UI:
+
+```text
+/bookings
+- Shows booking summary cards, status/service filters, booking table/mobile cards.
+- Supports quick booking creation using active BOOKABLE_SERVICE catalog items.
+- Supports status update via PATCH /api/bookings/:id/status.
+
+/products
+- Catalog OS nav now includes "Lịch booking".
+- BOOKABLE_SERVICE detail view has Booking tab.
+- Booking tab can PATCH ServiceProfile and manage ServiceVariation rows.
+```
+
+Runtime note:
+
+```text
+- No schema change and no migration in UI phase.
+- Production deploy PASS at commit c6e0679 with image dc-funnel-cmr-dc-iea9mn:codex-booking-ui-c6e0679.
+- Production smoke PASS: /bookings 200, /products 200, /api/bookings 200, /api/catalog/items?type=BOOKABLE_SERVICE 200 and core APIs 200.
+- Production currently has 0 active BOOKABLE_SERVICE rows after previous smoke cleanup; UI handles empty state and can create bookings once real services are active/configured.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -1910,6 +1941,59 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### Founder cần làm khi quay lại
 - Test nghiệp vụ booking thật sau khi Claude làm Booking UI.
+```
+
+#### 2026-06-23 — Catalog v2 Phase 3B Booking UI (Codex)
+
+```text
+## 2026-06-23 — Codex — Catalog v2 Phase 3B Booking UI
+
+### Đã làm
+- Thêm nav Catalog OS -> Lịch booking.
+- Thêm route /bookings với summary, filter status/service, list booking desktop/mobile, tạo booking nhanh và đổi status.
+- Thêm tab Booking trong chi tiết BOOKABLE_SERVICE ở /products.
+- Tab Booking hỗ trợ bật/tắt booking, duration/buffer/deposit/location/intake JSON và quản lý ServiceVariation.
+
+### Files đã sửa
+- src/components/layout/nav.ts
+- src/app/bookings/page.tsx
+- src/components/bookings/BookingsClient.tsx
+- src/components/products/ProductsClient.tsx
+- src/components/products/ServiceBookingPanel.tsx
+
+### Migration
+- Không có schema change.
+- Không chạy migration.
+
+### Typecheck/build/test
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+
+### Production deploy
+- PASS. Commit `c6e0679` pushed main and deployed as image `dc-funnel-cmr-dc-iea9mn:codex-booking-ui-c6e0679`.
+
+### Production smoke
+- PASS:
+  - /dashboard 200
+  - /apps 200
+  - /browser 200
+  - /products 200
+  - /bookings 200
+  - /inbox 200
+  - /comments 200
+  - /api/catalog/items?type=BOOKABLE_SERVICE&pageSize=3 200
+  - /api/bookings?pageSize=3 200
+  - /api/media?pageSize=1 200
+  - /api/comments?pageSize=1 200
+  - /api/conversations?pageSize=1 200
+
+### Blocker
+- Không có blocker chặn Booking UI.
+- Production hiện chưa có active BOOKABLE_SERVICE thật vì data smoke trước đó đã soft-cleanup; cần founder/ops tạo dịch vụ thật trong /products để dùng booking thật.
+
+### Kế hoạch tiếp theo
+- Catalog v2 Phase 4 nếu founder duyệt: package/bundle builder hoặc calendar day/week nâng cao.
 ```
 
 #### 2026-06-22 — Catalog v2 List Aggregate Polish (Codex)
@@ -7027,6 +7111,65 @@ Production read smoke: PASS for /products, /inbox, /comments, /api/bookings, /ap
 
 ---
 
+### 18.34. Catalog v2 Phase 3B — Booking UI
+
+**Owner:** Codex
+**Status:** `DONE_DEPLOYED`
+**Branch:** `main`
+**Commit/PR link:** `c6e0679`
+
+#### Summary
+
+```text
+Implemented first Booking UI on top of Phase 3A backend:
+- /bookings page with summary cards, status/service filters, booking list and quick booking form.
+- Booking status update from the list.
+- Catalog OS sidebar link for "Lịch booking".
+- /products service detail Booking tab for ServiceProfile and ServiceVariation management.
+```
+
+#### UI / Route Contract
+
+```text
+GET /bookings
+- Requires login through AppShell.
+- Uses GET /api/bookings, GET /api/catalog/items?type=BOOKABLE_SERVICE&status=ACTIVE, GET /api/contacts.
+- POST /api/bookings for quick create.
+- PATCH /api/bookings/:id/status for status updates.
+
+/products service detail -> Booking tab
+- Uses GET/PATCH /api/catalog/items/:id/service-profile.
+- Uses GET/POST/PATCH /api/catalog/items/:id/service-variations.
+```
+
+#### Migration
+
+```text
+No migration.
+No schema change.
+No database reset or destructive DB command.
+```
+
+#### Tests
+
+```text
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+Production deploy: PASS, image `dc-funnel-cmr-dc-iea9mn:codex-booking-ui-c6e0679`.
+Production smoke: PASS for /bookings, /products, /api/bookings, /api/catalog/items?type=BOOKABLE_SERVICE and core read APIs.
+```
+
+#### Risks / Handoff
+
+```text
+- Production currently has 0 active BOOKABLE_SERVICE rows after previous smoke cleanup; real usage needs founder/team to create active services in /products.
+- Calendar day/week view, staff availability view and reminder notifications are not in this MVP UI.
+- R2 durable upload remains env-dependent and unrelated to booking.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -7045,6 +7188,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-014 | Duyệt apply migration Catalog v2 Phase 2A `20260621_catalog_v2_phase2_variants` lên production? | Codex | DONE | Founder duyệt ngày 2026-06-21; Codex đã chạy npx prisma migrate deploy thành công, migrate status sau deploy schema up to date, production smoke variants/inventory PASS. |
 | D-CAT-020 | Catalog v2 Variant/Inventory UI đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push 1132c72, redeploy production và smoke PASS cho /products + catalog/media/inbox/comment APIs. |
 | D-CAT-030 | Catalog v2 Booking backend Phase 3A đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push caf4586, apply additive migration 20260622_catalog_v2_phase3_booking, deploy production và smoke PASS cho service profile/variation/booking APIs. |
+| D-CAT-031 | Catalog v2 Booking UI Phase 3B đã deploy production chưa? | Codex | DONE | 2026-06-23: Codex đã commit/push c6e0679, deploy production image codex-booking-ui-c6e0679, smoke PASS cho /bookings + booking/catalog/core APIs. |
 | D-DCOS-001 | Rebrand DCOS personal-first shell? | Codex | DONE | 2026-06-22: Code đổi metadata/login/sidebar/nav/dashboard copy sang DCOS, commit/push/deploy PASS, production smoke PASS. |
 | D-DCOS-002 | Personal Space behavior cho user mới? | Codex | DONE | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi; deploy PASS. |
 | D-DCOS-003 | App Center route? | Codex | DONE | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; runtime cookie-write issue fixed in `d72f2ea`; production smoke /apps 200. |
@@ -7069,6 +7213,7 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-032 (RESOLVED): Catalog list aggregate variant/stock fields added and deployed at `60f9f88`; /products smoke PASS and /api/catalog/items returns aggregate keys.
 - B-033 (PARTIAL): Browser OS MVP uses localStorage only; safe for first DCOS shell, but shortcuts do not sync between devices until additive BrowserShortcut DB is added.
 - B-034 (RESOLVED): Catalog v2 Phase 3A Booking backend migration/API deployed at `caf4586`; production write smoke PASS with temporary soft-cleaned test data.
+- B-035 (RESOLVED): Catalog v2 Phase 3B Booking UI deployed at `c6e0679`; /bookings, /products, /api/bookings and core APIs smoke PASS. No migration. Real service data needs active BOOKABLE_SERVICE rows.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
