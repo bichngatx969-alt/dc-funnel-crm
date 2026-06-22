@@ -290,6 +290,7 @@ model Workspace {
   serviceProfiles   ServiceProfile[]
   serviceVariations ServiceVariation[]
   bookings          Booking[]
+  packageComponents PackageComponent[]
   automationRules   AutomationRule[]
   automationRuns    AutomationRun[]
   aiInsights        AIConversationInsight[]
@@ -939,6 +940,8 @@ model CatalogItem {
   serviceProfile    ServiceProfile?
   serviceVariations ServiceVariation[]
   bookings          Booking[]
+  packageComponents PackageComponent[] @relation("PackageItemComponents")
+  usedInPackages    PackageComponent[] @relation("ComponentItemPackages")
 
   @@index([workspaceId])
   @@index([workspaceId, type])
@@ -946,6 +949,29 @@ model CatalogItem {
   @@index([workspaceId, categoryId])
   @@index([workspaceId, slug])
   @@index([workspaceId, legacyProductLiteId])
+}
+
+model PackageComponent {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  packageItemId      String
+  componentItemId    String
+  componentVariantId String?
+  quantity           Int       @default(1)
+  pricingMode        String    @default("INCLUDED")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  packageItem   CatalogItem @relation("PackageItemComponents", fields: [packageItemId], references: [id], onDelete: Restrict)
+  componentItem CatalogItem @relation("ComponentItemPackages", fields: [componentItemId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([workspaceId, packageItemId])
+  @@index([workspaceId, componentItemId])
+  @@index([workspaceId, componentVariantId])
+  @@index([deletedAt])
 }
 
 model CatalogOption {

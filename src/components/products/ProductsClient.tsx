@@ -8,6 +8,7 @@ import { ProductAuditPanel, type ProductAudit } from "./ProductAuditPanel";
 import { VariantManager } from "./VariantManager";
 import { InventoryPanel } from "./InventoryPanel";
 import { ServiceBookingPanel } from "./ServiceBookingPanel";
+import { PackageBuilderPanel } from "./PackageBuilderPanel";
 import { uploadMedia, ACCEPTED_IMAGE_TYPES, type MediaAsset } from "./media-upload";
 
 type CatalogType = "PHYSICAL_PRODUCT" | "DIGITAL_PRODUCT" | "BOOKABLE_SERVICE" | "PACKAGE";
@@ -280,7 +281,7 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CatalogForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [detailTab, setDetailTab] = useState<"detail" | "variants" | "inventory" | "booking">("detail");
+  const [detailTab, setDetailTab] = useState<"detail" | "variants" | "inventory" | "booking" | "bundle">("detail");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -592,6 +593,8 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
                   </>
                 ) : selected.type === "BOOKABLE_SERVICE" ? (
                   <DetailTab label="Booking" active={detailTab === "booking"} onClick={() => setDetailTab("booking")} />
+                ) : selected.type === "PACKAGE" ? (
+                  <DetailTab label="Bundle" active={detailTab === "bundle"} onClick={() => setDetailTab("bundle")} />
                 ) : (
                   <span className="ml-2 text-[11px] text-gray-400">Biến thể &amp; tồn kho chỉ áp dụng cho sản phẩm vật lý</span>
                 )}
@@ -607,6 +610,13 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
                   catalogItemName={selected.name}
                   basePriceVnd={selected.basePriceVnd}
                   onBookingChanged={() => void load()}
+                />
+              ) : detailTab === "bundle" && selected.type === "PACKAGE" ? (
+                <PackageBuilderPanel
+                  packageItemId={selected.id}
+                  packageName={selected.name}
+                  packagePriceVnd={selected.basePriceVnd}
+                  onPackageChanged={() => void load()}
                 />
               ) : (
                 <div className="grid min-h-0 flex-1 grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
@@ -830,7 +840,7 @@ function CatalogFormPanel({
         {form.type === "PHYSICAL_PRODUCT" && "Phase 2 sẽ bổ sung variant, tồn kho, cân nặng/kích thước."}
         {form.type === "DIGITAL_PRODUCT" && "Phase 2/3 sẽ bổ sung file delivery và quyền truy cập số."}
         {form.type === "BOOKABLE_SERVICE" && "Dịch vụ có thể bật booking, cấu hình thời lượng, đặt cọc và biến thể ở tab Booking sau khi tạo."}
-        {form.type === "PACKAGE" && "Phase 4 sẽ bổ sung bundle/package component builder."}
+        {form.type === "PACKAGE" && "Combo/gói có thể thêm sản phẩm, dịch vụ hoặc variant ở tab Bundle sau khi tạo."}
       </div>
 
       <div className="mt-4 flex justify-end">
