@@ -1900,6 +1900,84 @@ Runtime note:
 
 ---
 
+### 16.17. Catalog v2 AI Intelligence v2 Contract
+
+**Status:** `DONE_DEPLOYED`
+**Owner:** Codex
+**Last updated:** 2026-06-23
+
+Backend:
+
+```text
+src/lib/ai/catalog-context.ts
+src/lib/ai/catalog-matcher.ts
+src/lib/ai/reply-suggestion.ts
+```
+
+API:
+
+```text
+POST /api/ai/conversations/:id/reply-suggestion
+POST /api/ai/suggest
+POST /api/ai/conversations/:id/offer-suggestion
+GET /api/ai/growth-report
+POST /api/ai/products/:id/audit
+```
+
+Behavior:
+
+```text
+- Catalog context reads active CatalogItem, available variants, bookable service variations, package components, offers, customer/order/message context.
+- Matcher returns matchedItems, matchedVariants, matchedServices, matchedPackages, missingCatalogData.
+- Reply suggestion never sends messages automatically; sale must review/send manually.
+- If AI provider is not configured or fails, rule-based fallback still returns catalog-grounded suggestions.
+- Offer Suggestion now prefers package/variant/service matches where relevant.
+- Product Auditor v2 checks real variant/stock, booking profile/variation and package components instead of static "phase pending" notes.
+- Growth Report now includes catalog health signals: available variants, low stock variants, bookable services and packages with components.
+```
+
+Runtime note:
+
+```text
+- No schema change, no migration.
+- Production deploy PASS at commit a96ea96.
+- Production smoke PASS: /inbox 200, reply-suggestion 200, legacy /api/ai/suggest 200, offer-suggestion 200, growth-report 200, product audit 200 with fallback audit available.
+- AI provider runtime may still fallback if OPENAI_API_KEY/AI provider is not valid; app does not crash and does not fake AI.
+```
+
+---
+
+### 16.18. Catalog v2 Production Polish Contract
+
+**Status:** `DONE_DEPLOYED`
+**Owner:** Codex
+**Last updated:** 2026-06-23
+
+API:
+
+```text
+GET /api/catalog/export
+POST /api/media/upload
+```
+
+Behavior:
+
+```text
+- /api/catalog/export returns workspace-scoped CSV with item type/name/price/cost/margin, variant stock summary, service variation count, package component count and AI audit score.
+- /api/media/upload now rate-limits per user/workspace in memory: 10 uploads/minute.
+- No destructive cleanup was performed.
+- No schema change and no migration.
+```
+
+Runtime note:
+
+```text
+- Production deploy PASS at commit eb317dc.
+- Production smoke PASS: /products, /bookings, /inbox, /api/catalog/items, /api/media, /api/ai/growth-report, /api/catalog/export and reply-suggestion.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -1940,6 +2018,66 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-23 — Catalog v2 Phase 5/6 AI + Production Polish (Codex)
+
+```text
+## 2026-06-23 — Catalog v2 Phase 5/6
+
+### Đang làm
+- Hoàn tất AI Catalog Intelligence v2 và Production Polish/QA.
+
+### Đã làm hôm nay
+- Thêm catalog context + matcher dùng CatalogItem, available variants, bookable service variations, package components, customer/order/message context.
+- Thêm POST /api/ai/conversations/:id/reply-suggestion.
+- Nối /api/ai/suggest legacy sang reply suggestion engine mới để Inbox composer có fallback catalog-grounded khi chưa có AI model.
+- Nâng Offer Suggestion đọc variant/service/package matches.
+- Nâng Product Auditor v2 nhìn dữ liệu thật: variant/tồn kho, booking profile/variation, package components.
+- Nâng Growth Report có catalog health: available variants, low stock, bookable services, packages with components.
+- Thêm /api/catalog/export CSV workspace-scoped.
+- Thêm rate limit upload ảnh 10 uploads/phút/user-workspace.
+- Deploy production và smoke pass.
+
+### Files đã sửa
+- src/lib/ai/catalog-context.ts
+- src/lib/ai/catalog-matcher.ts
+- src/lib/ai/reply-suggestion.ts
+- src/lib/ai/offer-suggestion.ts
+- src/lib/ai/product-audit.ts
+- src/lib/ai/growth-report.ts
+- src/app/api/ai/conversations/[id]/reply-suggestion/route.ts
+- src/app/api/ai/suggest/route.ts
+- src/components/InboxClient.tsx
+- src/app/api/catalog/export/route.ts
+- src/app/api/media/upload/route.ts
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: src/components/InboxClient.tsx để composer hiện gợi ý catalog fallback. Đây là wire nhỏ theo Phase 5, không sửa UI lớn.
+
+### Typecheck/build/test
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- npx prisma migrate status: PASS, schema up to date, không có migration mới.
+- Production deploy PASS: a96ea96 (AI) và eb317dc (polish).
+- Production smoke PASS: /products, /bookings, /inbox, /api/catalog/items, /api/media, /api/catalog/export, /api/ai/growth-report, reply-suggestion, offer-suggestion, legacy /api/ai/suggest.
+
+### Blocker
+- Không còn blocker code/deploy cho Catalog v2 Phase 5/6.
+- D-013 vẫn PARTIAL nếu cần upload ảnh bền vững bằng R2/S3 trên production.
+- D-010 vẫn OPEN nếu founder muốn AI model thật thay vì fallback/rule-based.
+
+### Cần founder quyết
+- Nhập OPENAI_API_KEY/AI provider hợp lệ trong Dokploy nếu muốn AI model thật.
+- Cấu hình R2/S3 env nếu muốn ảnh upload bền vững qua redeploy.
+
+### Cần agent kia hỗ trợ
+- Không bắt buộc. Claude có thể polish UI sâu hơn sau, nhưng MVP Catalog v2 full-phase đã usable.
+
+### Kế hoạch tiếp theo
+- Founder test thực tế: tạo sản phẩm thật có ảnh/variant, tạo service bookable, tạo package, bấm AI audit/gợi ý trả lời/growth report.
+```
 
 #### 2026-06-23 — Catalog v2 Phase 4 Package/Bundle (Codex)
 
@@ -7390,6 +7528,109 @@ Production smoke: PASS /products, login, create package/component catalog items,
 
 ---
 
+### 18.36. Catalog v2 Phase 5 — AI Catalog Intelligence v2
+
+**Owner:** Codex
+**Status:** `DONE_DEPLOYED`
+**Branch:** `main`
+**Commit/PR link:** `a96ea96`
+
+#### Summary
+
+```text
+Implemented catalog-grounded AI Intelligence v2:
+- Catalog context builder for active items, variants, services, packages, customer/order/message context.
+- Catalog matcher that returns matchedItems, matchedVariants, matchedServices, matchedPackages and missingCatalogData.
+- New reply suggestion endpoint for conversations.
+- Legacy /api/ai/suggest now uses the new engine and can fallback without OpenAI.
+- Offer Suggestion, Product Auditor and Growth Report now understand Catalog v2 variant/stock/booking/package data.
+```
+
+#### Runtime Contract
+
+```text
+POST /api/ai/conversations/:id/reply-suggestion
+- Requires login.
+- Filters by currentWorkspaceId.
+- Returns suggestedReply, referencedItems, referencedVariants, referencedServices, referencedPackages, reason, confidence, warnings.
+- Does not send messages or create orders/bookings.
+
+POST /api/ai/suggest
+- Backward-compatible composer endpoint.
+- Returns suggestion string and catalog references in data.catalog.
+```
+
+#### Tests
+
+```text
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+No migration.
+Production deploy PASS.
+Production smoke PASS: reply-suggestion 200, legacy suggest 200, offer-suggestion 200, growth-report 200, product audit endpoint 200 with fallback audit available.
+```
+
+#### Risks / Handoff
+
+```text
+- If AI provider env is missing/invalid, APIs return rule-based fallback with status SKIPPED/FAILED; this is expected and not fake AI.
+- OPENAI_API_KEY/provider setup remains D-010 if founder wants model-generated language.
+```
+
+---
+
+### 18.37. Catalog v2 Phase 6 — Production Polish
+
+**Owner:** Codex
+**Status:** `DONE_DEPLOYED`
+**Branch:** `main`
+**Commit/PR link:** `eb317dc`
+
+#### Summary
+
+```text
+Implemented final production polish:
+- Added workspace-scoped CSV catalog export.
+- Added upload API rate limit.
+- Re-ran typecheck/build/migrate status.
+- Redeployed production and smoke tested core Catalog v2 flows.
+```
+
+#### Runtime Contract
+
+```text
+GET /api/catalog/export
+- Requires login.
+- Filters by currentWorkspaceId.
+- Optional type/status query params.
+- Returns text/csv with item price, stock, service/package and audit summary.
+
+POST /api/media/upload
+- Existing upload route.
+- Adds 10 uploads/minute/user-workspace in-memory rate limit.
+```
+
+#### Tests
+
+```text
+npm run typecheck: PASS.
+npm run build: PASS.
+npx prisma migrate status: PASS, schema up to date.
+Production deploy PASS at eb317dc.
+Production smoke PASS: /products, /bookings, /inbox, /api/catalog/items, /api/media, /api/ai/growth-report, /api/catalog/export, reply-suggestion.
+```
+
+#### Risks / Handoff
+
+```text
+- CSV import is not implemented in this pass; export is ready for backup/review.
+- Upload rate limit is in-memory per running app instance; enough for single-node VPS MVP, not a distributed global limiter.
+- Durable R2/S3 upload remains env-dependent under D-013.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -7410,6 +7651,8 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-CAT-030 | Catalog v2 Booking backend Phase 3A đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push caf4586, apply additive migration 20260622_catalog_v2_phase3_booking, deploy production và smoke PASS cho service profile/variation/booking APIs. |
 | D-CAT-031 | Catalog v2 Booking UI Phase 3B đã deploy production chưa? | Codex | DONE | 2026-06-23: Codex đã commit/push c6e0679, deploy production image codex-booking-ui-c6e0679, smoke PASS cho /bookings + booking/catalog/core APIs. |
 | D-CAT-040 | Catalog v2 Package/Bundle Phase 4 đã deploy production chưa? | Codex | DONE | 2026-06-23: Codex đã commit/push 577e791, apply additive migration 20260623_catalog_v2_phase4_package, deploy production và smoke PASS cho /products + package component APIs. |
+| D-CAT-050 | Catalog v2 AI Intelligence Phase 5 đã deploy production chưa? | Codex | DONE | 2026-06-23: Codex đã commit/push a96ea96, không cần migration, deploy production và smoke PASS cho reply-suggestion, legacy suggest, offer-suggestion, growth-report. |
+| D-CAT-060 | Catalog v2 Production Polish Phase 6 đã deploy production chưa? | Codex | DONE | 2026-06-23: Codex đã commit/push eb317dc, không cần migration, deploy production và smoke PASS cho /api/catalog/export + core Catalog v2 routes. |
 | D-DCOS-001 | Rebrand DCOS personal-first shell? | Codex | DONE | 2026-06-22: Code đổi metadata/login/sidebar/nav/dashboard copy sang DCOS, commit/push/deploy PASS, production smoke PASS. |
 | D-DCOS-002 | Personal Space behavior cho user mới? | Codex | DONE | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi; deploy PASS. |
 | D-DCOS-003 | App Center route? | Codex | DONE | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; runtime cookie-write issue fixed in `d72f2ea`; production smoke /apps 200. |
@@ -7436,6 +7679,8 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-034 (RESOLVED): Catalog v2 Phase 3A Booking backend migration/API deployed at `caf4586`; production write smoke PASS with temporary soft-cleaned test data.
 - B-035 (RESOLVED): Catalog v2 Phase 3B Booking UI deployed at `c6e0679`; /bookings, /products, /api/bookings and core APIs smoke PASS. No migration. Real service data needs active BOOKABLE_SERVICE rows.
 - B-036 (RESOLVED): Catalog v2 Phase 4 Package/Bundle migration/API/UI deployed at `577e791`; production smoke PASS for package component create/list/update/soft-delete and /products Bundle tab.
+- B-037 (RESOLVED): Catalog v2 Phase 5 AI Intelligence v2 deployed at `a96ea96`; production smoke PASS for reply suggestion, legacy suggest, offer suggestion and growth report. AI provider may fallback until D-010 is configured.
+- B-038 (RESOLVED): Catalog v2 Phase 6 Production Polish deployed at `eb317dc`; production smoke PASS for CSV export and core Catalog v2 routes. Upload rate limit added; no migration.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
