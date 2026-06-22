@@ -37,7 +37,11 @@ _Cập nhật: 2026-06-23 (đêm) — Claude (DCOS Daily Intelligence)_
 - npm run build: biên dịch PASS + types valid + static 8/8; chỉ fail bước rename 500.html (OneDrive, Windows-only).
 
 ## Pending tests
-- Smoke production sau deploy: `/ai-copilot/daily`, `/api/ai/daily-intelligence`, `/api/ai/daily-intelligence/history`.
+- ✅ ĐÃ XONG. Smoke production PASS (c132c0f + 0c79bac live):
+  - /ai-copilot/daily 307, /content 307, /ads 307.
+  - /api/ai/daily-intelligence + /history + /cron/daily-intelligence 401, /api/content/posts + /insights 401, /api/meta/ads/insights 401.
+  - Regression OK: /products 307, /inbox 307, /api/catalog/items 401.
+- Còn lại (cần persistence): Phase 4 Attribution sâu, Phase 5 Learning Memory, Phase 6 Notifications.
 
 ## Next exact command
 1. `git add` (chỉ 12 file của Claude ở trên) → commit "add dcos daily intelligence foundation" → `git push origin main`.
