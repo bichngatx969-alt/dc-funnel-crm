@@ -1841,6 +1841,65 @@ Runtime note:
 
 ---
 
+### 16.16. Catalog v2 Package/Bundle API + UI Contract
+
+**Status:** `DONE_DEPLOYED`
+**Owner:** Codex
+**Last updated:** 2026-06-23
+
+Schema:
+
+```text
+PackageComponent
+- workspaceId
+- packageItemId
+- componentItemId
+- componentVariantId nullable
+- quantity
+- pricingMode
+- deletedAt nullable
+```
+
+API:
+
+```text
+GET /api/catalog/items/:id/package-components
+POST /api/catalog/items/:id/package-components
+PATCH /api/catalog/items/:id/package-components/:componentId
+DELETE /api/catalog/items/:id/package-components/:componentId
+```
+
+Behavior:
+
+```text
+- Package item phải là CatalogItem type PACKAGE trong currentWorkspaceId.
+- Component item phải thuộc cùng workspace, active và không hard-deleted.
+- Component có thể chọn CatalogVariant nếu variant thuộc component item/currentWorkspaceId.
+- Không cho package tự chứa chính nó; có guard chống vòng lặp trực tiếp.
+- DELETE là soft-delete bằng deletedAt.
+- Summary trả retailValueVnd, packagePriceVnd, savingsVnd để UI hiển thị giá trị combo.
+```
+
+UI:
+
+```text
+/products
+- CatalogItem type PACKAGE có tab Bundle.
+- Bundle builder thêm/sửa/xóa mềm component, chọn variant, quantity, pricingMode.
+- Hiển thị giá package, tổng giá trị lẻ và mức tiết kiệm.
+```
+
+Runtime note:
+
+```text
+- Migration additive-only: prisma/migrations/20260623_catalog_v2_phase4_package/migration.sql.
+- npx prisma migrate deploy PASS; migrate status sau deploy: schema up to date.
+- Production deploy/smoke PASS at commit 577e791.
+- Smoke: /products 200, login 200, create package + component item, POST/GET/PATCH/DELETE package component PASS, cleanup bằng soft archive.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -1881,6 +1940,61 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-23 — Catalog v2 Phase 4 Package/Bundle (Codex)
+
+```text
+## 2026-06-23 — Catalog v2 Phase 4 Package/Bundle
+
+### Đang làm
+- Hoàn tất PR-CAT-4A/4B: Package/Bundle schema, API và bundle builder UI.
+
+### Đã làm hôm nay
+- Thêm PackageComponent additive schema + migration.
+- Thêm helper package validation: workspace isolation, PACKAGE-only, component cùng workspace, variant hợp lệ, soft-delete, chống self-contained package.
+- Thêm API GET/POST/PATCH/DELETE /api/catalog/items/:id/package-components.
+- Nối /products detail cho type PACKAGE có tab Bundle.
+- Thêm PackageBuilderPanel quản lý component, variant, quantity, pricingMode và summary giá trị lẻ/giá package/savings.
+- Apply migration production bằng npx prisma migrate deploy sau safety scan additive-only.
+- Deploy production và smoke package flow thật; cleanup bằng soft archive.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260623_catalog_v2_phase4_package/migration.sql
+- src/lib/catalog-packages.ts
+- src/app/api/catalog/items/[id]/package-components/route.ts
+- src/app/api/catalog/items/[id]/package-components/[componentId]/route.ts
+- src/components/products/ProductsClient.tsx
+- src/components/products/PackageBuilderPanel.tsx
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Có sửa file thuộc owner agent khác không?
+- Có: src/components/products/** để hoàn tất Bundle UI vì founder yêu cầu Codex làm tiếp khi Claude bận. Không sửa UI lớn ngoài /products package tab.
+
+### Typecheck/build/test
+- npx prisma format: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- Migration safety scan: PASS, không DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
+- npx prisma migrate deploy: PASS, applied 20260623_catalog_v2_phase4_package.
+- npx prisma migrate status: PASS, database schema up to date.
+- Production Docker build/deploy: PASS.
+- Production smoke: PASS /products 200, login 200, create package/item, POST/GET/PATCH/DELETE package component, soft cleanup.
+
+### Blocker
+- Không còn blocker Phase 4.
+
+### Cần founder quyết
+- D-013 vẫn PARTIAL: production durable upload ảnh thật cần R2/S3 env nếu muốn dùng upload bền vững qua redeploy.
+
+### Cần agent kia hỗ trợ
+- Không bắt buộc. Claude có thể polish visual sau, nhưng Bundle MVP đã usable.
+
+### Kế hoạch tiếp theo
+- Phase 5: AI Catalog Intelligence v2 backend + UI.
+- Phase 6: production polish/QA/performance sau khi AI Catalog pass.
+```
 
 #### 2026-06-23 — DCOS Daily Intelligence Phase 1 Foundation (Claude)
 
@@ -7216,6 +7330,66 @@ Production smoke: PASS for /bookings, /products, /api/bookings, /api/catalog/ite
 
 ---
 
+### 18.35. Catalog v2 Phase 4 — Package/Bundle
+
+**Owner:** Codex
+**Status:** `DONE_DEPLOYED`
+**Branch:** `main`
+**Commit/PR link:** `577e791`
+
+#### Summary
+
+```text
+Implemented Package/Bundle MVP:
+- PackageComponent schema + additive migration.
+- Package component API for list/create/update/soft-delete.
+- /products Package detail Bundle tab.
+- Bundle builder UI with component item, optional variant, quantity, pricingMode and price summary.
+```
+
+#### API / UI Contract
+
+```text
+GET /api/catalog/items/:id/package-components
+POST /api/catalog/items/:id/package-components
+PATCH /api/catalog/items/:id/package-components/:componentId
+DELETE /api/catalog/items/:id/package-components/:componentId
+
+/products -> CatalogItem type PACKAGE -> Bundle tab.
+```
+
+#### Migration
+
+```text
+Migration file: prisma/migrations/20260623_catalog_v2_phase4_package/migration.sql.
+Additive-only review PASS.
+npx prisma migrate deploy PASS.
+npx prisma migrate status after deploy PASS, database schema up to date.
+No reset, no db push, no hard delete, no destructive SQL.
+```
+
+#### Tests
+
+```text
+npx prisma format: PASS.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+Production deploy: PASS at commit 577e791.
+Production smoke: PASS /products, login, create package/component catalog items, POST/GET/PATCH/DELETE package component, soft cleanup.
+```
+
+#### Risks / Handoff
+
+```text
+- Package order expansion/fulfillment logic is not expanded yet; current Order Lite can sell CatalogItem package as a normal item/name line.
+- Nested package cycle guard handles self and direct reverse cycle; deeper nested cycle detection can be added if nested package-in-package becomes a real workflow.
+- Durable media upload remains D-013 env-dependent.
+- Next phase: AI Catalog Intelligence v2 should include package components in matcher/audit/growth suggestions.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -7235,6 +7409,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-CAT-020 | Catalog v2 Variant/Inventory UI đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push 1132c72, redeploy production và smoke PASS cho /products + catalog/media/inbox/comment APIs. |
 | D-CAT-030 | Catalog v2 Booking backend Phase 3A đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push caf4586, apply additive migration 20260622_catalog_v2_phase3_booking, deploy production và smoke PASS cho service profile/variation/booking APIs. |
 | D-CAT-031 | Catalog v2 Booking UI Phase 3B đã deploy production chưa? | Codex | DONE | 2026-06-23: Codex đã commit/push c6e0679, deploy production image codex-booking-ui-c6e0679, smoke PASS cho /bookings + booking/catalog/core APIs. |
+| D-CAT-040 | Catalog v2 Package/Bundle Phase 4 đã deploy production chưa? | Codex | DONE | 2026-06-23: Codex đã commit/push 577e791, apply additive migration 20260623_catalog_v2_phase4_package, deploy production và smoke PASS cho /products + package component APIs. |
 | D-DCOS-001 | Rebrand DCOS personal-first shell? | Codex | DONE | 2026-06-22: Code đổi metadata/login/sidebar/nav/dashboard copy sang DCOS, commit/push/deploy PASS, production smoke PASS. |
 | D-DCOS-002 | Personal Space behavior cho user mới? | Codex | DONE | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi; deploy PASS. |
 | D-DCOS-003 | App Center route? | Codex | DONE | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; runtime cookie-write issue fixed in `d72f2ea`; production smoke /apps 200. |
@@ -7260,6 +7435,7 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-033 (PARTIAL): Browser OS MVP uses localStorage only; safe for first DCOS shell, but shortcuts do not sync between devices until additive BrowserShortcut DB is added.
 - B-034 (RESOLVED): Catalog v2 Phase 3A Booking backend migration/API deployed at `caf4586`; production write smoke PASS with temporary soft-cleaned test data.
 - B-035 (RESOLVED): Catalog v2 Phase 3B Booking UI deployed at `c6e0679`; /bookings, /products, /api/bookings and core APIs smoke PASS. No migration. Real service data needs active BOOKABLE_SERVICE rows.
+- B-036 (RESOLVED): Catalog v2 Phase 4 Package/Bundle migration/API/UI deployed at `577e791`; production smoke PASS for package component create/list/update/soft-delete and /products Bundle tab.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
