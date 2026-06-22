@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCurrentWorkspaceId } from "@/lib/workspace";
 import { AppShell } from "@/components/AppShell";
 import { isAiEnabled, isEmailEnabled } from "@/lib/env";
 
@@ -10,15 +11,16 @@ export const dynamic = "force-dynamic";
 export default async function IntegrationsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+  const workspaceId = await getCurrentWorkspaceId(user);
   const connectedPageCount = await prisma.facebookPage.count({
-    where: { status: { not: "DISCONNECTED" } },
+    where: { workspaceId, status: { not: "DISCONNECTED" } },
   });
 
   return (
     <AppShell user={user} active="settings">
       <div className="p-6">
-        <h1 className="mb-1 text-2xl font-bold">Integrations</h1>
-        <p className="mb-5 text-sm text-gray-500">Kết nối các kênh vận hành cho brand hiện tại.</p>
+        <h1 className="mb-1 text-2xl font-bold">Tích hợp</h1>
+        <p className="mb-5 text-sm text-gray-500">Kết nối các kênh vận hành cho Space hiện tại.</p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <IntegrationCard
             title="Facebook Fanpage"

@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       text: m.text,
     })),
     latestMessage: lastInbound?.text ?? "",
-    brandName: brandProfile?.brandName ?? "brand hiện tại",
+    brandName: brandProfile?.brandName ?? "Space hiện tại",
     offers: offers.map((o) => ({
       product: o.product,
       title: o.title,

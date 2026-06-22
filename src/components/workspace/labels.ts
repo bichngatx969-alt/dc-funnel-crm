@@ -43,7 +43,7 @@ export function roleLabel(role?: string | null): string {
   return ROLE_LABELS[role.toUpperCase()] ?? role;
 }
 
-// Lựa chọn ngành khi tạo brand mới (value gửi lên API, backend tự normalize).
+// Lựa chọn ngành khi tạo Space mới (value gửi lên API, backend tự normalize).
 export const INDUSTRY_OPTIONS: { value: string; label: string }[] = [
   { value: "fashion", label: "Thời trang" },
   { value: "studio", label: "Studio ảnh" },

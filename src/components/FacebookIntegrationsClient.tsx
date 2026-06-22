@@ -176,7 +176,7 @@ export function FacebookIntegrationsClient() {
         <div>
           <h1 className="mb-1 text-2xl font-bold">Kết nối Fanpage Facebook</h1>
           <p className="text-sm text-gray-500">
-            Kết nối Fanpage để D.C Funnel Bot nhận inbox, phân loại khách và hỗ trợ sale theo funnel.
+            Kết nối Fanpage để DCOS nhận inbox, phân loại khách và hỗ trợ sale theo funnel.
           </p>
         </div>
         <div className="flex gap-2">

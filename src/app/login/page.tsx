@@ -38,8 +38,9 @@ export default function LoginPage() {
         className="w-full max-w-sm space-y-4 rounded-xl bg-white p-6 shadow"
       >
         <div className="text-center">
-          <h1 className="text-xl font-bold text-brand">D.C Funnel Bot</h1>
-          <p className="text-sm text-gray-500">Đăng nhập CRM</p>
+          <h1 className="text-xl font-bold text-brand">DCOS</h1>
+          <p className="text-sm text-gray-500">D.C Operating System</p>
+          <p className="mt-1 text-xs text-gray-400">Hệ điều hành cá nhân cho người kinh doanh hiện đại.</p>
         </div>
 
         {err && (

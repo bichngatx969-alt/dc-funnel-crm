@@ -56,7 +56,7 @@ export const env = {
   // Email (Resend) — tùy chọn
   resendApiKey: process.env.RESEND_API_KEY ?? "",
   resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET ?? "",
-  emailFromName: process.env.EMAIL_FROM_NAME || "D.C Funnel Bot",
+  emailFromName: process.env.EMAIL_FROM_NAME || "DCOS",
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS || "",
   unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET || process.env.AUTH_SECRET || DEFAULT_UNSUBSCRIBE_SECRET,
 

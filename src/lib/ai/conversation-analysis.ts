@@ -29,7 +29,7 @@ type AnalyzeResult = {
   error?: string;
 };
 
-const SYSTEM_PROMPT = `Bạn là AI Growth Copilot cho CRM bán hàng qua Facebook.
+const SYSTEM_PROMPT = `Bạn là AI Copilot cho DCOS Customer OS bán hàng qua Facebook.
 Phân tích hội thoại để hỗ trợ sale ra quyết định. Chỉ suy luận từ tín hiệu hội thoại và hành vi, không phán xét con người.
 Không tự động gửi tin, không chốt đơn thay sale. Trả về JSON hợp lệ, ngắn gọn, tiếng Việt.`;
 

@@ -14,8 +14,8 @@ export default async function AiGrowthPage() {
     <AppShell user={user} active="dashboard">
       <div className="mx-auto max-w-7xl p-4 sm:p-6">
         <PageHeader
-          title="AI Growth"
-          subtitle="Báo cáo tối ưu tăng trưởng do AI tổng hợp mỗi ngày: điểm nghẽn, khách cần chăm, offer nên test và việc nên làm ngày mai."
+          title="AI Copilot"
+          subtitle="Báo cáo tối ưu tăng trưởng trong DCOS: điểm nghẽn, khách cần chăm, offer nên test và việc nên làm tiếp theo."
         />
         <AiGrowthReport />
       </div>

@@ -44,9 +44,9 @@ export async function POST(req: Request) {
     subject = r.subject;
     html = r.html;
   } else {
-    subject = renderString(String(body.subject ?? "Test D.C Funnel Bot"), ctx);
+    subject = renderString(String(body.subject ?? "Test DCOS"), ctx);
     html = renderString(
-      String(body.html ?? body.bodyHtml ?? "<p>Đây là email test từ D.C Funnel Bot.</p>"),
+      String(body.html ?? body.bodyHtml ?? "<p>Đây là email test từ DCOS.</p>"),
       ctx
     );
     if (!/unsubscribe/i.test(html))

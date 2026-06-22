@@ -2,22 +2,22 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { FounderDashboardClient } from "@/components/dashboard/FounderDashboardClient";
+import { BrowserClient } from "@/components/browser/BrowserClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function BrowserPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
   return (
-    <AppShell user={user} active="dashboard">
+    <AppShell user={user} active="browser">
       <div className="mx-auto max-w-7xl p-4 sm:p-6">
         <PageHeader
-          title="DCOS Home"
-          subtitle="Không gian điều hành cá nhân: việc cần làm hôm nay, inbox mới, khách cần chăm sóc, doanh thu, catalog và automation."
+          title="Browser OS"
+          subtitle="Shortcut workbench cho các công cụ vận hành cá nhân trong DCOS: Meta, Zalo OA, Canva, Webcake, Google Drive và Gmail."
         />
-        <FounderDashboardClient />
+        <BrowserClient />
       </div>
     </AppShell>
   );

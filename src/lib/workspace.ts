@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/lib/auth";
 
 const WORKSPACE_COOKIE = "dc_workspace_id";
-const DEFAULT_ORG_NAME = "D.C Group";
-const DEFAULT_WORKSPACE_NAME = "D.C Funnel CRM";
+const DEFAULT_ORG_NAME = "Personal OS";
+const DEFAULT_WORKSPACE_NAME = "Không gian cá nhân";
 const DEFAULT_TIMEZONE = "Asia/Ho_Chi_Minh";
 const DEFAULT_CURRENCY = "VND";
 const DEFAULT_LOCALE = "vi-VN";
@@ -184,7 +184,7 @@ export async function ensureDefaultWorkspaceForUser(user: SessionUser): Promise<
     return existingMembership;
   }
 
-  const workspace = await getOrCreateDefaultWorkspace();
+  const workspace = await createPersonalWorkspaceForUser(user);
   const membership = await prisma.workspaceMember.create({
     data: {
       workspaceId: workspace.id,
@@ -213,21 +213,16 @@ export async function backfillLegacyWorkspace(workspaceId: string): Promise<void
   ]);
 }
 
-async function getOrCreateDefaultWorkspace() {
-  const existingWorkspace = await prisma.workspace.findFirst({
-    where: { deletedAt: null },
-    orderBy: { createdAt: "asc" },
+async function createPersonalWorkspaceForUser(user: SessionUser) {
+  const displayName = normalizeText(user.name) || normalizeText(user.email) || "bạn";
+  const organization = await prisma.organization.create({
+    data: { name: `Personal của ${displayName}` },
   });
-  if (existingWorkspace) return existingWorkspace;
-
-  const organization = await getOrCreateDefaultOrganization();
-  const brandProfile = await prisma.brandProfile.findFirst({ orderBy: { createdAt: "asc" } });
-
   return prisma.workspace.create({
     data: {
       organizationId: organization.id,
-      name: brandProfile?.brandName || DEFAULT_WORKSPACE_NAME,
-      industry: brandProfile?.industry ?? "OTHER",
+      name: DEFAULT_WORKSPACE_NAME,
+      industry: "OTHER",
       timezone: DEFAULT_TIMEZONE,
       currency: DEFAULT_CURRENCY,
       locale: DEFAULT_LOCALE,

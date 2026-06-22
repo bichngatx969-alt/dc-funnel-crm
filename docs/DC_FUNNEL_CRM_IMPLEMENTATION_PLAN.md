@@ -1723,6 +1723,47 @@ Safety:
 
 ---
 
+### 16.13. DCOS Personal-first Shell Contract
+
+**Status:** `READY_CODED`
+**Owner:** Codex
+**Last updated:** 2026-06-22
+
+Routes:
+
+```http
+GET /dashboard
+GET /apps
+GET /browser
+GET /settings/workspaces
+```
+
+Behavior:
+
+```text
+- Display product name as DCOS / D.C Operating System.
+- Keep existing routes/database/table names for backward compatibility.
+- Dashboard label becomes DCOS Home and continues to use founder stats data.
+- /apps is App Center: shows workspace-scoped Facebook, Catalog, Automation counts plus AI/Email config status.
+- /browser is Browser OS MVP: localStorage shortcut workbench, opens external tools in a new tab.
+- Browser OS does not scrape cookies/sessions, does not store passwords, and does not automate personal accounts.
+- Existing user memberships are unchanged.
+- New user with no workspace membership gets a personal organization `Personal của {user}` and workspace `Không gian cá nhân`.
+- No migration required for this shell phase.
+```
+
+Safety:
+
+```text
+- No schema changes.
+- No database reset.
+- No secret logging.
+- /apps DB reads filter currentWorkspaceId.
+- Existing legal/public Meta review pages remain public and have DCOS naming.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -1764,6 +1805,73 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### 17.1. Daily Reports Log
 
+#### 2026-06-22 — DCOS Personal-first Shell (Codex)
+
+```text
+## 2026-06-22 — Codex — DCOS Personal-first Shell
+
+### Đã làm
+- Đổi metadata/login/sidebar/nav/dashboard copy từ D.C FUNNEL CRM sang DCOS / D.C Operating System.
+- Thêm App Center route /apps, đọc trạng thái theo currentWorkspaceId: Facebook Pages, conversations, comments, CatalogItem, active AutomationRule, AI/Email config status.
+- Thêm Browser OS route /browser: shortcut workbench localStorage, mở external tools bằng tab mới, không lưu password/cookie/session.
+- Đổi Workspace/Brand wording chính sang Space ở sidebar/workspace switcher/workspace settings.
+- Sửa integration page count FacebookPage để filter workspaceId.
+- Personal Space behavior: user mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing memberships/data không bị đổi.
+- Tạo docs/product/DCOS_PERSONAL_PIVOT_MASTER_PLAN.md.
+
+### Files đã sửa
+- src/app/layout.tsx
+- src/app/login/page.tsx
+- src/app/dashboard/page.tsx
+- src/app/dashboard/ai-growth/page.tsx
+- src/app/apps/page.tsx
+- src/app/browser/page.tsx
+- src/app/settings/integrations/page.tsx
+- src/app/settings/workspaces/page.tsx
+- src/app/terms/page.tsx
+- src/app/privacy/page.tsx
+- src/app/data-deletion/page.tsx
+- src/app/api/ai/suggest/route.ts
+- src/app/api/email/send-test/route.ts
+- src/components/AppShell.tsx
+- src/components/browser/BrowserClient.tsx
+- src/components/dashboard/AiGrowthReport.tsx
+- src/components/FacebookIntegrationsClient.tsx
+- src/components/FlowsClient.tsx
+- src/components/OffersClient.tsx
+- src/components/layout/nav.ts
+- src/components/workspace/WorkspaceSwitcher.tsx
+- src/components/workspace/WorkspacesClient.tsx
+- src/components/workspace/labels.ts
+- src/lib/env.ts
+- src/lib/workspace.ts
+- docs/product/DCOS_PERSONAL_PIVOT_MASTER_PLAN.md
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Migration
+- Không tạo migration mới.
+- npx prisma migrate status: PASS, schema up to date.
+
+### Typecheck/build/test
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+
+### Production deploy
+- Chưa deploy tại thời điểm ghi report; sẽ commit/push/deploy ngay sau report nếu tests vẫn PASS.
+
+### Production smoke
+- Pending sau deploy: /, /dashboard, /apps, /browser, /products, /inbox, /comments, /api/catalog/items, /api/comments, /api/conversations.
+
+### Blocker
+- R2 env vẫn PARTIAL nếu muốn media upload bền qua redeploy.
+- Browser OS hiện là localStorage MVP; chưa đồng bộ shortcut qua DB giữa thiết bị.
+
+### Founder cần làm khi quay lại
+- Cấu hình R2 env nếu muốn upload ảnh production bền.
+- Quyết định có cần persistent BrowserShortcut DB ở sprint sau không.
+```
+
 #### 2026-06-21 — Catalog v2 Phase 1B/2B/2C UI (Claude)
 
 ```text
@@ -1804,6 +1912,48 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ### Kế hoạch tiếp theo
 - Khi list API có aggregate: hoàn thiện Phần 4 (filter + card variant/tồn).
 - Phase 3B Booking UI khi Codex xong backend booking.
+```
+
+#### 2026-06-22 — Catalog v2 UI Deploy Verification (Codex)
+
+```text
+## 2026-06-22 — Catalog v2 UI Deploy Verification
+
+### Đang làm
+- Chốt trạng thái Catalog v2 Phase 1B/2B/2C UI trước khi chuyển sang DCOS personal-first sprint.
+
+### Đã làm hôm nay
+- Kiểm working tree và không stage các file diagnostic/untracked cũ.
+- Xác nhận UI /products đã có Media Upload UI, Variant Manager UI, Inventory Panel.
+- Chạy baseline local: npx prisma migrate status, npx prisma generate, npm run typecheck, npm run build.
+- Commit/push UI Catalog v2 lên main.
+- Redeploy production qua Docker service/Dokploy flow.
+- Smoke production không phá dữ liệu: login 200, / 200, /products 200, /inbox 200, /comments 200, /api/catalog/items 200, /api/media 200, /api/comments 200, /api/conversations 200.
+
+### Files đã sửa
+- src/components/products/ProductsClient.tsx
+- src/components/products/media-upload.ts
+- src/components/products/VariantManager.tsx
+- src/components/products/InventoryPanel.tsx
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Migration
+- Không tạo migration mới.
+- npx prisma migrate status: PASS, schema up to date.
+
+### Typecheck/build/test
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- Production deploy: PASS, commit 1132c72.
+- Production smoke: PASS theo endpoints ở trên.
+
+### Blocker
+- R2/S3 env production vẫn cần founder cấu hình nếu muốn upload ảnh thật bền qua redeploy.
+- Chưa thêm aggregate variant/stock vào list API, nên filter/card tồn kho nâng cao vẫn là bước polish tiếp theo.
+
+### Founder cần làm khi quay lại
+- Cấu hình R2 env trong Dokploy nếu muốn bật durable media upload production.
 ```
 
 #### 2026-06-21 — Catalog v2 Phase 1B Media Upload API
@@ -6484,6 +6634,112 @@ Production runtime smoke: PASS, create physical CatalogItem 201, create option 2
 
 ---
 
+### 18.30. Product/Service Catalog v2 Phase 1B/2B/2C — UI Deploy
+
+**Owner:** Claude UI + Codex deploy verification
+**Status:** `DONE_DEPLOYED`
+**Branch:** `main`
+**Commit/PR link:** 1132c72
+
+#### Summary
+
+```text
+Catalog v2 UI is now production-deployed:
+- /products supports media upload/gallery UI with cover preview and URL fallback.
+- PHYSICAL_PRODUCT detail has Variant Manager: options, generate variants, quick edit, soft archive.
+- Inventory panel supports stock totals, low/out-of-stock badges, stock adjustments and movement history.
+- UI compiles against deployed Catalog v2 APIs.
+```
+
+#### Files changed
+
+```text
+src/components/products/ProductsClient.tsx
+src/components/products/media-upload.ts
+src/components/products/VariantManager.tsx
+src/components/products/InventoryPanel.tsx
+docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+```
+
+#### Tests / Smoke
+
+```text
+npx prisma migrate status: PASS, schema up to date.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+Git push origin main: PASS, commit 1132c72.
+Production deploy: PASS via Docker service update.
+Production no-write smoke: PASS, login 200, / 200, /products 200, /inbox 200, /comments 200, /api/catalog/items 200, /api/media 200, /api/comments 200, /api/conversations 200.
+```
+
+#### Risks / Handoff
+
+```text
+- R2/S3 production env still pending for durable upload writes; UI has safe URL fallback and backend local fallback.
+- Product list aggregate fields for variants/stock are not yet added; advanced list filters/card stock metrics remain polish.
+- Next Codex priority per founder prompt: DCOS Personal-first shell, App Center and Browser OS MVP.
+```
+
+---
+
+### 18.31. DCOS Personal-first Shell — Rebrand + App Center + Browser OS
+
+**Owner:** Codex
+**Status:** `READY_CODED`
+**Branch:** `main`
+**Commit/PR link:** pending commit
+
+#### Summary
+
+```text
+Implemented the first DCOS shell without renaming the repository/package/database:
+- Product display name is DCOS / D.C Operating System.
+- Dashboard becomes DCOS Home.
+- Sidebar IA adds DCOS group with Home, App Center, Browser OS, AI Copilot.
+- App Center (/apps) shows workspace-scoped app status.
+- Browser OS (/browser) is a safe shortcut workbench using localStorage.
+- New users without membership get a personal organization/workspace instead of being attached to the first global workspace.
+```
+
+#### API / Route Contract
+
+```http
+GET /apps
+GET /browser
+GET /dashboard
+GET /settings/workspaces
+```
+
+#### Safety
+
+```text
+- No migration.
+- No DB reset.
+- No secret logging.
+- Browser OS does not scrape sessions/cookies or store passwords.
+- /apps DB reads filter currentWorkspaceId.
+```
+
+#### Tests
+
+```text
+npx prisma migrate status: PASS, schema up to date.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+```
+
+#### Risks / Handoff
+
+```text
+- Browser shortcuts are device-local only; DB persistence can be added later with additive BrowserShortcut.
+- Public legal pages now use DCOS naming while preserving Meta review content.
+- Next safe steps: production deploy + smoke, then Catalog list aggregate polish or Booking backend.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -6500,6 +6756,11 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-012 | Duyệt apply migration Catalog v2 `20260621_catalog_v2_foundation` lên production? | Codex | DONE | Founder duyệt; Codex đã chạy npx prisma migrate deploy thành công ngày 2026-06-21. npx prisma migrate status sau deploy: schema up to date. |
 | D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | PARTIAL — code ready, env pending | 2026-06-21 Codex đã implement backend upload với MEDIA_STORAGE_PROVIDER=r2 qua Cloudflare R2/S3-compatible và local fallback dev/test. Production durable upload cần founder cấu hình R2 env trực tiếp trong Dokploy; không gửi secret qua chat. |
 | D-014 | Duyệt apply migration Catalog v2 Phase 2A `20260621_catalog_v2_phase2_variants` lên production? | Codex | DONE | Founder duyệt ngày 2026-06-21; Codex đã chạy npx prisma migrate deploy thành công, migrate status sau deploy schema up to date, production smoke variants/inventory PASS. |
+| D-CAT-020 | Catalog v2 Variant/Inventory UI đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push 1132c72, redeploy production và smoke PASS cho /products + catalog/media/inbox/comment APIs. |
+| D-DCOS-001 | Rebrand DCOS personal-first shell? | Codex | READY_CODED | 2026-06-22: Code đổi metadata/login/sidebar/nav/dashboard copy sang DCOS; chờ commit/push/deploy smoke. |
+| D-DCOS-002 | Personal Space behavior cho user mới? | Codex | READY_CODED | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi. |
+| D-DCOS-003 | App Center route? | Codex | READY_CODED | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; chờ deploy smoke. |
+| D-DCOS-004 | Browser OS MVP? | Codex | READY_CODED | 2026-06-22: /browser localStorage shortcut MVP, không scrape cookie/session/password; chờ deploy smoke. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -6516,6 +6777,9 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-028 (RESOLVED): ProductLite legacy backfill completed safely. `npm run catalog:backfill -- --apply` created 3 CatalogItem rows, rerun dry-run shows existing 3 / created 0. /api/products POST/PATCH now mirrors ProductLite to CatalogItem for future compatibility.
 - B-029 (OPEN): POST /api/media/upload runtime write smoke is intentionally not run against production until R2 env is configured; local fallback in production would be non-durable across redeploy.
 - B-030 (RESOLVED): Catalog v2 Phase 2A Variant/Inventory migration applied and production smoke passed.
+- B-031 (RESOLVED): Catalog v2 Phase 1B/2B/2C UI committed, pushed and production deployed at 1132c72; /products smoke PASS.
+- B-032 (OPEN): Catalog list aggregate variant/stock fields are still a polish gap; current detail tabs work, but list filters/cards for "có biến thể/sắp hết/hết hàng" need a later API enrich pass.
+- B-033 (PARTIAL): Browser OS MVP uses localStorage only; safe for first DCOS shell, but shortcuts do not sync between devices until additive BrowserShortcut DB is added.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;

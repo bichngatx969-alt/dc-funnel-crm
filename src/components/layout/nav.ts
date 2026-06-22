@@ -6,14 +6,16 @@ export type NavGroup = { label: string; items: NavItem[] };
 // IA mới — gom theo phòng ban. Mục chưa có backend = soon ("Sắp ra mắt").
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Tổng quan",
+    label: "DCOS",
     items: [
-      { label: "Bảng điều khiển", href: "/dashboard", icon: "dashboard" },
-      { label: "AI Growth", href: "/dashboard/ai-growth", icon: "sparkles" },
+      { label: "Home", href: "/dashboard", icon: "dashboard" },
+      { label: "App Center", href: "/apps", icon: "integrations" },
+      { label: "Browser OS", href: "/browser", icon: "system" },
+      { label: "AI Copilot", href: "/dashboard/ai-growth", icon: "sparkles" },
     ],
   },
   {
-    label: "Sale",
+    label: "Customer OS",
     items: [
       { label: "Hộp thư", href: "/inbox", icon: "inbox" },
       { label: "Khách hàng", href: "/contacts", icon: "contacts" },
@@ -24,7 +26,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Marketing",
+    label: "Growth OS",
     items: [
       { label: "Tự động hóa", href: "/automation", icon: "automation" },
       { label: "Fanpage / Kênh", href: "/settings/integrations/facebook", icon: "fanpage" },
@@ -34,9 +36,9 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Sản phẩm",
+    label: "Catalog OS",
     items: [
-      { label: "Sản phẩm", href: "/products", icon: "products" },
+      { label: "Sản phẩm / Dịch vụ", href: "/products", icon: "products" },
       { label: "Bộ sưu tập / Dịch vụ", href: "#", icon: "services", soon: true },
     ],
   },
@@ -56,10 +58,10 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Cài đặt",
+    label: "Cài đặt OS",
     items: [
-      { label: "Brands", href: "/settings/workspaces", icon: "brands" },
-      { label: "Thông tin brand", href: "/settings/brand", icon: "settings" },
+      { label: "Spaces", href: "/settings/workspaces", icon: "brands" },
+      { label: "Thông tin Space", href: "/settings/brand", icon: "settings" },
       { label: "Tích hợp", href: "/settings/integrations", icon: "integrations" },
       { label: "Bảo mật", href: "#", icon: "security", soon: true },
       { label: "Hệ thống", href: "#", icon: "system", soon: true },

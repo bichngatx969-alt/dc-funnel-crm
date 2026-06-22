@@ -32,13 +32,13 @@ export function AppShell({
         {/* Brand + collapse */}
         <div className="flex items-center justify-between gap-2 px-3 pt-3">
           {isCollapsed ? (
-            <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-black text-white">DC</span>
+            <span className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-black text-white">OS</span>
           ) : (
             <div className="flex items-center gap-2 px-1">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-black text-white">DC</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-sm font-black text-white">OS</span>
               <div className="leading-tight">
-                <div className="text-sm font-bold text-gray-900">D.C FUNNEL</div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">CRM</div>
+                <div className="text-sm font-bold text-gray-900">DCOS</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">D.C Operating System</div>
               </div>
             </div>
           )}

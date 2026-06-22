@@ -12,7 +12,7 @@ import {
 
 type WorkspacesPayload = { items: Workspace[]; currentWorkspaceId: string | null };
 
-// Trang Cài đặt > Brands: xem danh sách brand, chuyển brand, và tạo brand mới (nếu đủ quyền).
+// Trang Cài đặt > Spaces: xem danh sách Space, chuyển Space, và tạo Space mới (nếu đủ quyền).
 export function WorkspacesClient({ canManage }: { canManage: boolean }) {
   const [items, setItems] = useState<Workspace[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function WorkspacesClient({ canManage }: { canManage: boolean }) {
       setItems(data.items ?? []);
       setCurrentId(data.currentWorkspaceId ?? null);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Không tải được danh sách brand");
+      setError(e instanceof Error ? e.message : "Không tải được danh sách Space");
     } finally {
       setLoading(false);
     }
@@ -49,7 +49,7 @@ export function WorkspacesClient({ canManage }: { canManage: boolean }) {
       await apiSend("/api/workspaces/switch", "POST", { workspaceId: id });
       window.location.reload();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Không chuyển được brand");
+      setError(e instanceof Error ? e.message : "Không chuyển được Space");
       setBusy(false);
     }
   }
@@ -60,11 +60,11 @@ export function WorkspacesClient({ canManage }: { canManage: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      // API tạo brand sẽ tự chuyển workspace hiện tại sang brand mới -> reload.
+      // API tạo Space sẽ tự chuyển workspace hiện tại sang Space mới -> reload.
       await apiSend("/api/workspaces", "POST", { name: name.trim(), industry });
       window.location.reload();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Không tạo được brand");
+      setError(e instanceof Error ? e.message : "Không tạo được Space");
       setBusy(false);
     }
   }
@@ -90,11 +90,11 @@ export function WorkspacesClient({ canManage }: { canManage: boolean }) {
       {items.length === 0 ? (
         <EmptyState
           icon="🏢"
-          title="Tạo brand đầu tiên của bạn"
-          description="Mỗi brand là một không gian làm việc riêng, dữ liệu khách không lẫn giữa các brand."
+          title="Tạo Space đầu tiên của bạn"
+          description="Mỗi Space là một không gian làm việc riêng, dữ liệu khách không lẫn giữa các Space."
           action={
             canManage ? undefined : (
-              <span className="text-xs text-gray-400">Liên hệ quản trị viên để được tạo brand.</span>
+              <span className="text-xs text-gray-400">Liên hệ quản trị viên để được tạo Space.</span>
             )
           }
         />
@@ -136,12 +136,12 @@ export function WorkspacesClient({ canManage }: { canManage: boolean }) {
 
       {canManage && (
         <form onSubmit={createWorkspace} className="rounded-xl border bg-white p-4">
-          <h2 className="mb-3 font-semibold">Tạo brand mới</h2>
+          <h2 className="mb-3 font-semibold">Tạo Space mới</h2>
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Tên brand (vd: HICHAOS)"
+              placeholder="Tên Space (vd: HICHAOS)"
               className="flex-1 rounded border px-3 py-2 text-sm focus:border-brand focus:outline-none"
             />
             <select
@@ -160,11 +160,11 @@ export function WorkspacesClient({ canManage }: { canManage: boolean }) {
               disabled={busy || !name.trim()}
               className="rounded bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60"
             >
-              {busy ? "Đang tạo…" : "Tạo brand"}
+              {busy ? "Đang tạo…" : "Tạo Space"}
             </button>
           </div>
           <p className="mt-2 text-xs text-gray-400">
-            Brand mới mặc định dùng VND và múi giờ Asia/Ho_Chi_Minh.
+            Space mới mặc định dùng VND và múi giờ Asia/Ho_Chi_Minh.
           </p>
         </form>
       )}

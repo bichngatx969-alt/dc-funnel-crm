@@ -116,7 +116,7 @@ export function OffersClient() {
     <div className="p-6">
       <h1 className="mb-1 text-2xl font-bold">Offers</h1>
       <p className="mb-4 text-sm text-gray-500">
-        Offer của brand hiện tại. Có thể áp dụng cho toàn brand hoặc riêng một Fanpage.
+        Offer của Space hiện tại. Có thể áp dụng cho toàn Space hoặc riêng một Fanpage.
       </p>
 
       {err && <div className="mb-3 rounded bg-rose-50 px-3 py-2 text-sm text-rose-700">{err}</div>}
@@ -126,7 +126,7 @@ export function OffersClient() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field label="Áp dụng">
             <select className="inp" value={form.pageId} onChange={(e) => setForm({ ...form, pageId: e.target.value })}>
-              <option value="">Toàn brand</option>
+              <option value="">Toàn Space</option>
               {pages.map((p) => (
                 <option key={p.pageId} value={p.pageId}>{p.pageName}</option>
               ))}
@@ -199,7 +199,7 @@ export function OffersClient() {
             {offers.map((o) => (
               <tr key={o.id} className="border-t">
                 <td className="px-3 py-2">
-                  <div className="font-medium">{o.pageId ? o.facebookPage?.pageName ?? o.pageId : "Toàn brand"}</div>
+                  <div className="font-medium">{o.pageId ? o.facebookPage?.pageName ?? o.pageId : "Toàn Space"}</div>
                   <div className="text-xs text-gray-500">{o.product}</div>
                 </td>
                 <td className="px-3 py-2">

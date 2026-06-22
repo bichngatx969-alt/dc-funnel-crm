@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "D.C FUNNEL CRM",
-  description: "CRM Funnel multi-brand cho agency và local brand Việt Nam",
+  title: "DCOS",
+  description: "D.C Operating System - hệ điều hành cá nhân cho người kinh doanh hiện đại",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

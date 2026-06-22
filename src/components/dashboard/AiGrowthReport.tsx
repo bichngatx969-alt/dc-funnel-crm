@@ -85,7 +85,7 @@ export function AiGrowthReport() {
         const data = await apiGet<GrowthReport>(`/api/ai/growth-report?range=${range}`);
         if (!cancelled) setReport(data);
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? "Không tải được AI Growth Report.");
+        if (!cancelled) setError(e?.message ?? "Không tải được AI Copilot Report.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -106,7 +106,7 @@ export function AiGrowthReport() {
           <Icon name="sparkles" className="h-6 w-6" />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-bold text-gray-900">AI Growth Optimizer</h2>
+          <h2 className="text-[15px] font-bold text-gray-900">AI Copilot</h2>
           <p className="mt-0.5 text-[13px] text-gray-500">
             Tổng hợp dữ liệu hội thoại, sản phẩm, offer, pipeline và đơn hàng để gợi ý việc nên làm tiếp theo.
           </p>
@@ -213,7 +213,7 @@ export function AiGrowthReport() {
       )}
 
       <p className="px-1 text-[11.5px] text-gray-400">
-        Nguyên tắc: AI chỉ phân tích và gợi ý dựa trên dữ liệu trong workspace; không tự động gửi tin,
+        Nguyên tắc: AI chỉ phân tích và gợi ý dựa trên dữ liệu trong Space hiện tại; không tự động gửi tin,
         không tạo đơn, không đổi stage và không phán xét khách hàng.
       </p>
     </div>

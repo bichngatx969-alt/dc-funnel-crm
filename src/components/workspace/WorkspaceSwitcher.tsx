@@ -7,8 +7,8 @@ import { industryLabel, roleLabel, type Workspace } from "@/components/workspace
 
 type WorkspacesPayload = { items: Workspace[]; currentWorkspaceId: string | null };
 
-// Switcher brand/workspace đặt trên cùng sidebar (AppShell).
-// Gọi GET /api/workspaces khi mount; chuyển brand qua POST /api/workspaces/switch rồi reload
+// Switcher Space/workspace đặt trên cùng sidebar (AppShell).
+// Gọi GET /api/workspaces khi mount; chuyển Space qua POST /api/workspaces/switch rồi reload
 // để mọi dữ liệu lấy lại theo workspace mới (cookie HttpOnly dc_workspace_id do backend set).
 export function WorkspaceSwitcher() {
   const [items, setItems] = useState<Workspace[]>([]);
@@ -28,7 +28,7 @@ export function WorkspaceSwitcher() {
       setItems(data.items ?? []);
       setCurrentId(data.currentWorkspaceId ?? null);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Không tải được danh sách brand");
+      setError(e instanceof Error ? e.message : "Không tải được danh sách Space");
     } finally {
       setLoading(false);
     }
@@ -64,10 +64,10 @@ export function WorkspaceSwitcher() {
     setError(null);
     try {
       await apiSend("/api/workspaces/switch", "POST", { workspaceId: id });
-      // Cookie dc_workspace_id đã đổi -> reload toàn trang để dữ liệu re-scope theo brand mới.
+      // Cookie dc_workspace_id đã đổi -> reload toàn trang để dữ liệu re-scope theo Space mới.
       window.location.reload();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Không chuyển được brand");
+      setError(e instanceof Error ? e.message : "Không chuyển được Space");
       setSwitching(null);
     }
   }
@@ -84,14 +84,14 @@ export function WorkspaceSwitcher() {
 
   const current = items.find((w) => w.id === currentId) ?? items[0] ?? null;
 
-  // Chưa có brand -> CTA onboarding.
+  // Chưa có Space -> CTA onboarding.
   if (!current) {
     return (
       <Link
         href="/settings/workspaces"
         className="block rounded-lg border border-dashed px-3 py-2 text-center text-sm font-medium text-brand hover:bg-brand-light/40"
       >
-        + Tạo brand đầu tiên
+        + Tạo Space đầu tiên
       </Link>
     );
   }
@@ -136,14 +136,14 @@ export function WorkspaceSwitcher() {
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Tìm brand…"
+                placeholder="Tìm Space…"
                 className="w-full rounded border px-2 py-1 text-xs focus:border-brand focus:outline-none"
               />
             </div>
           )}
 
           {filtered.length === 0 && (
-            <p className="px-3 py-2 text-xs text-gray-400">Không tìm thấy brand phù hợp.</p>
+            <p className="px-3 py-2 text-xs text-gray-400">Không tìm thấy Space phù hợp.</p>
           )}
 
           {filtered.map((w) => {
@@ -187,14 +187,14 @@ export function WorkspaceSwitcher() {
               onClick={() => setOpen(false)}
               className="block px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
             >
-              + Tạo brand mới
+              + Tạo Space mới
             </Link>
             <Link
               href="/settings/workspaces"
               onClick={() => setOpen(false)}
               className="block px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
             >
-              ⚙ Quản lý brand
+              ⚙ Quản lý Space
             </Link>
           </div>
         </div>
