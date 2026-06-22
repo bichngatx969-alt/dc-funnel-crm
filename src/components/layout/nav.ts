@@ -39,6 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Catalog OS",
     items: [
       { label: "Sản phẩm / Dịch vụ", href: "/products", icon: "products" },
+      { label: "Lịch booking", href: "/bookings", icon: "services" },
       { label: "Bộ sưu tập / Dịch vụ", href: "#", icon: "services", soon: true },
     ],
   },
