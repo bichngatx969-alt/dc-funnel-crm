@@ -1806,6 +1806,58 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### 17.1. Daily Reports Log
 
+#### 2026-06-22 — Catalog v2 List Aggregate Polish (Codex)
+
+```text
+## 2026-06-22 — Codex — Catalog v2 List Aggregate Polish
+
+### Đã làm
+- Thêm aggregate variant/stock vào enrichCatalogItems: variantCount, activeVariantCount, totalStock, lowStockVariantCount, outOfStockVariantCount.
+- /products list/card hiển thị badge số biến thể và tổng tồn.
+- Bật filter list thật cho: Có biến thể, Sắp hết, Hết hàng.
+- Khi sửa biến thể/tồn kho trong detail, list reload nhẹ để số liệu aggregate không stale.
+
+### Files đã sửa
+- src/lib/catalog.ts
+- src/components/products/ProductsClient.tsx
+- src/components/products/InventoryPanel.tsx
+
+### Migration
+- Không tạo migration mới.
+- Không chạy DB write/migration.
+
+### Typecheck/build/test
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+
+### Production deploy
+- PASS. Commit `60f9f88` pushed main and deployed as image `dc-funnel-cmr-dc-iea9mn:codex-catalog-60f9f88`.
+
+### Production smoke
+- PASS:
+  - LOGIN 200
+  - / 307
+  - /dashboard 200
+  - /apps 200
+  - /browser 200
+  - /products 200
+  - /inbox 200
+  - /comments 200
+  - /api/catalog/items?pageSize=3 200
+  - CATALOG_AGGREGATES OK
+  - /api/media?pageSize=1 200
+  - /api/comments?pageSize=1 200
+  - /api/conversations?pageSize=1 200
+
+### Blocker
+- R2 durable upload env vẫn PARTIAL.
+- Browser OS shortcut vẫn localStorage MVP.
+
+### Founder cần làm khi quay lại
+- Cấu hình R2 env trong Dokploy nếu muốn upload ảnh bền qua redeploy.
+```
+
 #### 2026-06-22 — DCOS Personal-first Shell (Codex)
 
 ```text
@@ -6758,6 +6810,58 @@ Production smoke: PASS for /dashboard, /apps, /browser, /settings/integrations, 
 
 ---
 
+### 18.32. Catalog v2 List Aggregate Polish
+
+**Owner:** Codex
+**Status:** `DONE_DEPLOYED`
+**Branch:** `main`
+**Commit/PR link:** `60f9f88`
+
+#### Summary
+
+```text
+Catalog list now receives real variant/stock aggregate fields from the backend:
+- variantCount
+- activeVariantCount
+- totalStock
+- lowStockVariantCount
+- outOfStockVariantCount
+
+/products now shows variant/stock badges and supports true list filters for:
+- Có biến thể
+- Sắp hết
+- Hết hàng
+```
+
+#### Safety
+
+```text
+- No migration.
+- No database reset.
+- No secret logging.
+- All aggregate reads filter currentWorkspaceId.
+```
+
+#### Tests
+
+```text
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+Production deploy: PASS, image `dc-funnel-cmr-dc-iea9mn:codex-catalog-60f9f88`.
+Production smoke: PASS for /products and core catalog/media/inbox/comment APIs.
+```
+
+#### Risks / Handoff
+
+```text
+- Detail variant/inventory writes are already available; list aggregate is read-only polish.
+- R2 durable upload remains env-dependent.
+- Next safe step: Booking backend Phase 3A.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -6796,7 +6900,7 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-029 (OPEN): POST /api/media/upload runtime write smoke is intentionally not run against production until R2 env is configured; local fallback in production would be non-durable across redeploy.
 - B-030 (RESOLVED): Catalog v2 Phase 2A Variant/Inventory migration applied and production smoke passed.
 - B-031 (RESOLVED): Catalog v2 Phase 1B/2B/2C UI committed, pushed and production deployed at 1132c72; /products smoke PASS.
-- B-032 (OPEN): Catalog list aggregate variant/stock fields are still a polish gap; current detail tabs work, but list filters/cards for "có biến thể/sắp hết/hết hàng" need a later API enrich pass.
+- B-032 (RESOLVED): Catalog list aggregate variant/stock fields added and deployed at `60f9f88`; /products smoke PASS and /api/catalog/items returns aggregate keys.
 - B-033 (PARTIAL): Browser OS MVP uses localStorage only; safe for first DCOS shell, but shortcuts do not sync between devices until additive BrowserShortcut DB is added.
 
 [2026-06-14 · Claude · PR #1B]
