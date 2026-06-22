@@ -1765,6 +1765,51 @@ Safety:
 
 ---
 
+### 16.14. Catalog v2 Booking API Contract
+
+**Status:** `DONE_DEPLOYED`
+**Owner:** Codex
+**Last updated:** 2026-06-22
+
+Routes:
+
+```http
+GET /api/catalog/items/:id/service-profile
+PATCH /api/catalog/items/:id/service-profile
+GET /api/catalog/items/:id/service-variations
+POST /api/catalog/items/:id/service-variations
+PATCH /api/catalog/items/:id/service-variations/:variationId
+GET /api/bookings
+POST /api/bookings
+GET /api/bookings/:id
+PATCH /api/bookings/:id
+PATCH /api/bookings/:id/status
+```
+
+Behavior:
+
+```text
+- Booking chỉ áp dụng cho CatalogItem type BOOKABLE_SERVICE.
+- ServiceProfile lưu cấu hình bật/tắt booking, duration mặc định, buffer, deposit, locationMode, intakeFormJson.
+- ServiceVariation lưu variation theo dịch vụ: name, durationMinutes, priceVnd, bookingEnabled, staffIdsJson.
+- Booking lưu customerId nullable, catalogItemId, serviceVariationId nullable, staffId nullable, status, startAt/endAt, depositVnd, orderId nullable.
+- startAt phải trước endAt; nếu thiếu endAt thì tính theo variation.durationMinutes hoặc profile.defaultDurationMinutes.
+- Nếu có staffId, API check trùng lịch active booking PENDING/CONFIRMED trong cùng workspace.
+- Không hard delete; dùng deletedAt/bookingEnabled/status.
+```
+
+Safety:
+
+```text
+- Migration additive-only: CREATE TYPE, CREATE TABLE, CREATE INDEX.
+- Không reset DB, không xóa dữ liệu, không DROP/DELETE/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
+- Mọi query/write filter currentWorkspaceId.
+- Production migrate deploy PASS: 20260622_catalog_v2_phase3_booking.
+- Production smoke PASS: service item/profile/variation/booking create, status patch, soft-delete/archived cleanup.
+```
+
+---
+
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -1805,6 +1850,67 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 ---
 
 ### 17.1. Daily Reports Log
+
+#### 2026-06-22 — Catalog v2 Phase 3A Booking Backend (Codex)
+
+```text
+## 2026-06-22 — Codex — Catalog v2 Phase 3A Booking Backend
+
+### Đã làm
+- Thêm schema additive cho ServiceProfile, ServiceVariation, Booking và enums ServiceLocationMode/BookingStatus.
+- Thêm API service profile, service variations và bookings.
+- Booking chỉ cho CatalogItem type BOOKABLE_SERVICE.
+- Validate workspace, customer/order/staff, startAt/endAt và conflict staff/time cho booking active.
+- Booking write cập nhật Customer.lastActivityAt nếu có customerId.
+- Smoke write production tạo service/profile/variation/booking test, đổi status CONFIRMED, rồi soft-delete/ẩn test data.
+
+### Files đã sửa
+- prisma/schema.prisma
+- prisma/migrations/20260622_catalog_v2_phase3_booking/migration.sql
+- src/lib/booking.ts
+- src/app/api/catalog/items/[id]/service-profile/route.ts
+- src/app/api/catalog/items/[id]/service-variations/route.ts
+- src/app/api/catalog/items/[id]/service-variations/[variationId]/route.ts
+- src/app/api/bookings/route.ts
+- src/app/api/bookings/[id]/route.ts
+- src/app/api/bookings/[id]/status/route.ts
+
+### Migration
+- Created: prisma/migrations/20260622_catalog_v2_phase3_booking/migration.sql.
+- Safety scan: PASS, no DROP/DELETE FROM/TRUNCATE/SET NOT NULL/ON DELETE CASCADE.
+- npx prisma migrate deploy: PASS.
+- npx prisma migrate status after deploy: PASS, schema up to date.
+
+### Typecheck/build/test
+- npx prisma format: PASS.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+
+### Production deploy
+- PASS. Commit `caf4586` pushed main and deployed as image `dc-funnel-cmr-dc-iea9mn:codex-booking-caf4586`.
+
+### Production smoke
+- PASS:
+  - GET /api/bookings?pageSize=1 200
+  - POST /api/catalog/items 201 (temporary BOOKABLE_SERVICE smoke item)
+  - PATCH/GET /api/catalog/items/:id/service-profile 200
+  - POST/GET /api/catalog/items/:id/service-variations 201/200
+  - POST /api/bookings 201
+  - GET /api/bookings/:id 200
+  - PATCH /api/bookings/:id/status 200
+  - PATCH /api/bookings/:id 200 soft-delete
+  - PATCH service variation deleted/disabled 200
+  - PATCH catalog item deleted/archived 200
+  - Final read smoke: /products, /inbox, /comments, /api/bookings, /api/catalog/items all PASS.
+
+### Blocker
+- Booking UI chưa làm trong Phase 3A.
+- Staff calendar UI/chế độ tuần-ngày để Claude/next phase.
+
+### Founder cần làm khi quay lại
+- Test nghiệp vụ booking thật sau khi Claude làm Booking UI.
+```
 
 #### 2026-06-22 — Catalog v2 List Aggregate Polish (Codex)
 
@@ -6862,6 +6968,65 @@ Production smoke: PASS for /products and core catalog/media/inbox/comment APIs.
 
 ---
 
+### 18.33. Catalog v2 Phase 3A — Booking Backend
+
+**Owner:** Codex
+**Status:** `DONE_DEPLOYED`
+**Branch:** `main`
+**Commit/PR link:** `caf4586`
+
+#### Summary
+
+```text
+Implemented backend booking foundation for BOOKABLE_SERVICE catalog items:
+- ServiceProfile: bookingEnabled, duration/buffer, deposit, location mode, intake form.
+- ServiceVariation: duration/price/staff options per service.
+- Booking: customer/order/staff nullable, status, start/end time, deposit, note.
+- Staff conflict check for active bookings in the same workspace.
+```
+
+#### API / Route Contract
+
+```http
+GET/PATCH /api/catalog/items/:id/service-profile
+GET/POST /api/catalog/items/:id/service-variations
+PATCH /api/catalog/items/:id/service-variations/:variationId
+GET/POST /api/bookings
+GET/PATCH /api/bookings/:id
+PATCH /api/bookings/:id/status
+```
+
+#### Migration
+
+```text
+prisma/migrations/20260622_catalog_v2_phase3_booking/migration.sql
+Safety scan: PASS, additive-only.
+npx prisma migrate deploy: PASS.
+npx prisma migrate status: PASS, schema up to date.
+```
+
+#### Tests
+
+```text
+npx prisma format: PASS.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+Production deploy: PASS, image `dc-funnel-cmr-dc-iea9mn:codex-booking-caf4586`.
+Production write smoke: PASS with temporary service/profile/variation/booking and soft cleanup.
+Production read smoke: PASS for /products, /inbox, /comments, /api/bookings, /api/catalog/items, /api/media, /api/comments, /api/conversations.
+```
+
+#### Risks / Handoff
+
+```text
+- No Booking UI yet.
+- Claude/next UI phase can build /bookings, service editor Booking tab, and simple day/week calendar using the API contract above.
+- R2 durable upload remains env-dependent and unrelated to booking.
+```
+
+---
+
 ## 19. Blockers / Founder Decisions
 
 Agent nào gặp blocker phải ghi vào đây.
@@ -6879,6 +7044,7 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | PARTIAL — code ready, env pending | 2026-06-21 Codex đã implement backend upload với MEDIA_STORAGE_PROVIDER=r2 qua Cloudflare R2/S3-compatible và local fallback dev/test. Production durable upload cần founder cấu hình R2 env trực tiếp trong Dokploy; không gửi secret qua chat. |
 | D-014 | Duyệt apply migration Catalog v2 Phase 2A `20260621_catalog_v2_phase2_variants` lên production? | Codex | DONE | Founder duyệt ngày 2026-06-21; Codex đã chạy npx prisma migrate deploy thành công, migrate status sau deploy schema up to date, production smoke variants/inventory PASS. |
 | D-CAT-020 | Catalog v2 Variant/Inventory UI đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push 1132c72, redeploy production và smoke PASS cho /products + catalog/media/inbox/comment APIs. |
+| D-CAT-030 | Catalog v2 Booking backend Phase 3A đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push caf4586, apply additive migration 20260622_catalog_v2_phase3_booking, deploy production và smoke PASS cho service profile/variation/booking APIs. |
 | D-DCOS-001 | Rebrand DCOS personal-first shell? | Codex | DONE | 2026-06-22: Code đổi metadata/login/sidebar/nav/dashboard copy sang DCOS, commit/push/deploy PASS, production smoke PASS. |
 | D-DCOS-002 | Personal Space behavior cho user mới? | Codex | DONE | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi; deploy PASS. |
 | D-DCOS-003 | App Center route? | Codex | DONE | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; runtime cookie-write issue fixed in `d72f2ea`; production smoke /apps 200. |
@@ -6902,6 +7068,7 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-031 (RESOLVED): Catalog v2 Phase 1B/2B/2C UI committed, pushed and production deployed at 1132c72; /products smoke PASS.
 - B-032 (RESOLVED): Catalog list aggregate variant/stock fields added and deployed at `60f9f88`; /products smoke PASS and /api/catalog/items returns aggregate keys.
 - B-033 (PARTIAL): Browser OS MVP uses localStorage only; safe for first DCOS shell, but shortcuts do not sync between devices until additive BrowserShortcut DB is added.
+- B-034 (RESOLVED): Catalog v2 Phase 3A Booking backend migration/API deployed at `caf4586`; production write smoke PASS with temporary soft-cleaned test data.
 
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
