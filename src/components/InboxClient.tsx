@@ -229,13 +229,19 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
     setAiSuggestion(null);
     setNotice(null);
     try {
-      const res = await apiSend<{ enabled: boolean; suggestion: string | null }>(
+      const res = await apiSend<{ enabled: boolean; aiConfigured?: boolean; status?: string; suggestion: string | null }>(
         `/api/ai/suggest`,
         "POST",
         { conversationId: selectedId }
       );
-      if (!res.enabled) setNotice("AI chưa bật (thiếu OPENAI_API_KEY).");
-      else setAiSuggestion(res.suggestion);
+      if (!res.enabled) {
+        setNotice("Chưa tạo được gợi ý trả lời.");
+      } else {
+        setAiSuggestion(res.suggestion);
+        if (!res.aiConfigured || res.status === "AI_NOT_CONFIGURED" || res.status === "SKIPPED") {
+          setNotice("Đang dùng gợi ý catalog cơ bản vì chưa cấu hình AI model.");
+        }
+      }
     } catch (e: any) {
       setNotice(e.message);
     } finally {
@@ -313,7 +319,7 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
 
               <MessageThread ref={messagesEndRef} messages={messages} loading={threadLoading} />
 
-              {aiEnabled && aiSuggestion && (
+              {aiSuggestion && (
                 <AiSuggestionBar
                   suggestion={aiSuggestion}
                   onCopy={() => navigator.clipboard.writeText(aiSuggestion)}
@@ -328,7 +334,7 @@ export function InboxClient({ aiEnabled, emailEnabled }: { aiEnabled: boolean; e
                 onChange={setComposer}
                 onSend={() => sendMessage()}
                 sending={sending}
-                aiEnabled={aiEnabled}
+                aiEnabled={true}
                 aiLoading={aiLoading}
                 onAiSuggest={aiSuggest}
               />

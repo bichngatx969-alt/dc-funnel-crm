@@ -32,6 +32,18 @@ type AuditSubject =
   | { sourceType: "PRODUCT_LITE"; record: ProductLiteRecord }
   | { sourceType: "CATALOG_ITEM"; record: CatalogItemRecord };
 
+type CatalogAuditSignals = {
+  variantCount: number;
+  activeVariantCount: number;
+  availableVariantCount: number;
+  lowStockVariantCount: number;
+  hasBookableProfile: boolean;
+  serviceVariationCount: number;
+  bookableServiceVariationCount: number;
+  packageComponentCount: number;
+  unavailablePackageComponentCount: number;
+};
+
 const SYSTEM_PROMPT = `Bạn là AI Product/Service Auditor cho CRM bán hàng.
 Nhiệm vụ: kiểm tra thông tin sản phẩm/dịch vụ còn thiếu để sale tư vấn tốt hơn.
 Không bịa chính sách, không ghi đè dữ liệu gốc. Trả về JSON hợp lệ bằng tiếng Việt.`;
@@ -47,19 +59,20 @@ export async function auditProductService(params: {
   let status: ProductAuditResult["status"] = "SUCCESS";
   let error: string | undefined;
   const aiConfigured = getAIProviderStatus().configured;
+  const signals = subject.sourceType === "CATALOG_ITEM" ? await loadCatalogAuditSignals(params.workspaceId, subject.record.id) : null;
 
   if (aiConfigured) {
     try {
-      audit = normalizeAudit(await auditWithOpenAI(subject));
+      audit = normalizeAudit(await auditWithOpenAI(subject, signals));
     } catch (err) {
       status = "FAILED";
       error = err instanceof Error ? err.message : String(err);
-      audit = buildRuleBasedAudit(subject);
+      audit = buildRuleBasedAudit(subject, signals);
     }
   } else {
     status = "SKIPPED";
     error = "AI_NOT_CONFIGURED";
-    audit = buildRuleBasedAudit(subject);
+    audit = buildRuleBasedAudit(subject, signals);
   }
 
   const updated = await updateAuditCache(subject, audit, { aiConfigured, status, error });
@@ -109,7 +122,7 @@ async function updateAuditCache(
   });
 }
 
-async function auditWithOpenAI(subject: AuditSubject) {
+async function auditWithOpenAI(subject: AuditSubject, signals: CatalogAuditSignals | null) {
   const product = subject.record;
   return generateStructuredAIResponse({
     task: "product-audit",
@@ -151,12 +164,15 @@ Sản phẩm:
 - FAQ hiện có: ${JSON.stringify(product.faqsJson ?? null)}
 - Objections hiện có: ${JSON.stringify(product.objectionsJson ?? null)}
 - Offer ideas hiện có: ${JSON.stringify(product.offerIdeasJson ?? null)}
+- Variant/tồn kho: ${signals ? `${signals.activeVariantCount}/${signals.variantCount} variant active, ${signals.availableVariantCount} còn hàng, ${signals.lowStockVariantCount} sắp hết` : "n/a"}
+- Booking: ${signals ? `profile bookable=${signals.hasBookableProfile}, variations=${signals.bookableServiceVariationCount}/${signals.serviceVariationCount}` : "n/a"}
+- Package components: ${signals ? `${signals.packageComponentCount} components, unavailable=${signals.unavailablePackageComponentCount}` : "n/a"}
 
 Chỉ gợi ý phần thiếu. Không tự sửa field gốc.`,
   });
 }
 
-function buildRuleBasedAudit(subject: AuditSubject): ProductAuditPayload {
+function buildRuleBasedAudit(subject: AuditSubject, signals: CatalogAuditSignals | null): ProductAuditPayload {
   const product = subject.record;
   const missingFields: string[] = [];
   if (!product.description || product.description.trim().length < 30) missingFields.push("Mô tả sản phẩm/dịch vụ đủ rõ");
@@ -174,8 +190,19 @@ function buildRuleBasedAudit(subject: AuditSubject): ProductAuditPayload {
     if (!catalogItem.galleryJson) missingFields.push("Gallery ảnh");
     if (!catalogItem.categoryId) missingFields.push("Danh mục catalog");
     if (catalogItem.costVnd === null) missingFields.push("Giá vốn để tính margin");
-    if (catalogItem.type === "PHYSICAL_PRODUCT") missingFields.push("Phase 2: variant/tồn kho/khối lượng");
-    if (catalogItem.type === "BOOKABLE_SERVICE") missingFields.push("Phase 3: thời lượng/booking/staff/deposit");
+    if (catalogItem.type === "PHYSICAL_PRODUCT") {
+      if (!signals?.variantCount) missingFields.push("Variant size/màu/chất liệu");
+      else if (!signals.availableVariantCount) missingFields.push("Variant còn hàng để AI/sale gợi ý");
+      if (signals?.lowStockVariantCount) missingFields.push("Kế hoạch xử lý variant sắp hết hàng");
+    }
+    if (catalogItem.type === "BOOKABLE_SERVICE") {
+      if (!signals?.hasBookableProfile) missingFields.push("Cấu hình bật booking cho dịch vụ");
+      if (!signals?.bookableServiceVariationCount) missingFields.push("Service variation có thời lượng/giá và đang nhận lịch");
+    }
+    if (catalogItem.type === "PACKAGE") {
+      if (!signals?.packageComponentCount) missingFields.push("Package components");
+      if (signals?.unavailablePackageComponentCount) missingFields.push("Component/variant trong package đang không khả dụng");
+    }
   }
 
   const totalFields = subject.sourceType === "CATALOG_ITEM" ? 15 : 9;
@@ -208,6 +235,57 @@ function buildRuleBasedAudit(subject: AuditSubject): ProductAuditPayload {
     nextActions: missingFields.length
       ? missingFields.slice(0, 5).map((field) => `Bổ sung: ${field}`)
       : ["Thông tin sản phẩm khá đầy đủ; có thể test offer và theo dõi tỷ lệ chốt."],
+  };
+}
+
+async function loadCatalogAuditSignals(workspaceId: string, catalogItemId: string): Promise<CatalogAuditSignals> {
+  const [variants, serviceProfile, serviceVariations, packageComponents] = await Promise.all([
+    prisma.catalogVariant.findMany({
+      where: { workspaceId, catalogItemId, deletedAt: null },
+      select: {
+        status: true,
+        inventoryTracked: true,
+        inventoryQuantity: true,
+        lowStockThreshold: true,
+      },
+    }),
+    prisma.serviceProfile.findFirst({
+      where: { workspaceId, catalogItemId },
+      select: { bookingEnabled: true },
+    }),
+    prisma.serviceVariation.findMany({
+      where: { workspaceId, catalogItemId, deletedAt: null },
+      select: { bookingEnabled: true },
+    }),
+    prisma.packageComponent.findMany({
+      where: { workspaceId, packageItemId: catalogItemId, deletedAt: null },
+      select: {
+        componentVariantId: true,
+        componentItem: { select: { status: true, deletedAt: true } },
+      },
+    }),
+  ]);
+  const activeVariants = variants.filter((variant) => variant.status === "ACTIVE");
+  const availableVariants = activeVariants.filter((variant) => !variant.inventoryTracked || variant.inventoryQuantity > 0);
+  const lowStockVariants = activeVariants.filter(
+    (variant) =>
+      variant.inventoryTracked &&
+      variant.lowStockThreshold !== null &&
+      variant.inventoryQuantity <= variant.lowStockThreshold
+  );
+  const unavailablePackageComponents = packageComponents.filter(
+    (component) => component.componentItem.status !== "ACTIVE" || component.componentItem.deletedAt !== null
+  );
+  return {
+    variantCount: variants.length,
+    activeVariantCount: activeVariants.length,
+    availableVariantCount: availableVariants.length,
+    lowStockVariantCount: lowStockVariants.length,
+    hasBookableProfile: Boolean(serviceProfile?.bookingEnabled),
+    serviceVariationCount: serviceVariations.length,
+    bookableServiceVariationCount: serviceVariations.filter((variation) => variation.bookingEnabled).length,
+    packageComponentCount: packageComponents.length,
+    unavailablePackageComponentCount: unavailablePackageComponents.length,
   };
 }
 

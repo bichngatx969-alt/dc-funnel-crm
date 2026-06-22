@@ -1,7 +1,5 @@
-import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
-import { isAiEnabled } from "@/lib/env";
-import { aiSuggestReply } from "@/lib/ai/suggest";
+import { buildConversationReplySuggestion } from "@/lib/ai/reply-suggestion";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -12,66 +10,31 @@ export async function POST(req: Request) {
   if (!user) return jsonError("Chưa đăng nhập", 401);
   const workspaceId = await getCurrentWorkspaceId(user);
 
-  if (!isAiEnabled()) {
-    return jsonOk({ enabled: false, suggestion: null });
-  }
-
   const body = await req.json().catch(() => ({}));
   const conversationId = String(body.conversationId ?? "");
   if (!conversationId) return jsonError("Thiếu conversationId");
 
-  const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, workspaceId },
-    include: { customer: true },
-  });
-  if (!conversation) return jsonError("Không tìm thấy hội thoại", 404);
+  const result = await buildConversationReplySuggestion({ workspaceId, conversationId });
+  if (!result) return jsonError("Không tìm thấy hội thoại", 404);
 
-  const [messages, offers, brandProfile] = await Promise.all([
-    prisma.message.findMany({
-      where: { workspaceId, conversationId },
-      orderBy: { createdAt: "desc" },
-      take: 12,
-    }),
-    prisma.offer.findMany({
-      where: {
-        workspaceId,
-        isActive: true,
-        OR: [{ pageId: conversation.pageId }, { pageId: null }],
-      },
-      orderBy: { priority: "desc" },
-      take: 10,
-    }),
-    prisma.brandProfile.findFirst({ orderBy: { createdAt: "asc" } }),
-  ]);
-
-  const ordered = messages.reverse();
-  const lastInbound = [...ordered].reverse().find((m) => m.direction === "INBOUND");
-
-  const result = await aiSuggestReply({
-    customer: {
-      name: conversation.customer.name,
-      currentStage: conversation.customer.currentStage,
-      tags: conversation.customer.tags,
-      leadScore: conversation.customer.leadScore,
-    },
-    recentMessages: ordered.map((m) => ({
-      direction: m.direction,
-      senderType: m.senderType,
-      text: m.text,
-    })),
-    latestMessage: lastInbound?.text ?? "",
-    brandName: brandProfile?.brandName ?? "Space hiện tại",
-    offers: offers.map((o) => ({
-      product: o.product,
-      title: o.title,
-      offerText: o.offerText,
-      priceText: o.priceText,
-    })),
-  });
-
-  if (!result.ok) {
+  if (result.status === "FAILED" && !result.suggestion?.suggestedReply) {
     return jsonError("Không tạo được gợi ý AI: " + (result.error ?? "unknown"), 502);
   }
 
-  return jsonOk({ enabled: true, suggestion: result.suggestion });
+  return jsonOk({
+    enabled: true,
+    aiConfigured: result.aiConfigured,
+    status: result.aiConfigured ? result.status : "AI_NOT_CONFIGURED",
+    suggestion: result.suggestion.suggestedReply,
+    catalog: {
+      referencedItems: result.suggestion.referencedItems,
+      referencedVariants: result.suggestion.referencedVariants,
+      referencedServices: result.suggestion.referencedServices,
+      referencedPackages: result.suggestion.referencedPackages,
+      warnings: result.suggestion.warnings,
+      reason: result.suggestion.reason,
+      confidence: result.suggestion.confidence,
+    },
+    error: result.error,
+  });
 }

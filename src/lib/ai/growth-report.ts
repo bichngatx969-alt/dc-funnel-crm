@@ -19,6 +19,15 @@ export type GrowthReportBlock = {
   items: string[];
 };
 
+type CatalogHealthSignals = {
+  activeVariants: number;
+  availableVariants: number;
+  lowStockVariants: number;
+  activeBookableServices: number;
+  activePackages: number;
+  packagesWithComponents: number;
+};
+
 type GrowthProduct = {
   id: string;
   sourceType: "CATALOG_ITEM" | "PRODUCT_LITE";
@@ -33,7 +42,7 @@ export async function buildAiGrowthReport(params: {
   workspaceId: string;
   filters: FounderStatsFilters;
 }) {
-  const [stats, catalogItems, legacyProducts, offers] = await Promise.all([
+  const [stats, catalogItems, legacyProducts, offers, catalogSignals] = await Promise.all([
     buildFounderStats({ workspaceId: params.workspaceId, filters: params.filters }),
     prisma.catalogItem.findMany({
       where: { workspaceId: params.workspaceId, deletedAt: null, status: "ACTIVE" },
@@ -72,6 +81,7 @@ export async function buildAiGrowthReport(params: {
         priceText: true,
       },
     }),
+    loadCatalogHealthSignals(params.workspaceId),
   ]);
   const products: GrowthProduct[] = catalogItems.length
     ? catalogItems.map((item) => ({
@@ -92,7 +102,7 @@ export async function buildAiGrowthReport(params: {
         aiAuditedAt: item.aiAuditedAt,
       }));
 
-  const blocks = buildBlocks(stats, products, offers);
+  const blocks = buildBlocks(stats, products, offers, catalogSignals);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -107,7 +117,8 @@ export async function buildAiGrowthReport(params: {
 function buildBlocks(
   stats: Awaited<ReturnType<typeof buildFounderStats>>,
   products: GrowthProduct[],
-  offers: Array<{ id: string; title: string; product: string; priority: number; priceText: string | null }>
+  offers: Array<{ id: string; title: string; product: string; priority: number; priceText: string | null }>,
+  catalogSignals: CatalogHealthSignals
 ): GrowthReportBlock[] {
   const summary = stats.summary;
   const topStage = [...stats.pipeline.stages].sort((a, b) => b.valueVnd - a.valueVnd || b.count - a.count)[0] ?? null;
@@ -226,10 +237,25 @@ function buildBlocks(
         activeProductsSampled: products.length,
         weakProducts: weakProducts.length,
         missingImages,
+        activeVariants: catalogSignals.activeVariants,
+        availableVariants: catalogSignals.availableVariants,
+        lowStockVariants: catalogSignals.lowStockVariants,
+        activePackages: catalogSignals.activePackages,
+        packagesWithComponents: catalogSignals.packagesWithComponents,
+        activeBookableServices: catalogSignals.activeBookableServices,
       },
       items: weakProducts.length
-        ? weakProducts.map((product) => `${product.name}: audit score ${product.aiAuditScore ?? "chưa audit"}.`)
-        : products.slice(0, 4).map((product) => `${product.name}: ${formatVnd(product.priceVnd)}.`),
+        ? [
+            ...weakProducts.map((product) => `${product.name}: audit score ${product.aiAuditScore ?? "chưa audit"}.`),
+            catalogSignals.lowStockVariants ? `${catalogSignals.lowStockVariants} variant đang sắp hết hàng, cần ưu tiên nhập/đổi offer.` : "",
+            catalogSignals.activePackages && !catalogSignals.packagesWithComponents ? "Có package active nhưng chưa đủ component để AI gợi ý combo." : "",
+          ].filter(Boolean)
+        : [
+            ...products.slice(0, 4).map((product) => `${product.name}: ${formatVnd(product.priceVnd)}.`),
+            `${catalogSignals.availableVariants}/${catalogSignals.activeVariants} variant đang khả dụng.`,
+            `${catalogSignals.activeBookableServices} dịch vụ đang bật booking.`,
+            `${catalogSignals.packagesWithComponents}/${catalogSignals.activePackages} package có component.`,
+          ],
     },
     {
       key: "salesTraining",
@@ -260,21 +286,67 @@ function buildBlocks(
           weakProducts.length,
         ].reduce((sum, value) => sum + Number(value), 0),
       },
-      items: buildTomorrowActions(stats, weakProducts, offers),
+      items: buildTomorrowActions(stats, weakProducts, offers, catalogSignals),
     },
   ];
+}
+
+async function loadCatalogHealthSignals(workspaceId: string): Promise<CatalogHealthSignals> {
+  const [variants, bookableServices, packages, packagesWithComponents] = await Promise.all([
+    prisma.catalogVariant.findMany({
+      where: { workspaceId, deletedAt: null, status: "ACTIVE" },
+      select: { inventoryTracked: true, inventoryQuantity: true, lowStockThreshold: true },
+    }),
+    prisma.catalogItem.count({
+      where: {
+        workspaceId,
+        deletedAt: null,
+        status: "ACTIVE",
+        type: "BOOKABLE_SERVICE",
+        serviceProfile: { bookingEnabled: true },
+      },
+    }),
+    prisma.catalogItem.count({
+      where: { workspaceId, deletedAt: null, status: "ACTIVE", type: "PACKAGE" },
+    }),
+    prisma.catalogItem.count({
+      where: {
+        workspaceId,
+        deletedAt: null,
+        status: "ACTIVE",
+        type: "PACKAGE",
+        packageComponents: { some: { workspaceId, deletedAt: null } },
+      },
+    }),
+  ]);
+  return {
+    activeVariants: variants.length,
+    availableVariants: variants.filter((variant) => !variant.inventoryTracked || variant.inventoryQuantity > 0).length,
+    lowStockVariants: variants.filter(
+      (variant) =>
+        variant.inventoryTracked &&
+        variant.lowStockThreshold !== null &&
+        variant.inventoryQuantity <= variant.lowStockThreshold
+    ).length,
+    activeBookableServices: bookableServices,
+    activePackages: packages,
+    packagesWithComponents,
+  };
 }
 
 function buildTomorrowActions(
   stats: Awaited<ReturnType<typeof buildFounderStats>>,
   weakProducts: Array<{ name: string; aiAuditScore: number | null }>,
-  offers: Array<{ title: string; product: string }>
+  offers: Array<{ title: string; product: string }>,
+  catalogSignals: CatalogHealthSignals
 ): string[] {
   const actions: string[] = [];
   if (stats.summary.overdueTasksCount) actions.push(`Dọn ${stats.summary.overdueTasksCount} task quá hạn trước 11h.`);
   if (stats.summary.needsFollowUpCommentsCount) actions.push(`Gọi/nhắn lại ${stats.summary.needsFollowUpCommentsCount} comment cần follow-up.`);
   if (stats.pipeline.stages[0]) actions.push(`Rà stage ${stats.pipeline.stages[0].stageName} và kéo cơ hội có value cao nhất.`);
   if (weakProducts[0]) actions.push(`Audit/bổ sung thông tin cho sản phẩm ${weakProducts[0].name}.`);
+  if (catalogSignals.lowStockVariants) actions.push(`Xử lý ${catalogSignals.lowStockVariants} variant sắp hết hàng trước khi đẩy offer.`);
+  if (catalogSignals.activePackages && !catalogSignals.packagesWithComponents) actions.push("Bổ sung component cho package active để AI có thể gợi ý combo.");
   if (offers[0]) actions.push(`Test lại offer ${offers[0].title} với nhóm khách đang hỏi ${offers[0].product}.`);
   if (stats.automation.failed) actions.push(`Kiểm tra ${stats.automation.failed} automation run bị failed.`);
   if (!actions.length) actions.push("Chọn 1 offer chủ lực, 1 sản phẩm chủ lực và 1 nhóm lead để test trong ngày mai.");

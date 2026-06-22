@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAIProviderStatus, generateStructuredAIResponse } from "@/lib/ai/provider";
+import { buildCatalogContextForConversation } from "@/lib/ai/catalog-context";
+import { matchCatalogContext, type CatalogMatcherResult } from "@/lib/ai/catalog-matcher";
 
 export type OfferSuggestionPayload = {
   offerId: string | null;
@@ -32,10 +34,13 @@ type OfferCandidate = {
 type ProductCandidate = {
   id: string;
   sourceType: "CATALOG_ITEM" | "PRODUCT_LITE";
+  type?: string;
   name: string;
   priceVnd: number;
   description: string | null;
   targetSegment?: string | null;
+  available?: boolean;
+  warnings?: string[];
   score: number;
 };
 
@@ -63,7 +68,7 @@ export async function suggestOfferForConversation(params: {
   });
   if (!conversation) return null;
 
-  const [messagesDesc, offers, catalogItems, products, orders] = await Promise.all([
+  const [messagesDesc, offers, catalogItems, products, orders, catalogContext] = await Promise.all([
     prisma.message.findMany({
       where: { workspaceId: params.workspaceId, conversationId: conversation.id },
       orderBy: { createdAt: "desc" },
@@ -109,13 +114,15 @@ export async function suggestOfferForConversation(params: {
       take: 5,
       include: { items: { select: { name: true, quantity: true, lineTotalVnd: true } } },
     }),
+    buildCatalogContextForConversation({ workspaceId: params.workspaceId, conversationId: conversation.id, itemLimit: 80 }),
   ]);
 
   const messages = messagesDesc.reverse();
   const conversationText = messages.map((message) => message.text ?? "").join("\n").toLowerCase();
   const offerCandidates = rankOffers(offers, conversationText, conversation.customer.tags);
+  const catalogMatches = matchCatalogContext({ context: catalogContext, query: conversationText, limit: 8 });
   const productCandidates = catalogItems.length
-    ? rankCatalogItems(catalogItems, conversationText)
+    ? buildCatalogCandidatesFromMatches(catalogMatches, catalogItems, conversationText)
     : rankProducts(products, conversationText);
 
   let suggestion: OfferSuggestionPayload;
@@ -189,7 +196,10 @@ function buildPrompt(input: Parameters<typeof suggestWithOpenAI>[0]): string {
     .map((offer) => `- id=${offer.id}; title=${offer.title}; product=${offer.product}; price=${offer.priceText ?? "n/a"}; offer=${offer.offerText}`)
     .join("\n");
   const products = input.products
-    .map((product) => `- id=${product.id}; name=${product.name}; priceVnd=${product.priceVnd}; description=${product.description ?? "n/a"}`)
+    .map(
+      (product) =>
+        `- id=${product.id}; type=${product.type ?? product.sourceType}; name=${product.name}; priceVnd=${product.priceVnd}; available=${product.available ?? true}; warnings=${product.warnings?.join("|") || "none"}; description=${product.description ?? "n/a"}`
+    )
     .join("\n");
   const orders = input.orders
     .map((order) => `- ${order.code}; ${order.status}; ${order.totalVnd} VND; items=${order.items.map((item) => item.name).join(", ")}`)
@@ -304,6 +314,74 @@ function rankCatalogItems(products: Array<{
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
+}
+
+function buildCatalogCandidatesFromMatches(
+  matches: CatalogMatcherResult,
+  products: Array<{
+    id: string;
+    name: string;
+    basePriceVnd: number;
+    shortDescription: string | null;
+    description: string | null;
+    targetSegment: string | null;
+    tagsJson: unknown;
+  }>,
+  text: string
+): ProductCandidate[] {
+  const fallback = rankCatalogItems(products, text);
+  const fromItems = matches.matchedItems.map((item) => ({
+    id: item.id,
+    sourceType: "CATALOG_ITEM" as const,
+    type: item.type,
+    name: item.name,
+    priceVnd: item.priceVnd,
+    description: item.reason,
+    available: item.available,
+    warnings: item.warnings,
+    score: item.score,
+  }));
+  const fromVariants = matches.matchedVariants.map((variant) => ({
+    id: variant.itemId,
+    sourceType: "CATALOG_ITEM" as const,
+    type: "VARIANT",
+    name: `${variant.itemName} - ${variant.name}`,
+    priceVnd: variant.priceVnd,
+    description: `Variant còn ${variant.inventoryQuantity} sản phẩm.`,
+    available: true,
+    warnings: [],
+    score: variant.score + 8,
+  }));
+  const fromServices = matches.matchedServices.map((service) => ({
+    id: service.itemId,
+    sourceType: "CATALOG_ITEM" as const,
+    type: "BOOKABLE_SERVICE",
+    name: service.variationName ? `${service.itemName} - ${service.variationName}` : service.itemName,
+    priceVnd: service.priceVnd,
+    description: service.durationMinutes ? `Dịch vụ ${service.durationMinutes} phút, đang nhận booking.` : "Dịch vụ đang nhận booking.",
+    available: true,
+    warnings: [],
+    score: service.score + 6,
+  }));
+  const fromPackages = matches.matchedPackages.map((pkg) => ({
+    id: pkg.id,
+    sourceType: "CATALOG_ITEM" as const,
+    type: "PACKAGE",
+    name: pkg.name,
+    priceVnd: pkg.priceVnd,
+    description: `Combo tiết kiệm ${pkg.savingsVnd} VND so với mua lẻ.`,
+    available: true,
+    warnings: [],
+    score: pkg.score + 10,
+  }));
+  const byId = new Map<string, ProductCandidate>();
+  for (const item of [...fromPackages, ...fromVariants, ...fromServices, ...fromItems, ...fallback]) {
+    const current = byId.get(item.id);
+    if (!current || item.score > current.score) byId.set(item.id, item);
+  }
+  return Array.from(byId.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10);
 }
 
 function buildRuleBasedSuggestion(offers: OfferCandidate[], products: ProductCandidate[], text: string): OfferSuggestionPayload {
