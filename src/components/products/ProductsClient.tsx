@@ -5,6 +5,9 @@ import { apiGet, apiSend } from "@/lib/client";
 import { Icon } from "@/components/layout/icons";
 import { formatVnd } from "@/components/money";
 import { ProductAuditPanel, type ProductAudit } from "./ProductAuditPanel";
+import { VariantManager } from "./VariantManager";
+import { InventoryPanel } from "./InventoryPanel";
+import { uploadMedia, ACCEPTED_IMAGE_TYPES, type MediaAsset } from "./media-upload";
 
 type CatalogType = "PHYSICAL_PRODUCT" | "DIGITAL_PRODUCT" | "BOOKABLE_SERVICE" | "PACKAGE";
 type CatalogStatus = "DRAFT" | "ACTIVE" | "ARCHIVED";
@@ -13,12 +16,6 @@ type Category = {
   id: string;
   name: string;
   slug: string;
-};
-
-type MediaAsset = {
-  id: string;
-  url: string;
-  altText: string | null;
 };
 
 type CatalogItem = {
@@ -274,6 +271,7 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CatalogForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [detailTab, setDetailTab] = useState<"detail" | "variants" | "inventory">("detail");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -319,6 +317,7 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
 
   async function selectItem(id: string) {
     setSelectedId(id);
+    setDetailTab("detail");
     setAudit(null);
     setError(null);
     setNotice(null);
@@ -536,23 +535,46 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
               }}
             />
           ) : selected ? (
-            <>
-              <button type="button" onClick={() => setSelectedId(null)} className="flex items-center gap-1 px-3 pt-3 text-[12px] text-gray-500 xl:hidden">
-                <Icon name="chevron" className="h-4 w-4 rotate-180" /> Danh sách
-              </button>
-              <div className="grid min-h-0 flex-1 grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
-                <CatalogDetail item={selected} onEdit={() => startEdit(selected)} />
-                <ProductAuditPanel
-                  product={selected}
-                  audit={audit ?? selected.aiAuditJson}
-                  auditing={auditing}
-                  aiEnabled={aiEnabled}
-                  applyingSuggestions={applyingAudit}
-                  onAudit={runAudit}
-                  onApplySuggestions={applyAuditToEmptyFields}
-                />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex items-center gap-1 border-b border-gray-100 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(null)}
+                  className="mr-1 flex items-center rounded-lg px-2 py-1 text-gray-500 hover:bg-gray-100 xl:hidden"
+                  aria-label="Quay lại danh sách"
+                >
+                  <Icon name="chevron" className="h-4 w-4 rotate-180" />
+                </button>
+                <DetailTab label="Chi tiết" active={detailTab === "detail"} onClick={() => setDetailTab("detail")} />
+                {selected.type === "PHYSICAL_PRODUCT" ? (
+                  <>
+                    <DetailTab label="Biến thể" active={detailTab === "variants"} onClick={() => setDetailTab("variants")} />
+                    <DetailTab label="Tồn kho" active={detailTab === "inventory"} onClick={() => setDetailTab("inventory")} />
+                  </>
+                ) : (
+                  <span className="ml-2 text-[11px] text-gray-400">Biến thể &amp; tồn kho chỉ áp dụng cho sản phẩm vật lý</span>
+                )}
               </div>
-            </>
+
+              {detailTab === "variants" && selected.type === "PHYSICAL_PRODUCT" ? (
+                <VariantManager catalogItemId={selected.id} />
+              ) : detailTab === "inventory" && selected.type === "PHYSICAL_PRODUCT" ? (
+                <InventoryPanel catalogItemId={selected.id} />
+              ) : (
+                <div className="grid min-h-0 flex-1 grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
+                  <CatalogDetail item={selected} onEdit={() => startEdit(selected)} />
+                  <ProductAuditPanel
+                    product={selected}
+                    audit={audit ?? selected.aiAuditJson}
+                    auditing={auditing}
+                    aiEnabled={aiEnabled}
+                    applyingSuggestions={applyingAudit}
+                    onAudit={runAudit}
+                    onApplySuggestions={applyAuditToEmptyFields}
+                  />
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center text-gray-400">
               <Icon name="products" className="h-8 w-8 text-gray-300" />
@@ -568,6 +590,18 @@ export function ProductsClient({ aiEnabled }: { aiEnabled: boolean }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function DetailTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold transition ${active ? "bg-brand-light text-brand" : "text-gray-500 hover:bg-gray-100"}`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -764,18 +798,6 @@ function CatalogFormPanel({
       </div>
     </div>
   );
-}
-
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-
-async function uploadMedia(file: File, altText?: string): Promise<MediaAsset> {
-  const fd = new FormData();
-  fd.append("file", file);
-  if (altText) fd.append("altText", altText);
-  const res = await fetch("/api/media/upload", { method: "POST", body: fd });
-  const json = (await res.json()) as { ok: boolean; data?: { media: MediaAsset }; error?: string };
-  if (!res.ok || !json.ok || !json.data?.media) throw new Error(json.error || `Lỗi ${res.status}`);
-  return json.data.media;
 }
 
 function MediaManager({

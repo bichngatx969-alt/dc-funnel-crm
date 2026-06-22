@@ -1764,6 +1764,48 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### 17.1. Daily Reports Log
 
+#### 2026-06-21 — Catalog v2 Phase 1B/2B/2C UI (Claude)
+
+```text
+## 2026-06-21 — Catalog v2 UI (Claude — UI/UX Owner)
+
+### Đang làm
+- UI Catalog v2: Phase E polish /products, Phase 1B Media Upload UI, Phase 2B Variant UI, Phase 2C Inventory UI.
+
+### Đã làm hôm nay
+- Phase E polish /products (deployed): stat grid 2 cột mobile, min-height co giãn breakpoint, ListError + nút "Thử lại", debounce 280ms ô tìm kiếm, microcopy tiếng Việt.
+- Phase 1B Media UI (deployed): kéo-thả/chọn nhiều file -> POST /api/media/upload; gallery đặt-ảnh-đại-diện/xóa; preview cover; alt text; fallback dán URL; badge "Thiếu ảnh" trên list; detail hiện gallery; gửi coverImageId + gallery[].
+- Phase 2B Variant UI: tab "Biến thể" chỉ cho PHYSICAL_PRODUCT; tạo option bằng chip values (POST /options); nút "Sinh biến thể" (POST /variants/generate, hiển thị created/skipped, không duplicate); bảng variant + sửa nhanh từng dòng (SKU/giá/giá vốn/tồn/ngưỡng/khối lượng/kích thước/trạng thái/theo-dõi-tồn) qua PATCH; upload ảnh variant; xóa variant (soft delete); empty states; item không phải vật lý chỉ hiện note.
+- Phase 2C Inventory UI: tab "Tồn kho"; tổng tồn / sắp hết / hết hàng; tồn theo từng variant + badge "Sắp hết"/"Hết hàng"; form điều chỉnh Nhập(+)/Xuất(−)/Đặt-lại(=) (POST /inventory/adjust); chặn tồn âm theo API + hiện error; lịch sử InventoryMovement.
+
+### Files đã sửa
+- src/components/products/ProductsClient.tsx
+- src/components/products/media-upload.ts (mới)
+- src/components/products/VariantManager.tsx (mới)
+- src/components/products/InventoryPanel.tsx (mới)
+
+### Có sửa file thuộc owner agent khác không?
+- Không. Chỉ UI components trong lane Claude. Không đụng schema/API/migration/inbox/comment/AI provider.
+
+### Typecheck/build/test
+- npm run typecheck: PASS (toàn bộ Phase E + 1B + 2B + 2C).
+- npm run build: Phase E + 1B đã build PASS và deploy production. 2B/2C: build + commit + deploy ĐANG CHỜ shell (sự cố classifier tạm thời chặn PowerShell/Bash), sẽ chạy ngay khi phục hồi.
+- Smoke UI: chờ founder đăng nhập test theo checklist báo cáo.
+
+### Blocker
+- LIST API thiếu aggregate: GET /api/catalog/items không trả variantCount / tổng tồn / lowStockCount → chưa hiện "số variant / tổng tồn / sắp hết / hết hàng" trên card và filter list (Phần 4). Tránh N+1 nên cần Codex thêm field vào list API.
+
+### Cần founder quyết
+- Mount volume cho .data/media (đã chọn) để ảnh upload bền qua redeploy.
+
+### Cần agent kia hỗ trợ (Codex)
+- Thêm cho mỗi item trong GET /api/catalog/items (PHYSICAL_PRODUCT): variantCount, totalInventory, lowStockCount, hasVariants — để Claude hoàn thiện filter "Có biến thể / Sắp hết / Hết hàng" + hiển thị tồn trên card mà không gọi N+1.
+
+### Kế hoạch tiếp theo
+- Khi list API có aggregate: hoàn thiện Phần 4 (filter + card variant/tồn).
+- Phase 3B Booking UI khi Codex xong backend booking.
+```
+
 #### 2026-06-21 — Catalog v2 Phase 1B Media Upload API
 
 ```text
