@@ -1725,7 +1725,7 @@ Safety:
 
 ### 16.13. DCOS Personal-first Shell Contract
 
-**Status:** `READY_CODED`
+**Status:** `DONE_DEPLOYED`
 **Owner:** Codex
 **Last updated:** 2026-06-22
 
@@ -1760,6 +1760,7 @@ Safety:
 - No secret logging.
 - /apps DB reads filter currentWorkspaceId.
 - Existing legal/public Meta review pages remain public and have DCOS naming.
+- Production runtime smoke PASS on 2026-06-22 for /dashboard, /apps, /browser, /products, /inbox, /comments and core read APIs.
 ```
 
 ---
@@ -1858,10 +1859,25 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 - npm run build: PASS.
 
 ### Production deploy
-- Chưa deploy tại thời điểm ghi report; sẽ commit/push/deploy ngay sau report nếu tests vẫn PASS.
+- PASS. Commit `adfec8f` deployed first, then `/apps` runtime cookie-write issue was fixed in commit `d72f2ea`.
+- Dokploy/Docker service updated to image `dc-funnel-cmr-dc-iea9mn:codex-dcos-d72f2ea` and converged.
+- No database migration, no DB reset, no secret logging.
 
 ### Production smoke
-- Pending sau deploy: /, /dashboard, /apps, /browser, /products, /inbox, /comments, /api/catalog/items, /api/comments, /api/conversations.
+- PASS after fix:
+  - LOGIN 200
+  - / 307
+  - /dashboard 200
+  - /apps 200
+  - /browser 200
+  - /settings/integrations 200
+  - /products 200
+  - /inbox 200
+  - /comments 200
+  - /api/catalog/items?pageSize=1 200
+  - /api/media?pageSize=1 200
+  - /api/comments?pageSize=1 200
+  - /api/conversations?pageSize=1 200
 
 ### Blocker
 - R2 env vẫn PARTIAL nếu muốn media upload bền qua redeploy.
@@ -6686,9 +6702,9 @@ Production no-write smoke: PASS, login 200, / 200, /products 200, /inbox 200, /c
 ### 18.31. DCOS Personal-first Shell — Rebrand + App Center + Browser OS
 
 **Owner:** Codex
-**Status:** `READY_CODED`
+**Status:** `DONE_DEPLOYED`
 **Branch:** `main`
-**Commit/PR link:** pending commit
+**Commit/PR link:** `adfec8f`, runtime fix `d72f2ea`
 
 #### Summary
 
@@ -6728,6 +6744,8 @@ npx prisma migrate status: PASS, schema up to date.
 npx prisma generate: PASS.
 npm run typecheck: PASS.
 npm run build: PASS.
+Production deploy: PASS, image `dc-funnel-cmr-dc-iea9mn:codex-dcos-d72f2ea`.
+Production smoke: PASS for /dashboard, /apps, /browser, /settings/integrations, /products, /inbox, /comments and core read APIs.
 ```
 
 #### Risks / Handoff
@@ -6735,7 +6753,7 @@ npm run build: PASS.
 ```text
 - Browser shortcuts are device-local only; DB persistence can be added later with additive BrowserShortcut.
 - Public legal pages now use DCOS naming while preserving Meta review content.
-- Next safe steps: production deploy + smoke, then Catalog list aggregate polish or Booking backend.
+- Next safe steps: Catalog list aggregate polish or Booking backend.
 ```
 
 ---
@@ -6757,10 +6775,10 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-013 | Storage ảnh thật cho Catalog v2 Phase 2 dùng gì? | Founder/Codex | PARTIAL — code ready, env pending | 2026-06-21 Codex đã implement backend upload với MEDIA_STORAGE_PROVIDER=r2 qua Cloudflare R2/S3-compatible và local fallback dev/test. Production durable upload cần founder cấu hình R2 env trực tiếp trong Dokploy; không gửi secret qua chat. |
 | D-014 | Duyệt apply migration Catalog v2 Phase 2A `20260621_catalog_v2_phase2_variants` lên production? | Codex | DONE | Founder duyệt ngày 2026-06-21; Codex đã chạy npx prisma migrate deploy thành công, migrate status sau deploy schema up to date, production smoke variants/inventory PASS. |
 | D-CAT-020 | Catalog v2 Variant/Inventory UI đã deploy production chưa? | Codex | DONE | 2026-06-22: Codex đã commit/push 1132c72, redeploy production và smoke PASS cho /products + catalog/media/inbox/comment APIs. |
-| D-DCOS-001 | Rebrand DCOS personal-first shell? | Codex | READY_CODED | 2026-06-22: Code đổi metadata/login/sidebar/nav/dashboard copy sang DCOS; chờ commit/push/deploy smoke. |
-| D-DCOS-002 | Personal Space behavior cho user mới? | Codex | READY_CODED | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi. |
-| D-DCOS-003 | App Center route? | Codex | READY_CODED | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; chờ deploy smoke. |
-| D-DCOS-004 | Browser OS MVP? | Codex | READY_CODED | 2026-06-22: /browser localStorage shortcut MVP, không scrape cookie/session/password; chờ deploy smoke. |
+| D-DCOS-001 | Rebrand DCOS personal-first shell? | Codex | DONE | 2026-06-22: Code đổi metadata/login/sidebar/nav/dashboard copy sang DCOS, commit/push/deploy PASS, production smoke PASS. |
+| D-DCOS-002 | Personal Space behavior cho user mới? | Codex | DONE | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi; deploy PASS. |
+| D-DCOS-003 | App Center route? | Codex | DONE | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; runtime cookie-write issue fixed in `d72f2ea`; production smoke /apps 200. |
+| D-DCOS-004 | Browser OS MVP? | Codex | DONE | 2026-06-22: /browser localStorage shortcut MVP, không scrape cookie/session/password; production smoke /browser 200. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
