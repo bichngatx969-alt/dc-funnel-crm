@@ -16,10 +16,17 @@ import { getCurrentWorkspaceId } from "@/lib/workspace";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const UPLOAD_WINDOW_MS = 60_000;
+const UPLOAD_MAX_PER_WINDOW = 10;
+const uploadBuckets = new Map<string, { count: number; resetAt: number }>();
+
 export async function POST(req: Request) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
   const workspaceId = await getCurrentWorkspaceId(user);
+  if (!allowUpload(`${workspaceId}:${user.id}`)) {
+    return jsonError("Upload quá nhanh, vui lòng thử lại sau ít phút", 429);
+  }
 
   const form = await req.formData().catch(() => null);
   if (!form) return jsonError("Upload phải dùng multipart/form-data");
@@ -60,6 +67,18 @@ export async function POST(req: Request) {
     if (error instanceof MediaStorageError) return jsonError(error.message, error.status);
     return jsonError("Upload ảnh thất bại", 500);
   }
+}
+
+function allowUpload(key: string) {
+  const now = Date.now();
+  const bucket = uploadBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    uploadBuckets.set(key, { count: 1, resetAt: now + UPLOAD_WINDOW_MS });
+    return true;
+  }
+  if (bucket.count >= UPLOAD_MAX_PER_WINDOW) return false;
+  bucket.count += 1;
+  return true;
 }
 
 function isUploadFile(value: FormDataEntryValue | null): value is File {
