@@ -1,19 +1,23 @@
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
+import { getStoredReportById } from "@/lib/ai/daily-intelligence-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Chi tiết báo cáo theo id: cần persistence. Hiện trả note rõ ràng để UI xử lý mượt.
+// Chi tiết báo cáo đã lưu theo id.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
-  await getCurrentWorkspaceId(user);
+  const workspaceId = await getCurrentWorkspaceId(user);
   const { id } = await params;
-  return jsonOk({
-    report: null,
-    id,
-    persistence: "memory",
-    note: "Chi tiết báo cáo theo id sẽ khả dụng khi persistence được bật. Dùng GET /api/ai/daily-intelligence?date=YYYY-MM-DD để xem báo cáo theo ngày.",
-  });
+  const report = await getStoredReportById(workspaceId, id);
+  if (!report) {
+    return jsonOk({
+      report: null,
+      id,
+      note: "Không tìm thấy báo cáo đã lưu (có thể migration chưa apply hoặc id không tồn tại). Dùng GET /api/ai/daily-intelligence?date= để tạo mới.",
+    });
+  }
+  return jsonOk({ report, id });
 }

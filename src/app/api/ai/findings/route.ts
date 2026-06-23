@@ -1,19 +1,16 @@
 import { jsonError, jsonOk, requireApiUser } from "@/lib/api";
 import { getCurrentWorkspaceId } from "@/lib/workspace";
-import { listStoredReports } from "@/lib/ai/daily-intelligence-store";
+import { listFindings } from "@/lib/ai/daily-intelligence-store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Lịch sử báo cáo đã lưu. Nếu migration chưa apply (bảng chưa có) thì trả rỗng (defensive, không crash).
 export async function GET(req: Request) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
   const workspaceId = await getCurrentWorkspaceId(user);
-  const items = await listStoredReports(workspaceId, 60);
-  return jsonOk({
-    items,
-    total: items.length,
-    persistence: items.length > 0 ? "stored" : "empty",
-  });
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status");
+  const items = await listFindings(workspaceId, status);
+  return jsonOk({ items });
 }

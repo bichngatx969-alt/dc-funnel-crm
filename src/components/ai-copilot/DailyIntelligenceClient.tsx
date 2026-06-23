@@ -19,6 +19,9 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+type ActionRow = { id: string; title: string; source: string; priority: string; status: string };
+type LessonRow = { id: string; source: string; title: string; lesson: string; appliedCount: number };
+
 const BOTTLENECK_TONE: Record<string, string> = {
   "TRUYỀN THÔNG": "bg-violet-100 text-violet-700",
   ADS: "bg-sky-100 text-sky-700",
@@ -34,6 +37,22 @@ export function DailyIntelligenceClient() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("overview");
+  const [storedActions, setStoredActions] = useState<ActionRow[] | null>(null);
+  const [storedLessons, setStoredLessons] = useState<LessonRow[] | null>(null);
+
+  const loadMemory = useCallback(async () => {
+    try {
+      const [a, l] = await Promise.all([
+        apiGet<{ items: ActionRow[] }>("/api/ai/action-items?status=TODO"),
+        apiGet<{ items: LessonRow[] }>("/api/ai/lessons"),
+      ]);
+      setStoredActions(a.items ?? []);
+      setStoredLessons(l.items ?? []);
+    } catch {
+      setStoredActions([]);
+      setStoredLessons([]);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +72,10 @@ export function DailyIntelligenceClient() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void loadMemory();
+  }, [loadMemory]);
+
   async function regenerate() {
     setGenerating(true);
     setError(null);
@@ -61,6 +84,7 @@ export function DailyIntelligenceClient() {
         date: date || undefined,
       });
       setReport(res.report);
+      void loadMemory();
     } catch (e: any) {
       setError(e?.message ?? "Không tạo được báo cáo.");
     } finally {
@@ -145,8 +169,8 @@ export function DailyIntelligenceClient() {
               {tab === "inbox" && <InboxTab report={report} />}
               {tab === "sales" && <SalesTab report={report} />}
               {tab === "catalog" && <CatalogTab report={report} />}
-              {tab === "actions" && <ActionsTab report={report} />}
-              {tab === "lessons" && <LessonsTab report={report} />}
+              {tab === "actions" && <ActionsTab report={report} stored={storedActions} onChanged={loadMemory} />}
+              {tab === "lessons" && <LessonsTab report={report} stored={storedLessons} />}
             </div>
           </div>
         </>
@@ -386,12 +410,58 @@ function CatalogTab({ report }: { report: DailyIntelligenceReport }) {
   );
 }
 
-function ActionsTab({ report }: { report: DailyIntelligenceReport }) {
-  const priorityTone: Record<string, string> = {
-    HIGH: "bg-rose-100 text-rose-700",
-    MEDIUM: "bg-amber-100 text-amber-800",
-    LOW: "bg-gray-100 text-gray-600",
-  };
+const PRIORITY_TONE: Record<string, string> = {
+  HIGH: "bg-rose-100 text-rose-700",
+  MEDIUM: "bg-amber-100 text-amber-800",
+  LOW: "bg-gray-100 text-gray-600",
+};
+
+function ActionsTab({
+  report,
+  stored,
+  onChanged,
+}: {
+  report: DailyIntelligenceReport;
+  stored: ActionRow[] | null;
+  onChanged: () => void;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function setStatus(id: string, status: "DONE" | "DISMISSED") {
+    setBusyId(id);
+    try {
+      await apiSend(`/api/ai/action-items/${id}`, "PATCH", { status });
+      onChanged();
+    } catch {
+      // im lặng — UI sẽ tự refetch lần sau
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Nếu đã có action queue lưu trữ (sau khi apply migration + generate) → tương tác được.
+  if (stored && stored.length > 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[11px] text-gray-400">Action queue (lưu trữ) — đánh dấu xong hoặc bỏ qua.</p>
+        {stored.map((a) => (
+          <div key={a.id} className="flex items-start gap-3 rounded-xl border border-gray-100 p-3">
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${PRIORITY_TONE[a.priority] ?? "bg-gray-100 text-gray-600"}`}>{a.priority}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] text-gray-800">{a.title}</p>
+              <p className="text-[11px] text-gray-400">{a.source}</p>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <button type="button" disabled={busyId === a.id} onClick={() => setStatus(a.id, "DONE")} className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">Xong</button>
+              <button type="button" disabled={busyId === a.id} onClick={() => setStatus(a.id, "DISMISSED")} className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-gray-400 hover:bg-gray-100 disabled:opacity-50">Bỏ qua</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Fallback: action items tính trực tiếp (chưa lưu trữ / chưa apply migration).
   return (
     <div className="space-y-2">
       {report.actionItems.length === 0 ? (
@@ -399,7 +469,7 @@ function ActionsTab({ report }: { report: DailyIntelligenceReport }) {
       ) : (
         report.actionItems.map((a, i) => (
           <div key={i} className="flex items-start gap-3 rounded-xl border border-gray-100 p-3">
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityTone[a.priority] ?? "bg-gray-100 text-gray-600"}`}>{a.priority}</span>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${PRIORITY_TONE[a.priority] ?? "bg-gray-100 text-gray-600"}`}>{a.priority}</span>
             <div className="min-w-0">
               <p className="text-[13px] text-gray-800">{a.title}</p>
               <p className="text-[11px] text-gray-400">{a.source}</p>
@@ -411,12 +481,29 @@ function ActionsTab({ report }: { report: DailyIntelligenceReport }) {
   );
 }
 
-function LessonsTab({ report }: { report: DailyIntelligenceReport }) {
+function LessonsTab({ report, stored }: { report: DailyIntelligenceReport; stored: LessonRow[] | null }) {
+  if (stored && stored.length > 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-[11px] text-gray-400">Thư viện bài học (tích lũy nhiều ngày).</p>
+        {stored.map((l) => (
+          <div key={l.id} className="rounded-xl border border-gray-100 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px] text-gray-800">{l.lesson}</span>
+              {l.appliedCount > 1 && (
+                <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">lặp {l.appliedCount}×</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="space-y-4">
       <ListBlock title="Bài học hôm qua" items={report.lessons} />
       <p className="rounded-xl bg-gray-50 px-3 py-2 text-[12px] text-gray-400">
-        Thư viện bài học tích lũy nhiều ngày + phát hiện vấn đề lặp lại (3/7/30 ngày) sẽ bật khi persistence được thêm.
+        Thư viện bài học tích lũy + phát hiện vấn đề lặp lại sẽ hiện ở đây sau khi báo cáo được lưu (cron 8h hoặc bấm “Tạo lại”).
       </p>
     </div>
   );
