@@ -1,68 +1,40 @@
 # RESUME CHECKPOINT
 
-_Cập nhật: 2026-06-23 (đêm) — Claude (DCOS Daily Intelligence)_
+_Cập nhật: 2026-06-23 — Claude (DCOS Daily Intelligence — VERIFY + HARDEN)._
 
-## Current branch
-- `main`
+## Current branch / HEAD
+- `main` @ `ac7d657` (đã deploy production crm.hongducdigital.com). Working tree sạch (chỉ untracked: scripts/prod-*.* + architecture.html — không commit).
 
-## ✅ PERSISTENCE ĐÃ BẬT (migration applied 2026-06-23, founder duyệt)
-- `npx prisma migrate deploy` ĐÃ chạy: migration `20260624_dcos_daily_intelligence` applied, `migrate status` = "up to date".
-- 4 bảng tồn tại + queryable trên Neon (count 0, sẵn sàng). Persistence hoạt động ngay (không cần deploy lại).
-- Báo cáo sẽ được lưu khi: bấm "Tạo lại" ở /ai-copilot/daily, hoặc cron 8h chạy.
+## Trạng thái DCOS Daily Intelligence — ĐÃ XONG + VERIFIED
+Tất cả 6 phase đã build, deploy, và verify trên production:
 
-## Last completed step (cập nhật)
-- DCOS **Phase 1 (Daily Intelligence) + Phase 2 (Content OS) + Phase 3 (Ads OS fallback)** xong + typecheck PASS + build compile PASS (mọi route mới có trong build output; chỉ flake OneDrive rename 500.html trên Windows, Linux/Dokploy sạch).
-- Phase 1 đã commit+push `c132c0f`. Phase 2/3 commit kế tiếp.
-- Đã thêm: `/content` + `/api/content/posts` + `/api/content/insights` (internal PARTIAL), `/ads` + `/api/meta/ads/insights` (NOT_CONNECTED fallback), nav Content/Ads.
+- **Phase 1 Daily Intelligence** — `src/lib/ai/daily-intelligence.ts` (collector reuse `buildFounderStats` range hôm qua + rule-based generator: bottleneck TRUYỀN THÔNG/ADS/SALE/CATALOG-OFFER, funnel, strengths/weaknesses/actions/lessons). UI `/ai-copilot/daily`.
+- **Phase 2 Content OS** — `/content` + `/api/content/posts|insights` (FacebookPost/Comment nội bộ). PARTIAL (chưa reach/impressions từ Meta).
+- **Phase 3 Ads OS** — `/ads` + `/api/meta/ads/insights`. NOT_CONNECTED fallback (chưa ads_read), không crash.
+- **Phase 4 Attribution** — `attribution` phân kênh theo `Customer.source` (estimated), hiển thị tab Tổng quan.
+- **Phase 5 Learning Memory** — persistence 4 model (migration `20260624_dcos_daily_intelligence` ĐÃ apply prod). `daily-intelligence-store.ts`: store/history/[id] + action-items + lessons + findings + phát hiện nghẽn lặp ≥3/7 ngày. APIs `/api/ai/{action-items,lessons,findings}`. UI: action queue tương tác (Xong/Bỏ qua) + thư viện bài học.
+- **Phase 6 Notifications** — email Resend: nút "Gửi email" + `POST /api/ai/daily-intelligence/send-email` (self-send) + cron gửi `DAILY_REPORT_EMAIL_TO` (opt-in). In-app notification: PENDING (chưa có Notification model).
 
-## Current task
-- Xây module DCOS Daily Intelligence theo `DCOS_DAILY_INTELLIGENCE_CONTENT_ADS_SALES_PLAN.md`.
-- ĐÃ XONG (Phase 1, không cần bảng mới):
-  - `src/lib/ai/daily-intelligence.ts` — collector (reuse `buildFounderStats` cho range hôm qua + query conversation/message/facebookPost/catalog/offer) + rule-based generator (summary, funnel, bottleneck TRUYỀN THÔNG/ADS/SALE/CATALOG-OFFER, strengths/weaknesses/actions/lessons).
-  - API: `GET /api/ai/daily-intelligence?date=`, `POST /api/ai/daily-intelligence/generate`, `GET .../history`, `GET .../[id]`, `POST|GET /api/cron/daily-intelligence` (CRON_SECRET).
-  - UI: `/ai-copilot` (redirect), `/ai-copilot/daily` + `DailyIntelligenceClient.tsx` (date picker, generate, hero score/bottleneck, 8 tab, loading/error/empty).
-  - Nav: "AI Copilot" → `/ai-copilot/daily`.
+## Verify session 2026-06-23 — kết quả
+- `npx tsx scripts/prod-verify-dcos.ts` (chạy code store thật vào prod Neon, KHÔNG qua cron/email):
+  - PASS1: 5 workspaces → reports=5, findings=8, lessons=5, actions=11.
+  - PASS2 (chạy lại): IDEMPOTENT reports=true findings=true actions=true → **không nhân đôi**.
+  - History: ws0 có report 2026-06-22 (score 60, nghẽn CATALOG-OFFER), actionItems(TODO)=2, lessons=1.
+- `npx prisma migrate status` = "up to date" (16 migrations). typecheck PASS.
+- Smoke prod: /ai-copilot/daily, /content, /ads, /inbox, /comments, /products = 307; /api/ai/daily-intelligence/history = 401. Không regression.
 
-## Files changed (chỉ của Claude — KHÔNG add file của Codex)
-- src/lib/ai/daily-intelligence.ts (mới)
-- src/app/api/ai/daily-intelligence/route.ts (mới)
-- src/app/api/ai/daily-intelligence/generate/route.ts (mới)
-- src/app/api/ai/daily-intelligence/history/route.ts (mới)
-- src/app/api/ai/daily-intelligence/[id]/route.ts (mới)
-- src/app/api/cron/daily-intelligence/route.ts (mới)
-- src/app/ai-copilot/page.tsx (mới)
-- src/app/ai-copilot/daily/page.tsx (mới)
-- src/components/ai-copilot/DailyIntelligenceClient.tsx (mới)
-- src/components/layout/nav.ts (sửa 1 dòng)
-- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md (mục 17)
-- docs/RESUME_CHECKPOINT.md
+## env booleans (LOCAL .env — prod Dokploy có env riêng)
+- CRON_SECRET=SET (local). DATABASE_URL=SET (prod Neon). DAILY_REPORT_EMAIL_TO=EMPTY. RESEND_API_KEY=EMPTY. ANTHROPIC_API_KEY=EMPTY.
 
-## Tests already run
-- npm run typecheck: PASS
-- npm run build: biên dịch PASS + types valid + static 8/8; chỉ fail bước rename 500.html (OneDrive, Windows-only).
+## Founder cần cấu hình (KHÔNG làm bằng code được)
+1. **Cron 8h**: đảm bảo `CRON_SECRET` có trong env PRODUCTION (Dokploy) + trỏ cron service gọi `POST https://crm.hongducdigital.com/api/cron/daily-intelligence?secret=<CRON_SECRET>` lúc 08:00 Asia/Ho_Chi_Minh. (Endpoint đã guarded 401.)
+2. **Email báo cáo** (tùy): bật Resend trên prod (`RESEND_API_KEY` + `EMAIL_FROM_ADDRESS`) → nút "Gửi email" + self-send hoạt động. Đặt `DAILY_REPORT_EMAIL_TO` để cron tự gửi. Chưa bật Resend = email BLOCKED (endpoint trả lỗi rõ, không crash).
+3. **Meta Ads** (`ads_read`) → Ads OS số liệu thật. **Page insights permission** → reach/impressions cho Content OS (đang PARTIAL).
 
-## Pending tests
-- ✅ ĐÃ XONG. Smoke production PASS (c132c0f + 0c79bac live):
-  - /ai-copilot/daily 307, /content 307, /ads 307.
-  - /api/ai/daily-intelligence + /history + /cron/daily-intelligence 401, /api/content/posts + /insights 401, /api/meta/ads/insights 401.
-  - Regression OK: /products 307, /inbox 307, /api/catalog/items 401.
-- Còn lại (cần persistence): Phase 4 Attribution sâu, Phase 5 Learning Memory, Phase 6 Notifications.
+## Còn lại (tùy chọn, cần quyết định/permission)
+- In-app Notification model (chuông trong app) — cần thêm schema (phối hợp Codex).
+- Multi-tenant email routing (hiện cron gửi 1 địa chỉ `DAILY_REPORT_EMAIL_TO`; muốn gửi đúng owner mỗi workspace cần thêm logic).
+- Meta Ads sync + Page insights sync (SocialPostSnapshot/AdInsightSnapshot) khi có permission.
 
-## Next exact command
-1. `git add` (chỉ 12 file của Claude ở trên) → commit "add dcos daily intelligence foundation" → `git push origin main`.
-2. Chờ Dokploy build (~5-6'), smoke production.
-3. Tiếp Phase 2 Content OS + Phase 3 Ads OS (xem "Do not forget").
-
-## Risks / blockers
-- ⚠ Codex đang sửa `prisma/schema.prisma` (uncommitted) + Phase 4 Package (untracked). KHÔNG add các file đó. KHÔNG chạy migration đụng schema khi Codex còn dở.
-- 🟡 PERSISTENCE HOÃN: 4 model (DailyIntelligenceReport, AIFinding, AILesson, AIActionItem) + SocialPostSnapshot + AdInsightSnapshot CHƯA thêm vào schema (tránh đụng schema Codex). Vì vậy: history rỗng, cron compute nhưng chưa lưu, lessons/findings/actions chưa tích lũy nhiều ngày. → Khi schema Codex đã commit & ổn: thêm model additive + migration, rồi nối store vào collector/cron + bật history/lesson library.
-- 🟡 Meta Ads: NOT_CONNECTED (chưa có ads_read). UI đã báo rõ + fallback.
-- 🟡 Page insights: PARTIAL (dùng FacebookPost/Comment nội bộ, chưa có reach/impressions từ Graph).
-
-## Do not forget
-- Phase 2 Content OS: `/content`, `/content/posts`, `/content/insights` + `GET /api/content/posts|insights` (đọc FacebookPost/Comment nội bộ, PARTIAL). CHƯA làm trong phiên này.
-- Phase 3 Ads OS: `/ads`, `/ads/insights` + `/api/meta/ad-accounts`, `/api/meta/ads/insights` — fallback NOT_CONNECTED. CHƯA làm.
-- ✅ Phase 4 Attribution (phân kênh theo source, estimated) — XONG. Phase 5 Learning Memory — XONG (persistence applied). Phase 6 Notifications — XONG (email Resend: nút "Gửi email" self-send + endpoint + cron opt-in DAILY_REPORT_EMAIL_TO). In-app notification: pending (chưa có Notification model — báo cáo lưu DB + trang Daily là kênh in-app).
-- Còn lại tùy chọn: Meta Ads (ads_read), Page insights (reach/impressions), in-app Notification model, multi-tenant email routing (hiện cron gửi 1 địa chỉ DAILY_REPORT_EMAIL_TO).
-- Cron 8h: endpoint sẵn (`/api/cron/daily-intelligence` + CRON_SECRET). Cần founder cấu hình cron service (Dokploy/Vercel cron) gọi POST mỗi 08:00 Asia/Ho_Chi_Minh + set CRON_SECRET env.
-- Khi commit: chỉ `git add` các file của Claude, KHÔNG `git add .` (tránh nuốt work Codex).
+## Resume
+Module hoàn chỉnh + verified. Phiên sau chỉ cần khi: bật Meta/permission, hoặc thêm in-app notification, hoặc founder yêu cầu tính năng mới.

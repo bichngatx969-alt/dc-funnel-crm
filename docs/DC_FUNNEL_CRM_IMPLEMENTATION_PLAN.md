@@ -2019,6 +2019,29 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### 17.1. Daily Reports Log
 
+#### 2026-06-23 — DCOS Daily Intelligence VERIFY + HARDEN (Claude)
+
+```text
+## 2026-06-23 — DCOS Daily Intelligence verify (Claude)
+
+### Đã làm
+- Verify persistence thật trên prod Neon qua scripts/prod-verify-dcos.ts (chạy store code, không qua cron/email):
+  - 5 workspaces → DailyIntelligenceReport=5, AIFinding=8, AILesson=5, AIActionItem=11.
+  - Idempotency: chạy lại KHÔNG nhân đôi (reports/findings/actions giữ nguyên).
+  - History trả report đã lưu (ws0: 2026-06-22, score 60, nghẽn CATALOG-OFFER); action queue + lessons đọc được.
+- migrate status = up to date (16 migrations); typecheck PASS.
+- Smoke prod: /ai-copilot/daily, /content, /ads, /inbox, /comments, /products = 307; /api/ai/daily-intelligence/history = 401. Không regression.
+- Dọn checkpoint cũ/mâu thuẫn → docs/RESUME_CHECKPOINT.md viết lại sạch.
+
+### Kết quả
+- Daily Intelligence persistence: PASS. History: PASS. Action items/lessons: PASS. Idempotency: PASS.
+- Content OS: PARTIAL (chưa reach từ Meta). Ads OS: NOT_CONNECTED (chưa ads_read).
+- Cron 8h: READY (endpoint guarded) — cần founder set CRON_SECRET prod + scheduler 08:00.
+- Email: READY nếu bật Resend prod (local RESEND chưa cấu hình); không gửi email test.
+
+### Không đổi code app phiên này (chỉ verify + docs + script untracked) → không cần deploy lại.
+```
+
 #### 2026-06-23 — Catalog v2 Phase 5/6 AI + Production Polish (Codex)
 
 ```text
