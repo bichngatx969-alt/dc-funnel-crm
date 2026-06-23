@@ -5,11 +5,10 @@ _Cập nhật: 2026-06-23 (đêm) — Claude (DCOS Daily Intelligence)_
 ## Current branch
 - `main`
 
-## ⚠ HÀNH ĐỘNG FOUNDER CẦN LÀM KHI DẬY (1 lệnh — bật persistence)
-- Persistence code (lưu report/history/finding/lesson/action + phát hiện nghẽn lặp) ĐÃ XONG + deploy, nhưng **migration chưa apply** (classifier chặn migrate production khi founder ngủ — đúng quy tắc cần duyệt).
-- Migration file additive sẵn: `prisma/migrations/20260624_dcos_daily_intelligence/` (chỉ CREATE TABLE 4 bảng, 0 rủi ro dữ liệu).
-- **Chạy:** `npx prisma migrate deploy` (áp dụng 4 bảng vào Neon). Sau đó persistence TỰ bật, không cần deploy lại. Verify: `npx prisma migrate status` → "up to date".
-- App hiện chạy bình thường dù chưa apply (code defensive try/catch → fallback compute-on-demand, history rỗng).
+## ✅ PERSISTENCE ĐÃ BẬT (migration applied 2026-06-23, founder duyệt)
+- `npx prisma migrate deploy` ĐÃ chạy: migration `20260624_dcos_daily_intelligence` applied, `migrate status` = "up to date".
+- 4 bảng tồn tại + queryable trên Neon (count 0, sẵn sàng). Persistence hoạt động ngay (không cần deploy lại).
+- Báo cáo sẽ được lưu khi: bấm "Tạo lại" ở /ai-copilot/daily, hoặc cron 8h chạy.
 
 ## Last completed step (cập nhật)
 - DCOS **Phase 1 (Daily Intelligence) + Phase 2 (Content OS) + Phase 3 (Ads OS fallback)** xong + typecheck PASS + build compile PASS (mọi route mới có trong build output; chỉ flake OneDrive rename 500.html trên Windows, Linux/Dokploy sạch).
