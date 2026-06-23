@@ -35,6 +35,8 @@ export function DailyIntelligenceClient() {
   const [report, setReport] = useState<DailyIntelligenceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [emailing, setEmailing] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabKey>("overview");
   const [storedActions, setStoredActions] = useState<ActionRow[] | null>(null);
@@ -92,6 +94,19 @@ export function DailyIntelligenceClient() {
     }
   }
 
+  async function sendEmail() {
+    setEmailing(true);
+    setEmailMsg(null);
+    try {
+      const res = await apiSend<{ to: string }>("/api/ai/daily-intelligence/send-email", "POST", { date: date || undefined });
+      setEmailMsg(`Đã gửi báo cáo tới ${res.to}`);
+    } catch (e: any) {
+      setEmailMsg(e?.message ?? "Không gửi được email (kiểm tra cấu hình Resend).");
+    } finally {
+      setEmailing(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -118,6 +133,15 @@ export function DailyIntelligenceClient() {
           </span>
           <button
             type="button"
+            onClick={sendEmail}
+            disabled={emailing}
+            className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          >
+            <Icon name="email" className="h-4 w-4" />
+            {emailing ? "Đang gửi..." : "Gửi email"}
+          </button>
+          <button
+            type="button"
             onClick={regenerate}
             disabled={generating}
             className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
@@ -127,6 +151,7 @@ export function DailyIntelligenceClient() {
           </button>
         </div>
       </div>
+      {emailMsg && <p className="dc-card rounded-2xl px-4 py-2 text-[12px] text-gray-600">{emailMsg}</p>}
 
       {error && (
         <div className="dc-card rounded-2xl p-4 text-[13px] text-rose-500">
@@ -266,6 +291,25 @@ function OverviewTab({ report }: { report: DailyIntelligenceReport }) {
           <FunnelStep label="SĐT → Đơn" value={`${f.phoneToOrderRate}%`} />
           <FunnelStep label="Nhu cầu → Đơn" value={`${f.demandToOrderRate}%`} />
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 p-3">
+        <h4 className="mb-2 text-[12px] font-bold uppercase tracking-wide text-gray-500">Nguồn khách &amp; đơn (ước tính)</h4>
+        {report.attribution.byChannel.length === 0 ? (
+          <p className="text-[12px] text-gray-400">Chưa có dữ liệu nguồn để phân bổ.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {report.attribution.byChannel.map((c) => (
+              <div key={c.channel} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[12px]">
+                <span className="font-semibold text-gray-700">{c.label}</span>
+                <span className="text-gray-500">
+                  {c.contacts} khách · {c.orders} đơn · {formatVnd(c.revenueVnd)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-1.5 text-[10.5px] text-gray-400">{report.attribution.note}</p>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">

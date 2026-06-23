@@ -3,6 +3,7 @@ import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { buildDailyIntelligence } from "@/lib/ai/daily-intelligence";
 import { storeDailyReport } from "@/lib/ai/daily-intelligence-store";
+import { sendDailyReportEmail } from "@/lib/ai/daily-intelligence-email";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,13 +25,18 @@ async function run(req: Request) {
   const date = searchParams.get("date");
 
   const workspaces = await prisma.workspace.findMany({ select: { id: true }, take: 200 });
-  const results: Array<{ workspaceId: string; ok: boolean; mainBottleneck?: string; stored?: boolean; error?: string }> = [];
+  const results: Array<{ workspaceId: string; ok: boolean; mainBottleneck?: string; stored?: boolean; emailed?: boolean; error?: string }> = [];
   for (const ws of workspaces) {
     try {
       const report = await buildDailyIntelligence({ workspaceId: ws.id, date });
       const { stored } = await storeDailyReport(ws.id, report);
-      results.push({ workspaceId: ws.id, ok: true, mainBottleneck: report.summary.mainBottleneck, stored });
-      // TODO(notifications): gửi in-app/email report khi notification infra sẵn sàng.
+      let emailed = false;
+      // Gửi email báo cáo nếu founder đã cấu hình DAILY_REPORT_EMAIL_TO (opt-in, best-effort).
+      if (env.dailyReportEmailTo) {
+        const mail = await sendDailyReportEmail(env.dailyReportEmailTo, report);
+        emailed = mail.sent;
+      }
+      results.push({ workspaceId: ws.id, ok: true, mainBottleneck: report.summary.mainBottleneck, stored, emailed });
     } catch (e: any) {
       results.push({ workspaceId: ws.id, ok: false, error: e?.message ?? "error" });
     }
@@ -38,8 +44,9 @@ async function run(req: Request) {
 
   const okCount = results.filter((r) => r.ok).length;
   const storedCount = results.filter((r) => r.stored).length;
-  console.log("[CRON] daily-intelligence:", { date: date ?? "yesterday", workspaces: results.length, ok: okCount, stored: storedCount });
-  return jsonOk({ generated: okCount, stored: storedCount, total: results.length, date: date ?? "yesterday", results });
+  const emailedCount = results.filter((r) => r.emailed).length;
+  console.log("[CRON] daily-intelligence:", { date: date ?? "yesterday", workspaces: results.length, ok: okCount, stored: storedCount, emailed: emailedCount });
+  return jsonOk({ generated: okCount, stored: storedCount, emailed: emailedCount, total: results.length, date: date ?? "yesterday", results });
 }
 
 export async function POST(req: Request) {

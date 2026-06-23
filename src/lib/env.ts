@@ -58,6 +58,8 @@ export const env = {
   resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET ?? "",
   emailFromName: process.env.EMAIL_FROM_NAME || "DCOS",
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS || "",
+  // DCOS Daily Intelligence — địa chỉ nhận báo cáo 8h sáng (tùy chọn). Trống = cron không tự gửi email.
+  dailyReportEmailTo: process.env.DAILY_REPORT_EMAIL_TO ?? "",
   unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET || process.env.AUTH_SECRET || DEFAULT_UNSUBSCRIBE_SECRET,
 
   // Cron bảo vệ endpoint automation

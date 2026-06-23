@@ -62,6 +62,7 @@ _Cập nhật: 2026-06-23 (đêm) — Claude (DCOS Daily Intelligence)_
 ## Do not forget
 - Phase 2 Content OS: `/content`, `/content/posts`, `/content/insights` + `GET /api/content/posts|insights` (đọc FacebookPost/Comment nội bộ, PARTIAL). CHƯA làm trong phiên này.
 - Phase 3 Ads OS: `/ads`, `/ads/insights` + `/api/meta/ad-accounts`, `/api/meta/ads/insights` — fallback NOT_CONNECTED. CHƯA làm.
-- Phase 4 Attribution, Phase 5 Learning Memory (cần persistence), Phase 6 Notifications. CHƯA làm.
+- ✅ Phase 4 Attribution (phân kênh theo source, estimated) — XONG. Phase 5 Learning Memory — XONG (persistence applied). Phase 6 Notifications — XONG (email Resend: nút "Gửi email" self-send + endpoint + cron opt-in DAILY_REPORT_EMAIL_TO). In-app notification: pending (chưa có Notification model — báo cáo lưu DB + trang Daily là kênh in-app).
+- Còn lại tùy chọn: Meta Ads (ads_read), Page insights (reach/impressions), in-app Notification model, multi-tenant email routing (hiện cron gửi 1 địa chỉ DAILY_REPORT_EMAIL_TO).
 - Cron 8h: endpoint sẵn (`/api/cron/daily-intelligence` + CRON_SECRET). Cần founder cấu hình cron service (Dokploy/Vercel cron) gọi POST mỗi 08:00 Asia/Ho_Chi_Minh + set CRON_SECRET env.
 - Khi commit: chỉ `git add` các file của Claude, KHÔNG `git add .` (tránh nuốt work Codex).

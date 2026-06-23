@@ -73,6 +73,11 @@ export type DailyIntelligenceReport = {
     phoneToOrderRate: number;
     demandToOrderRate: number;
   };
+  attribution: {
+    estimated: boolean;
+    byChannel: Array<{ channel: string; label: string; contacts: number; orders: number; revenueVnd: number }>;
+    note: string;
+  };
   strengths: string[];
   weaknesses: string[];
   bottlenecks: Array<{ area: BottleneckArea; detail: string }>;
@@ -179,6 +184,7 @@ export async function buildDailyIntelligence(params: {
   const overallScore = computeScore({ demandSignals, orders, revenueVnd: summary.revenueVnd, needsFollowUp: summary.needsFollowUpCommentsCount, overdueTasks: summary.overdueTasksCount });
 
   const mainOpportunity = buildMainOpportunity({ mainBottleneck, phoneSignals, summary, postCount: posts.length });
+  const attribution = buildAttribution(stats);
 
   return {
     reportDate: range.dateStr,
@@ -244,6 +250,7 @@ export async function buildDailyIntelligence(params: {
       phoneToOrderRate,
       demandToOrderRate,
     },
+    attribution,
     strengths,
     weaknesses,
     bottlenecks,
@@ -392,4 +399,34 @@ function buildContentRecommendations(d: { postCount: number; comments: number; p
   if (d.comments === 0 && d.postCount > 0) out.push("Bài đăng nhưng ít tương tác — thử hook/CTA mạnh hơn.");
   if (!out.length) out.push("Duy trì nhịp đăng và gắn CTA hỏi SĐT/inbox vào mỗi bài.");
   return out;
+}
+
+// Phase 4 — Attribution ước tính theo nguồn (source) của khách/đơn.
+function buildAttribution(stats: Awaited<ReturnType<typeof buildFounderStats>>) {
+  const channels: Record<string, { channel: string; label: string; contacts: number; orders: number; revenueVnd: number }> = {
+    CONTENT: { channel: "CONTENT", label: "Truyền thông", contacts: 0, orders: 0, revenueVnd: 0 },
+    ADS: { channel: "ADS", label: "Quảng cáo", contacts: 0, orders: 0, revenueVnd: 0 },
+    OTHER: { channel: "OTHER", label: "Khác", contacts: 0, orders: 0, revenueVnd: 0 },
+  };
+  for (const s of stats.sources.contactsBySource) {
+    channels[classifyChannel(s.source)].contacts += s.count;
+  }
+  for (const s of stats.sources.ordersBySource) {
+    const c = channels[classifyChannel(s.source)];
+    c.orders += s.count;
+    c.revenueVnd += s.totalVnd;
+  }
+  const byChannel = Object.values(channels).filter((c) => c.contacts > 0 || c.orders > 0);
+  return {
+    estimated: true,
+    byChannel,
+    note: "Phân bổ theo nguồn (source) của khách/đơn — ước tính (estimated), chưa có attribution chính xác từ Meta Ads.",
+  };
+}
+
+function classifyChannel(source: string): "CONTENT" | "ADS" | "OTHER" {
+  const s = (source ?? "").toLowerCase();
+  if (/ads?|quảng cáo|quang cao|cpc|cpm|paid|boost/.test(s)) return "ADS";
+  if (/comment|inbox|messenger|fanpage|page|organic|post|content|facebook|fb|zalo/.test(s)) return "CONTENT";
+  return "OTHER";
 }
