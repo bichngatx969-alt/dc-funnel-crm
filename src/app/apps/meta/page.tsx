@@ -2,22 +2,22 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { AdsClient } from "@/components/ads/AdsClient";
+import { MetaConnectionCenter } from "@/components/meta/MetaConnectionCenter";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdsPage() {
+export default async function MetaAppsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
   return (
-    <AppShell user={user} active="ads">
+    <AppShell user={user} active="apps">
       <div className="mx-auto max-w-7xl p-4 sm:p-6">
         <PageHeader
-          title="Ads OS"
-          subtitle="Phân tích Meta Ads: spend, CPM, CTR, cost/message, chất lượng lead. Cần kết nối Meta Ads Manager."
+          title="Meta Connection Center"
+          subtitle="Chẩn đoán Facebook Page, Messenger, Comment, Business Manager, Ad Account và quyền Ads cho workspace hiện tại."
         />
-        <AdsClient />
+        <MetaConnectionCenter />
       </div>
     </AppShell>
   );

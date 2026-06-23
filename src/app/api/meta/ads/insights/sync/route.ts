@@ -6,40 +6,36 @@ import { getCurrentWorkspaceId } from "@/lib/workspace";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+export async function POST(req: Request) {
   const user = await requireApiUser();
   if (!user) return jsonError("Chưa đăng nhập", 401);
   const workspaceId = await getCurrentWorkspaceId(user);
-  const { searchParams } = new URL(req.url);
-  const level = searchParams.get("level");
-  const date = searchParams.get("date");
-  const adAccountId = searchParams.get("adAccountId");
-  const result = await getWorkspaceAdInsights(workspaceId, { date, level, adAccountId });
+  const body = await req.json().catch(() => ({}));
+  const result = await getWorkspaceAdInsights(workspaceId, {
+    date: typeof body.date === "string" ? body.date : null,
+    level: typeof body.level === "string" ? body.level : null,
+    adAccountId: typeof body.adAccountId === "string" ? body.adAccountId : null,
+  });
+
   if (!result.ok) {
     return NextResponse.json(
       {
         ok: false,
         code: result.code,
         error: result.message,
-        data: {
-          adsStatus: result.code === "MISSING_ADS_READ" ? "MISSING_PERMISSION" : "NOT_CONNECTED",
-          items: [],
-          connectionStatus: result.connectionStatus,
-        },
+        data: { items: [], connectionStatus: result.connectionStatus },
       },
       { status: result.statusCode }
     );
   }
+
   return jsonOk({
-    adsStatus: "CONNECTED",
-    level: result.level,
+    synced: false,
+    note: "Đã đọc live từ Meta Graph. Chưa persist Ads Insights để tránh tạo migration trong bước diagnostics.",
     date: result.date,
+    level: result.level,
     adAccount: result.adAccount,
     items: result.items,
     connectionStatus: result.connectionStatus,
-    note:
-      result.items.length > 0
-        ? "Ads Insights đọc live từ Meta Graph API."
-        : "Đã kết nối Ads nhưng chưa có campaign/adset/ad có số liệu trong ngày này.",
   });
 }

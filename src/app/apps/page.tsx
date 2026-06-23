@@ -39,8 +39,8 @@ export default async function AppsPage() {
       description: `${facebookPages} Page, ${conversations} hội thoại, ${comments} bình luận trong Space hiện tại.`,
       status: facebookPages > 0 ? "Đã kết nối" : "Chưa kết nối",
       tone: facebookPages > 0 ? "ready" : "partial",
-      href: "/settings/integrations/facebook",
-      action: facebookPages > 0 ? "Quản lý kênh" : "Kết nối Facebook",
+      href: "/apps/meta",
+      action: facebookPages > 0 ? "Kiểm tra kết nối" : "Kết nối Facebook",
     },
     {
       title: "Zalo OS",

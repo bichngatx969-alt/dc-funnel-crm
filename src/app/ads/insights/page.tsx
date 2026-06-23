@@ -6,7 +6,7 @@ import { AdsClient } from "@/components/ads/AdsClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdsPage() {
+export default async function AdsInsightsPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -14,10 +14,10 @@ export default async function AdsPage() {
     <AppShell user={user} active="ads">
       <div className="mx-auto max-w-7xl p-4 sm:p-6">
         <PageHeader
-          title="Ads OS"
-          subtitle="Phân tích Meta Ads: spend, CPM, CTR, cost/message, chất lượng lead. Cần kết nối Meta Ads Manager."
+          title="Ads Insights"
+          subtitle="Đọc campaign/adset/ad insights từ Meta Graph theo ngày, nếu workspace đã có ads_read và Ad Account."
         />
-        <AdsClient />
+        <AdsClient mode="insights" />
       </div>
     </AppShell>
   );

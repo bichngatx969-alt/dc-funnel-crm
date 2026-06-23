@@ -1978,6 +1978,52 @@ Runtime note:
 
 ---
 
+### 16.19. Meta Connection Diagnostics + Ads OS Contract
+
+**Status:** `READY`
+**Owner:** Codex
+**Last updated:** 2026-06-23
+
+API:
+
+```text
+GET /api/meta/connection-status
+GET /api/meta/ad-accounts
+POST /api/meta/ad-accounts/sync
+GET /api/meta/ads/insights?date=YYYY-MM-DD&level=campaign|adset|ad&adAccountId=...
+POST /api/meta/ads/insights/sync
+```
+
+Behavior:
+
+```text
+- All endpoints require logged-in user and use currentWorkspaceId.
+- Diagnostics never returns Facebook user/page tokens, app secrets or raw credentials.
+- connection-status reports facebookApp env booleans, user token validity/scopes, connected pages, webhook readiness, business connections, ad accounts, permission status, blockers and nextActions.
+- ad-accounts reads live from Meta Graph when ads_read is granted; current pass does not persist AdAccount rows to avoid a diagnostics migration.
+- ads insights reads live from Meta Graph; it returns 403 code MISSING_ADS_READ when ads_read is missing, 409 AD_ACCOUNT_NOT_SELECTED when no account can be selected, and sanitized META_GRAPH_ERROR for Graph failures.
+- No campaign/ad/adset mutation. No ads are created, changed, paused or launched.
+```
+
+UI:
+
+```text
+- /apps/meta: Meta Connection Center with Facebook Page, Messenger, Comment, permissions, Business, Ad Accounts, blocker cards and next actions.
+- /ads and /ads/insights: read Meta status; show clear missing ads_read/ad account states, or campaign/adset/ad table when connected.
+- /ai-copilot/daily Ads tab: shows specific blocker reason and CTA to /apps/meta instead of only generic "not connected".
+```
+
+Tests:
+
+```text
+npx prisma migrate status: PASS, schema up to date.
+npx prisma generate: PASS.
+npm run typecheck: PASS.
+npm run build: PASS.
+No schema change, no migration.
+```
+
+---
 ## 17. Daily Agent Report
 
 Codex và Claude cập nhật mỗi ngày vào đây.
@@ -2019,6 +2065,55 @@ Codex và Claude cập nhật mỗi ngày vào đây.
 
 ### 17.1. Daily Reports Log
 
+#### 2026-06-23 — Meta Connection Diagnostics + Ads OS Fix (Codex)
+
+```text
+## 2026-06-23 — Meta Connection Diagnostics + Ads OS Fix (Codex)
+
+### Đã làm
+- Audited current Facebook OAuth, Page connection, webhook status, comment permission usage and Ads fallback.
+- Added Meta diagnostics backend: /api/meta/connection-status.
+- Added safe Ads foundation: /api/meta/ad-accounts, /api/meta/ad-accounts/sync, /api/meta/ads/insights, /api/meta/ads/insights/sync.
+- Added /apps/meta Meta Connection Center UI with exact Page/Messenger/Comment/Business/Ad Account/permission/blocker status.
+- Replaced static /ads fallback with real connection-aware Ads OS UI and added /ads/insights.
+- Updated AI Copilot Daily Ads tab to explain missing ads_read/ad account/token and link to /apps/meta.
+- Expanded OAuth requested scopes to include pages_manage_engagement and ads_read.
+
+### Files đã sửa
+- src/lib/facebook/facebook-client.ts
+- src/lib/meta/connection-status.ts
+- src/app/api/meta/connection-status/route.ts
+- src/app/api/meta/ad-accounts/route.ts
+- src/app/api/meta/ad-accounts/sync/route.ts
+- src/app/api/meta/ads/insights/route.ts
+- src/app/api/meta/ads/insights/sync/route.ts
+- src/app/apps/meta/page.tsx
+- src/components/meta/MetaConnectionCenter.tsx
+- src/app/ads/page.tsx
+- src/app/ads/insights/page.tsx
+- src/components/ads/AdsClient.tsx
+- src/app/apps/page.tsx
+- src/components/ai-copilot/DailyIntelligenceClient.tsx
+- docs/DC_FUNNEL_CRM_IMPLEMENTATION_PLAN.md
+
+### Typecheck/build/test
+- npx prisma migrate status: PASS, schema up to date.
+- npx prisma generate: PASS.
+- npm run typecheck: PASS.
+- npm run build: PASS.
+- No migration.
+
+### Blocker
+- D-META-001: ads_read may still require founder reconnect/App Review before Ads Insights can show live data.
+- D-META-002: business_management may be missing for Business Manager/Catalog.
+- D-META-003: no Ad Account selection/persistence model yet; diagnostics reads live and can auto-use only when exactly one account is available.
+- D-META-004: page insights reach/impressions remain partial until Page insights permissions/data are available.
+- D-META-005: pages_manage_engagement is required for comment reply/hide and may require App Review.
+
+### Cần founder quyết
+- Reconnect Facebook via /apps/meta after deploy so new scopes ads_read/pages_manage_engagement can be granted if Meta allows.
+- If Meta blocks scopes, founder must complete App Review or add app/user permissions in Business Manager.
+```
 #### 2026-06-23 — DCOS Daily Intelligence VERIFY + HARDEN (Claude)
 
 ```text
@@ -7680,6 +7775,11 @@ Agent nào gặp blocker phải ghi vào đây.
 | D-DCOS-002 | Personal Space behavior cho user mới? | Codex | DONE | 2026-06-22: User mới chưa có membership sẽ được tạo org `Personal của {user}` và workspace `Không gian cá nhân`; existing data không đổi; deploy PASS. |
 | D-DCOS-003 | App Center route? | Codex | DONE | 2026-06-22: /apps hiển thị trạng thái app theo currentWorkspaceId; runtime cookie-write issue fixed in `d72f2ea`; production smoke /apps 200. |
 | D-DCOS-004 | Browser OS MVP? | Codex | DONE | 2026-06-22: /browser localStorage shortcut MVP, không scrape cookie/session/password; production smoke /browser 200. |
+| D-META-001 | Meta Ads permission `ads_read` đã được cấp chưa? | Codex | OPEN — diagnostics ready | /apps/meta now shows exact ads_read status. Founder needs to reconnect Facebook and/or complete Meta App Review if ads_read is missing. |
+| D-META-002 | Business Manager permission `business_management` đã được cấp chưa? | Codex | OPEN — diagnostics ready | /apps/meta shows Business status. If missing, founder needs Business role/App Review or reconnect with the scope. |
+| D-META-003 | Ad Account đã chọn/persist chưa? | Codex | PARTIAL | Current implementation reads Ad Accounts live from Graph and can read insights when an account is provided/unique. Persisted AdAccount selection model is not added in this diagnostics pass. |
+| D-META-004 | Page insights reach/impressions đã đầy đủ chưa? | Codex | PARTIAL | DCOS content/page insights still use internal post/comment data unless Meta Page insights permissions/data are available. |
+| D-META-005 | Comment reply/hide permission `pages_manage_engagement` đã được cấp chưa? | Codex | OPEN — diagnostics ready | /apps/meta shows permission status. Reply/hide comments need pages_manage_engagement and may require App Review. |
 | D-003 | Lưu tiền VND bằng integer đồng được không? | Codex | OPEN | Đề xuất: Có |
 | D-004 | Zalo OA để P2 hay ép vào MVP1? | Founder/PM | OPEN | Đề xuất: P2 |
 | D-005 | Email module hiện có giữ hay ẩn khỏi nav MVP1? | Founder/PM | OPEN | Đề xuất: Giữ code, ẩn khỏi nav nếu gây rối |
@@ -7705,6 +7805,13 @@ Agent nào gặp blocker phải ghi vào đây.
 - B-037 (RESOLVED): Catalog v2 Phase 5 AI Intelligence v2 deployed at `a96ea96`; production smoke PASS for reply suggestion, legacy suggest, offer suggestion and growth report. AI provider may fallback until D-010 is configured.
 - B-038 (RESOLVED): Catalog v2 Phase 6 Production Polish deployed at `eb317dc`; production smoke PASS for CSV export and core Catalog v2 routes. Upload rate limit added; no migration.
 
+[2026-06-23 · Codex · Meta Connection Diagnostics + Ads OS Fix]
+- B-META-001 (READY): /api/meta/connection-status added. It reports app env booleans, user token validity/scopes, pages, webhook readiness, business, ad accounts, permissions, blockers and next actions without returning tokens/secrets.
+- B-META-002 (READY): /apps/meta Meta Connection Center added; UI explains Facebook Page, Messenger, Comment, Business Manager, Ad Account, ads_read and pages_manage_engagement status.
+- B-META-003 (READY): /ads and /ads/insights now use real connection diagnostics and show explicit missing ads_read/ad account/Graph errors instead of a static blank fallback.
+- B-META-004 (READY): AI Copilot Daily Ads tab now explains why Ads data is unavailable and links to /apps/meta.
+- B-META-005 (OPEN_FOUNDER): Live Ads Insights still depends on founder reconnecting Facebook and Meta granting ads_read. Code returns MISSING_ADS_READ safely when permission is absent.
+- B-META-006 (FOLLOW-UP): Current pass does not add a persisted AdAccount selection model; /api/meta/ad-accounts reads live from Graph. Add MetaAdAccount model later if founder wants saved default account per workspace.
 [2026-06-14 · Claude · PR #1B]
 - B-001 (LOW): Repo chưa init git (không có .git). Chưa tạo được branch claude/01-docs-ui-foundation;
   PR #1B làm trực tiếp trên working tree. Đề nghị founder git init + tạo branch trước PR #2/#2B (xem D-008).
@@ -8349,3 +8456,5 @@ AI_TEMPERATURE=0.2   AI_MAX_TOKENS=900   AI_TIMEOUT_MS=30000
 - **D-CAT-001:** DONE. **D-CAT-005:** OK (không phá route/order cũ). **D-CAT-006:** DONE (founder duyệt, đã migrate+deploy).
 - **D-CAT-002 (storage ảnh):** Phase 1 dùng image URL; upload R2/S3 = Phase 1B (chờ founder cấu hình env).
 - **Còn lại:** founder nhập catalog item đầu tiên ở /products; Phase 2 (variant/inventory) sau.
+
+

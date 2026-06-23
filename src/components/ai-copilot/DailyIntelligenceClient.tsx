@@ -21,6 +21,11 @@ type TabKey = (typeof TABS)[number]["key"];
 
 type ActionRow = { id: string; title: string; source: string; priority: string; status: string };
 type LessonRow = { id: string; source: string; title: string; lesson: string; appliedCount: number };
+type MetaConnectionStatus = {
+  permissions: Record<string, "OK" | "MISSING" | "UNKNOWN">;
+  blockers: { code: string; title: string; description: string; action: string }[];
+  adAccounts: { connected: boolean; items: { id: string; name: string }[] };
+};
 
 const BOTTLENECK_TONE: Record<string, string> = {
   "TRUYỀN THÔNG": "bg-violet-100 text-violet-700",
@@ -41,6 +46,7 @@ export function DailyIntelligenceClient() {
   const [tab, setTab] = useState<TabKey>("overview");
   const [storedActions, setStoredActions] = useState<ActionRow[] | null>(null);
   const [storedLessons, setStoredLessons] = useState<LessonRow[] | null>(null);
+  const [metaStatus, setMetaStatus] = useState<MetaConnectionStatus | null>(null);
 
   const loadMemory = useCallback(async () => {
     try {
@@ -77,6 +83,12 @@ export function DailyIntelligenceClient() {
   useEffect(() => {
     void loadMemory();
   }, [loadMemory]);
+
+  useEffect(() => {
+    apiGet<MetaConnectionStatus>("/api/meta/connection-status")
+      .then(setMetaStatus)
+      .catch(() => setMetaStatus(null));
+  }, []);
 
   async function regenerate() {
     setGenerating(true);
@@ -190,7 +202,7 @@ export function DailyIntelligenceClient() {
             <div className="p-4">
               {tab === "overview" && <OverviewTab report={report} />}
               {tab === "content" && <ContentTab report={report} />}
-              {tab === "ads" && <AdsTab report={report} />}
+              {tab === "ads" && <AdsTab report={report} metaStatus={metaStatus} />}
               {tab === "inbox" && <InboxTab report={report} />}
               {tab === "sales" && <SalesTab report={report} />}
               {tab === "catalog" && <CatalogTab report={report} />}
@@ -384,17 +396,31 @@ function ContentTab({ report }: { report: DailyIntelligenceReport }) {
   );
 }
 
-function AdsTab({ report }: { report: DailyIntelligenceReport }) {
+function AdsTab({ report, metaStatus }: { report: DailyIntelligenceReport; metaStatus: MetaConnectionStatus | null }) {
+  const adsRead = metaStatus?.permissions?.ads_read;
+  const blocker = metaStatus?.blockers.find((item) =>
+    ["MISSING_ADS_READ", "NO_AD_ACCOUNT", "AD_ACCOUNT_GRAPH_ERROR", "FACEBOOK_NOT_CONNECTED"].includes(item.code)
+  );
+  const reason =
+    blocker?.description ||
+    (adsRead === "OK" && metaStatus?.adAccounts.connected
+      ? "Meta Ads đã sẵn sàng. Nếu chưa có số liệu, có thể campaign không có spend trong ngày đã chọn."
+      : "Chưa đủ dữ liệu diagnostics để xác định trạng thái Ads.");
   return (
     <div className="space-y-4">
       <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-gray-200 px-6 py-10 text-center">
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-sky-400">
           <Icon name="integrations" className="h-6 w-6" />
         </span>
-        <p className="text-[13px] font-medium text-gray-600">Chưa kết nối Meta Ads Manager</p>
-        <p className="max-w-[26rem] text-[12px] text-gray-400">{report.ads.note}</p>
-        <a href="/settings/integrations/facebook" className="mt-1 rounded-full bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand-dark">
-          Kết nối Meta Ads
+        <p className="text-[13px] font-medium text-gray-600">
+          {adsRead === "OK" && metaStatus?.adAccounts.connected ? "Meta Ads đã kết nối" : "Meta Ads chưa đủ điều kiện"}
+        </p>
+        <p className="max-w-[30rem] text-[12px] text-gray-400">
+          {reason} DCOS vẫn phân tích inbox/sale/catalog, nhưng chưa đánh giá được nguồn quảng cáo nếu Ads chưa sẵn sàng.
+        </p>
+        {blocker && <p className="rounded-xl bg-amber-50 px-3 py-2 text-[12px] text-amber-700">{blocker.title}: {blocker.action}</p>}
+        <a href="/apps/meta" className="mt-1 rounded-full bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand-dark">
+          Mở Meta Connection Center
         </a>
       </div>
       <ListBlock title="Gợi ý ads" items={report.ads.recommendations} />

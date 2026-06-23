@@ -1,11 +1,13 @@
 import { env } from "@/lib/env";
 
-const REQUIRED_SCOPES = [
+export const REQUIRED_SCOPES = [
   "public_profile",
   "pages_show_list",
   "pages_manage_metadata",
   "pages_read_engagement",
   "pages_messaging",
+  "pages_manage_engagement",
+  "ads_read",
   "business_management",
   "catalog_management",
 ];
@@ -48,6 +50,45 @@ export type FacebookCatalog = {
   name?: string;
   vertical?: string;
   product_count?: number;
+};
+
+export type FacebookAdAccount = {
+  id: string;
+  account_id?: string;
+  name?: string;
+  account_status?: number;
+  currency?: string;
+  timezone_name?: string;
+};
+
+export type FacebookAdsInsight = {
+  campaign_id?: string;
+  campaign_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
+  impressions?: string;
+  clicks?: string;
+  spend?: string;
+  cpm?: string;
+  ctr?: string;
+  actions?: { action_type?: string; value?: string }[];
+  date_start?: string;
+  date_stop?: string;
+};
+
+export type FacebookDebugToken = {
+  data?: {
+    app_id?: string;
+    type?: string;
+    application?: string;
+    data_access_expires_at?: number;
+    expires_at?: number;
+    is_valid?: boolean;
+    scopes?: string[];
+    user_id?: string;
+  };
 };
 
 function graphBase(): string {
@@ -103,6 +144,14 @@ export async function getGrantedScopes(userAccessToken: string): Promise<string[
   return (data.data ?? []).filter((p) => p.status === "granted").map((p) => p.permission);
 }
 
+export async function debugUserToken(userAccessToken: string): Promise<FacebookDebugToken> {
+  assertFacebookOAuthEnv();
+  return graphGet<FacebookDebugToken>("/debug_token", {
+    input_token: userAccessToken,
+    access_token: `${env.facebookAppId}|${env.facebookAppSecret}`,
+  });
+}
+
 export async function getUserPages(userAccessToken: string): Promise<FacebookUserPage[]> {
   const data = await graphGet<{ data?: FacebookUserPage[] }>("/me/accounts", {
     fields: "id,name,username,picture{url},access_token",
@@ -114,6 +163,31 @@ export async function getUserPages(userAccessToken: string): Promise<FacebookUse
 export async function getUserBusinesses(userAccessToken: string): Promise<FacebookBusiness[]> {
   const data = await graphGet<{ data?: FacebookBusiness[] }>("/me/businesses", {
     fields: "id,name,verification_status,created_time",
+    access_token: userAccessToken,
+  });
+  return data.data ?? [];
+}
+
+export async function getUserAdAccounts(userAccessToken: string): Promise<FacebookAdAccount[]> {
+  const data = await graphGet<{ data?: FacebookAdAccount[] }>("/me/adaccounts", {
+    fields: "id,account_id,name,account_status,currency,timezone_name",
+    access_token: userAccessToken,
+  });
+  return data.data ?? [];
+}
+
+export async function getAdAccountInsights(
+  adAccountId: string,
+  userAccessToken: string,
+  input: { date: string; level: "campaign" | "adset" | "ad" }
+): Promise<FacebookAdsInsight[]> {
+  const normalizedId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId}`;
+  const date = input.date;
+  const data = await graphGet<{ data?: FacebookAdsInsight[] }>(`/${normalizedId}/insights`, {
+    level: input.level,
+    fields:
+      "campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,clicks,spend,cpm,ctr,actions,date_start,date_stop",
+    time_range: JSON.stringify({ since: date, until: date }),
     access_token: userAccessToken,
   });
   return data.data ?? [];
